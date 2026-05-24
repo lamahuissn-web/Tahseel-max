@@ -241,4 +241,41 @@ class Sas4ApiService
             'traffic' => $traffic ? ($traffic['data'] ?? $traffic) : null,
         ];
     }
+
+    /**
+     * Create a new SAS 4 user
+     */
+    public function createUser($username, $password, $profileId, $firstname = '')
+    {
+        $payload = $this->aesEncrypt(json_encode([
+            'username' => $username,
+            'password' => $password,
+            'profile_id' => $profileId,
+            'firstname' => $firstname,
+            'enabled' => 1,
+        ]));
+
+        return $this->request('POST', '/admin/api/index.php/api/user', [
+            'payload' => $payload,
+        ]);
+    }
+
+    /**
+     * Check if a username exists
+     */
+    public function usernameExists($username)
+    {
+        $result = $this->searchUsers($username, 1, 100);
+        if (!$result || !isset($result['data'])) {
+            return false;
+        }
+
+        foreach ($result['data'] as $user) {
+            if (strtolower($user['username']) === strtolower($username)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

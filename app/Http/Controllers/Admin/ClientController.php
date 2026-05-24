@@ -236,6 +236,7 @@ class ClientController extends Controller
     {
         try {
             $client = $this->clientService->store($request);
+            $this->handleSas4Operations($client, $request);
             $notificationMessage = sprintf(
                 'تم إنشاء عميل جديد: %s - النوع: %s - السعر: %s %s - تم الإنشاء بواسطة %s',
                 $client->name,
@@ -279,6 +280,7 @@ class ClientController extends Controller
         try {
             $oldClientData = $this->ClientsRepository->getById($id)->toArray();
             $client = $this->clientService->update($request, $id);
+            $this->handleSas4Operations($client, $request);
             $notificationMessage = sprintf(
                 'تم تحديث بيانات العميل: %s - تم التحديث بواسطة %s',
                 $client->name,
@@ -876,6 +878,64 @@ class ClientController extends Controller
         }
 
         return response()->json($info);
+    }
+
+    public function searchSas4Users()
+    {
+        $query = request('q', '');
+        $sas4Service = app(\App\Services\Sas4\Sas4ApiService::class);
+        $result = $sas4Service->searchUsers($query);
+
+        return response()->json($result ?? ['data' => []]);
+    }
+
+    public function getSas4Profiles()
+    {
+        $sas4Service = app(\App\Services\Sas4\Sas4ApiService::class);
+        $result = $sas4Service->getProfiles();
+
+        return response()->json($result ?? ['data' => []]);
+    }
+
+    protected function handleSas4Operations($client, $request)
+    {
+        $sas4Action = $request->input('sas4_action');
+        $sas4Mode = $request->input('sas4_mode', 'link');
+
+        if ($sas4Action === 'unlink') {
+            $client->sas_username = null;
+            $client->save();
+            return;
+        }
+
+        if ($sas4Mode === 'create') {
+            $newUsername = $request->input('sas4_new_username');
+            $newPassword = $request->input('sas4_new_password');
+            $newProfile = $request->input('sas4_new_profile');
+
+            if (!$newUsername || !$newPassword || !$newProfile) {
+                return;
+            }
+
+            $sas4Service = app(\App\Services\Sas4\Sas4ApiService::class);
+
+            if ($sas4Service->usernameExists($newUsername)) {
+                return;
+            }
+
+            $result = $sas4Service->createUser($newUsername, $newPassword, $newProfile, $client->name);
+
+            if ($result && isset($result['status']) && $result['status'] == 200) {
+                $client->sas_username = $newUsername;
+                $client->save();
+            }
+        } elseif ($sas4Mode === 'link' || $sas4Action === 'link') {
+            $sasUsername = $request->input('sas_username');
+            if ($sasUsername) {
+                $client->sas_username = $sasUsername;
+                $client->save();
+            }
+        }
     }
 
 }
