@@ -60,7 +60,7 @@
         // Add any other common configurations here
     };
      
-    if(app()->getLocale() == 'ar')
+    if ('{{ app()->getLocale() }}' == 'ar')
     globalDataTableConfig.language = {
         url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/ar.json'
     };

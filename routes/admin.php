@@ -116,6 +116,7 @@ Route::group(
             Route::post('/client_add_invoice/{id}', [ClientController::class, 'client_add_invoice'])->name('client_add_invoice');
             Route::get('clients/change_status/{id}/{status}', [ClientController::class, 'change_status'])->name('clients.change_status');
             Route::get('/clients/details/{id}', [ClientController::class, 'getClientDetails'])->name('clients.details');
+            Route::get('/clients/{id}/remaining-invoices', [ClientController::class, 'remainingInvoices'])->name('clients.remaining_invoices');
 
             Route::resource('roles', RolesController::class);
             Route::get('role/delete/{id}', [RolesController::class, 'destroy'])->name('delete_role');
@@ -132,6 +133,7 @@ Route::group(
             Route::get('invoice/delete/{id}', [InvoiceController::class, 'destroy'])->name('delete_invoice');
             Route::post('/invoice/{id}/pay', [InvoiceController::class, 'pay_invoice'])->name('pay_invoice');
             Route::get('/invoice/{id}/details', [InvoiceController::class, 'show_details'])->name('invoice_details');
+            Route::get('/invoices/{id}/details-partial', [InvoiceController::class, 'show_details_partial'])->name('invoice_details_partial');
             Route::get('/invoice/{id}/print', [InvoiceController::class, 'print_invoice'])->name('print_invoice');
             Route::get('/invoice/{id}/redo', [InvoiceController::class, 'redo_invoice'])->name('redo_invoice');
             Route::get('/invoices/due-monthly', [InvoiceController::class, 'dueMonthlyInvoices'])->name('due_monthly_invoices');

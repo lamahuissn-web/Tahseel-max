@@ -619,6 +619,10 @@ class InvoiceController extends Controller
             'notes' => 'nullable|string',
         ]);
 
+        if ($request->ajax()) {
+            return $this->payInvoiceAjax($id, $request);
+        }
+
         try {
             DB::beginTransaction();
             $oldInvoiceData = Invoice::find($id)->toArray();
@@ -626,16 +630,6 @@ class InvoiceController extends Controller
             $result = $this->invoiceService->payInvoice($id, $request);
             $invoice = Invoice::findOrFail($id);
 
-            // $notificationMessage = sprintf(
-            //     'تم تسديد مبلغ %s %s للفاتورة رقم %s (العميل: %s) - تم الدفع بواسطة %s في %s',
-            //     number_format($request->paid_amount, 2),
-            //     get_app_config_data('currency'),
-            //     $invoice->invoice_number,
-            //     $invoice->client->name ?? 'غير محدد',
-            //     auth()->user()->name,
-            //     // now()->format('Y-m-d H:i')
-            //     $invoice->due_date
-            // );
             $notificationMessage = sprintf(
                 'تم دفع مبلغ %s %s للعميل %s، وكان تاريخ الاستحقاق %s. (تمت العملية بواسطة: %s)',
                 number_format($request->paid_amount, 2),
@@ -702,11 +696,106 @@ class InvoiceController extends Controller
         }
     }
 
+    private function payInvoiceAjax($id, Request $request)
+    {
+        try {
+            DB::beginTransaction();
+            $oldInvoiceData = Invoice::find($id)->toArray();
+
+            $result = $this->invoiceService->payInvoice($id, $request);
+
+            if ($result instanceof \Illuminate\Http\RedirectResponse) {
+                $session = $result->getSession();
+                if ($session && $session->has('error')) {
+                    DB::rollBack();
+                    return response()->json(['success' => false, 'message' => $session->get('error')], 422);
+                }
+            }
+
+            $invoice = Invoice::findOrFail($id);
+
+            $notificationMessage = sprintf(
+                'تم دفع مبلغ %s %s للعميل %s، وكان تاريخ الاستحقاق %s. (تمت العملية بواسطة: %s)',
+                number_format($request->paid_amount, 2),
+                get_app_config_data('currency'),
+                $invoice->client->name ?? 'غير محدد',
+                $invoice->due_date,
+                auth()->user()->name
+            );
+
+            $admins = Admin::where('status', '1')
+                ->whereNull('deleted_at')
+                ->whereHas('roles', function ($query) {
+                    $query->whereIn('id', [1, 7]);
+                })
+                ->get();
+
+            foreach ($admins as $admin) {
+                $admin->notify(new InvoicePaidNotification(
+                    $invoice,
+                    $request->paid_amount,
+                    auth()->user(),
+                    $notificationMessage
+                ));
+            }
+
+            if (!empty($admins)) {
+                sendOneSignalNotification1(
+                    $admins,
+                    $notificationMessage,
+                    [
+                        'invoice_id' => $invoice->id,
+                        'type' => 'invoice_paid',
+                        'amount' => $request->paid_amount,
+                        'initiator' => auth()->user()->name,
+                        'invoice_details' => [
+                            'number' => $invoice->invoice_number,
+                            'date' => $invoice->paid_date,
+                            'client' => $invoice->client->name ?? 'Unknown'
+                        ]
+                    ],
+                    null
+                );
+            }
+
+            sendTelegramNotification($notificationMessage, 'invoice_paid');
+
+            DB::commit();
+
+            log_helper(
+                'invoice_paid',
+                $notificationMessage,
+                [
+                    'model' => $invoice,
+                    'amount' => $request->paid_amount,
+                    'old_data' => $oldInvoiceData,
+                    'new_data' => $invoice->toArray()
+                ]
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => trans('forms.success'),
+                'invoice' => $invoice->toArray(),
+                'new_remaining' => $invoice->client->invoices()->sum('remaining_amount'),
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
     public function show_details($id)
     {
         $data['all_data'] = Invoice::with('client', 'subscription', 'employee')->findOrFail($id);
         // dd($data);
         return view($this->admin_view . '.details', $data);
+    }
+
+    public function show_details_partial($id)
+    {
+        $invoice = Invoice::with('client', 'subscription', 'employee')->findOrFail($id);
+        return view('dashbord.invoices.details_partial', compact('invoice'));
     }
 
     public function print_invoice($id)

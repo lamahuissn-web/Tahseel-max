@@ -46,7 +46,7 @@ class ClientController extends Controller
         $this->middleware('can:create_client')->only('create', 'store');
         $this->middleware('can:update_client')->only('edit', 'update');
         $this->middleware('can:delete_client')->only('destroy');
-        $this->middleware('can:view_client_unpaid_invoices')->only('client_unpaid_invoices');
+        $this->middleware('can:view_client_unpaid_invoices')->only('client_unpaid_invoices', 'remainingInvoices');
         // $this->middleware('can:view_client_paid_invoices')->only('client_paid_invoices');
         $this->middleware('can:view_client_invoices')->only('client_invoices');
         $this->middleware('can:add_client_invoice')->only('client_add_invoice');
@@ -847,6 +847,18 @@ class ClientController extends Controller
             ->findOrFail($id);
 
         return view($this->admin_view . '.details_modal', compact('client'))->render();
+    }
+
+    public function remainingInvoices($id)
+    {
+        $client = $this->ClientsRepository->getById($id);
+        $unpaidInvoices = Invoice::with(['subscription'])
+            ->where('client_id', $id)
+            ->whereIn('status', ['unpaid', 'partial'])
+            ->orderBy('due_date', 'asc')
+            ->get();
+
+        return view($this->admin_view . '.remaining_invoices_modal_content', compact('client', 'unpaidInvoices'))->render();
     }
 
 }

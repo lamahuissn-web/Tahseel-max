@@ -37,6 +37,40 @@
     .cursor-pointer:hover .status-badge {
         opacity: 0.8;
     }
+
+    /* Responsive DataTable: hide default + icon, use name as trigger */
+    table.table-bordered > tbody > tr > td > .dtr-title {
+        display: none !important;
+    }
+    table.table-bordered > tbody > tr > td > .dtr-data {
+        display: block !important;
+    }
+
+    @media (max-width: 991.98px) {
+        td.name-trigger {
+            cursor: pointer;
+            color: #0d6efd !important;
+        }
+        td.name-trigger::before {
+            display: none !important;
+        }
+        .remaining-mobile-trigger {
+            cursor: pointer;
+            color: #0d6efd !important;
+            font-weight: 600;
+        }
+    }
+
+    /* Name truncation */
+    .name-cell {
+        max-width: 180px;
+        display: inline-block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+
 </style>
 @endsection
 
@@ -187,10 +221,72 @@
 
 
 
+<!-- Remaining Invoices Modal -->
+<div class="modal fade" id="remainingInvoicesModal" tabindex="-1" aria-labelledby="remainingInvoicesModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-white">
+                <h5 class="modal-title" id="remainingInvoicesModalLabel">
+                    <i class="bi bi-receipt-cutoff"></i> {{ trans('clients.client_unpaid_invoices') }}
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="remainingInvoicesContent">
+                <div class="text-center py-5" id="remainingModalLoader">
+                    <div class="spinner-border text-warning" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">{{ trans('clients.loading_details') }}</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> {{ trans('clients.close') }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
-
-
-
+<!-- Pay Invoice Modal (for AJAX pay within remaining invoices modal) -->
+<div class="modal fade" id="ajaxPayInvoiceModal" tabindex="-1" aria-labelledby="ajaxPayInvoiceModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="ajaxPayInvoiceModalLabel">{{ trans('invoices.enter_payment_amount') }}</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="ajaxPayInvoiceForm">
+                @csrf
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="ajax_invoice_amount" class="form-label">{{ trans('invoices.invoice_amount') }}</label>
+                        <input type="number" step="0.01" class="form-control" id="ajax_invoice_amount" name="invoice_amount" required min="1">
+                    </div>
+                    <div class="mb-3">
+                        <label for="ajax_paid_amount" class="form-label">{{ trans('invoices.invoice_paid_amount') }}</label>
+                        <input type="number" step="0.01" class="form-control" id="ajax_paid_amount" name="paid_amount">
+                        <small class="text-muted">{{ trans('invoices.remaining_amount') }}: <span id="ajax_remaining_amount_note"></span></small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="ajax_paid_date" class="form-label">{{ trans('invoices.paid_date') }}</label>
+                        <input type="date" class="form-control" id="ajax_paid_date" name="paid_date">
+                        <small class="text-muted">{{ trans('invoices.optional_paid_date_update') }}</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="ajax_notes" class="form-label">{{ trans('invoices.notes') }}</label>
+                        <textarea class="form-control" id="ajax_notes" name="notes" rows="2"></textarea>
+                    </div>
+                    <div id="ajaxPayError" class="alert alert-danger d-none"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ trans('invoices.cancel') }}</button>
+                    <button type="submit" class="btn btn-primary" id="ajaxPaySubmitBtn">{{ trans('invoices.pay') }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 @stop
 @section('js')
@@ -208,6 +304,12 @@
             "order": [],
             "deferRender": true,
             "stateSave": false,
+            "responsive": {
+                "details": {
+                    "type": 'inline',
+                    "target": 'td.name-trigger'
+                }
+            },
             "pagingType": "simple_numbers",
             "ajax": {
                 url: "{{ route('admin.clients.index') }}",
@@ -233,66 +335,102 @@
             },
             "columns": [{
                     data: 'id',
-                    className: 'text-center no-export'
+                    className: 'text-center no-export',
+                    responsivePriority: 10001
                 },
                 {
                     data: 'name',
-                    className: 'text-center'
+                    className: 'text-center name-trigger',
+                    responsivePriority: 1,
+                    render: function(data, type, row) {
+                        if (type === 'display' && data) {
+                            return '<span class="name-cell" title="' + $('<span>').text(data).html() + '">' + $('<span>').text(data).html() + '</span>';
+                        }
+                        return data;
+                    }
                 },
                 {
                     data: 'phone',
-                    className: 'text-center'
+                    className: 'text-center',
+                    responsivePriority: 10002
                 },
                 // {data: 'email', className: 'text-center'},
                 {
                     data: 'user',
-                    className: 'text-center'
+                    className: 'text-center',
+                    responsivePriority: 10003
                 },
                 {
                     data: 'box_switch',
-                    className: 'text-center'
+                    className: 'text-center',
+                    responsivePriority: 10004
                 },
                 {
                     data: 'client_type',
-                    className: 'text-center'
+                    className: 'text-center',
+                    responsivePriority: 10005
                 },
                 {
                     data: 'address1',
                     className: 'text-center',
-                    width: "200px"
+                    width: "200px",
+                    responsivePriority: 10006
                 },
                 {
                     data: 'subscription',
-                    className: 'text-center'
+                    className: 'text-center',
+                    responsivePriority: 10007
                 },
                 {
                     data: 'price',
-                    className: 'text-center'
+                    className: 'text-center',
+                    responsivePriority: 10008
                 },
                 {
                     data: 'notes',
                     className: 'text-center',
-                    width: "200px"
+                    width: "200px",
+                    responsivePriority: 10009,
+                    render: function(data, type, row) {
+                        if (type === 'display' && data) {
+                            return data.length > 60
+                                ? '<span title="' + $('<span>').text(data).html() + '">' + $('<span>').text(data.substring(0, 60)).html() + '...</span>'
+                                : $('<span>').text(data).html();
+                        }
+                        return data;
+                    }
                 },
                 {
                     data: 'start_date',
-                    className: 'text-center'
+                    className: 'text-center',
+                    responsivePriority: 10010
                 },
                 {
                     data: 'remaining_amount',
-                    className: 'text-center'
+                    className: 'text-center',
+                    responsivePriority: 2,
+                    render: function(data, type, row) {
+                        if (type === 'display') {
+                            var displayVal = data || '0.00';
+                            return '<span class="d-none d-lg-block">' + displayVal + '</span>' +
+                                '<span class="d-lg-none remaining-mobile-trigger" onclick="showRemainingInvoices(' + row.id + ')">' + displayVal + ' &#9654;</span>';
+                        }
+                        return data;
+                    }
                 },
                 {
                     data: 'status',
                     className: 'text-center',
-                    orderable: false
+                    orderable: false,
+                    responsivePriority: 3
                 },
                 {
                     data: 'action',
                     name: 'action',
                     orderable: false,
                     className: 'text-center no-export',
-                    width: "30px"
+                    width: "30px",
+                    responsivePriority: 4
                 },
             ],
             "columnDefs": [{
@@ -566,5 +704,94 @@
         // إعادة رسم الجدول بدون refresh
         table.draw(false);
     }
+
+    function showRemainingInvoices(clientId) {
+        $('#remainingInvoicesModal').modal('show');
+        $('#remainingModalLoader').show();
+        $('#remainingInvoicesContent').html($('#remainingModalLoader'));
+
+        $.ajax({
+            url: '{{ route('admin.clients.remaining_invoices', ['id' => '__CLIENT_ID__']) }}'.replace('__CLIENT_ID__', clientId),
+            type: 'GET',
+            success: function(response) {
+                $('#remainingModalLoader').hide();
+                $('#remainingInvoicesContent').html(response);
+            },
+            error: function() {
+                $('#remainingModalLoader').hide();
+                $('#remainingInvoicesContent').html(
+                    '<div class="alert alert-danger text-center">' +
+                    '<i class="bi bi-exclamation-triangle fs-1 text-danger"></i>' +
+                    '<h4 class="mt-3">{{ trans("clients.error_loading_details") }}</h4>' +
+                    '<p class="mb-0">{{ trans("clients.please_try_again") }}</p>' +
+                    '</div>'
+                );
+            }
+        });
+    }
+
+    function showAjaxPayModal(invoiceId, invoiceAmount, remainingAmount) {
+        $('#ajaxPayInvoiceModal').modal('show');
+        $('#ajaxPayInvoiceForm').attr('data-invoice-id', invoiceId);
+        $('#ajax_invoice_amount').val(invoiceAmount);
+        $('#ajax_paid_amount').val('').attr('max', invoiceAmount);
+        $('#ajax_remaining_amount_note').text(remainingAmount);
+        $('#ajax_paid_date').val(new Date().toISOString().split('T')[0]);
+        $('#ajax_notes').val('');
+        $('#ajaxPayError').addClass('d-none').text('');
+        $('#ajaxPaySubmitBtn').prop('disabled', false);
+    }
+
+    $(document).ready(function() {
+        $('#ajaxPayInvoiceForm').on('submit', function(e) {
+            e.preventDefault();
+            var invoiceId = $(this).attr('data-invoice-id');
+            var formData = $(this).serialize();
+            $('#ajaxPayError').addClass('d-none').text('');
+            $('#ajaxPaySubmitBtn').prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> {{ trans("forms.Loading") }}');
+
+            $.ajax({
+                url: '{{ route('admin.pay_invoice', '') }}/' + invoiceId,
+                type: 'POST',
+                data: formData,
+                dataType: 'json',
+                success: function(response) {
+                    if (response.success) {
+                        $('#ajaxPayInvoiceModal').modal('hide');
+                        Swal.fire({
+                            icon: 'success',
+                            title: '{{ trans("forms.success") }}',
+                            text: response.message,
+                            timer: 1500,
+                            showConfirmButton: false
+                        });
+                        // Reload remaining invoices modal content
+                        var clientId = $('#remainingInvoicesModal').data('client-id');
+                        if (clientId) {
+                            showRemainingInvoices(clientId);
+                        }
+                        // Reload main DataTable to update remaining_amount
+                        $('#table1').DataTable().ajax.reload(null, false);
+                    } else {
+                        $('#ajaxPayError').removeClass('d-none').text(response.message);
+                        $('#ajaxPaySubmitBtn').prop('disabled', false).html('{{ trans("invoices.pay") }}');
+                    }
+                },
+                error: function(xhr) {
+                    var message = '{{ trans("forms.error") }}';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        message = xhr.responseJSON.message;
+                    }
+                    $('#ajaxPayError').removeClass('d-none').text(message);
+                    $('#ajaxPaySubmitBtn').prop('disabled', false).html('{{ trans("invoices.pay") }}');
+                }
+            });
+        });
+
+        // Store client-id on modal show for reload
+        $(document).on('show.bs.modal', '#remainingInvoicesModal', function() {
+            // data-client-id is set in the partial view
+        });
+    });
 </script>
 @endsection

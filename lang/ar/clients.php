@@ -147,4 +147,6 @@
   'error_changing_status' => 'حدث خطأ أثناء تغيير حالة الزبون',
   'show_inactive_only' => 'عرض الغير نشطين فقط',
   'all_types' => 'جميع الأنواع',
+  'total_remaining' => 'إجمالي المتبقي',
+  'no_unpaid_invoices' => 'لا توجد فواتير غير مدفوعة لهذا العميل',
 );
