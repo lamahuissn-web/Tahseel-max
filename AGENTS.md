@@ -22,7 +22,7 @@ chown -R www-data:www-data storage bootstrap/cache
 ## Critical Gotchas
 
 ### AppServiceProvider boot query
-`AppServiceProvider::boot()` calls `sendOverdueInvoiceNotifications()` which hits the DB. This **will crash** `composer install` / `artisan` commands if the DB isn't ready. Fix: temporarily comment out line 69 before first migration, restore after.
+`AppServiceProvider::boot()` **used** to call `sendOverdueInvoiceNotifications()` which hit the DB. This was moved to a scheduled command (`overdue:remind`). No longer blocks setup. If you see `Call to undefined function sendTelegramNotification()`, run `composer dump-autoload`.
 
 ### Custom Role model
 Missing `app/Models/Role.php` causes `Call to undefined method Role::getTranslation()` errors. If absent, create it:
@@ -48,11 +48,11 @@ Required but not always installed. Install with: `apt-get install php8.3-mysql`
 | Path | Purpose |
 |------|---------|
 | `app/Helpers/main_helper.php` | Auto-loaded helper functions |
-| `app/Helpers/notification_helper.php` | Auto-loaded notification helpers |
+| `app/Helpers/notification_helper.php` | Auto-loaded notification helpers (FCM + Telegram) |
 | `app/Models/Role.php` | Custom Role model (critical) |
 | `routes/admin.php` | All admin routes (`{locale}/admin/*`) |
 | `routes/adminauth.php` | Auth routes (login, etc.) |
-| `app/Providers/AppServiceProvider.php` | Boot query that can block setup |
+| `app/Providers/AppServiceProvider.php` | Boot — no longer calls DB queries |
 | `public/.htaccess` | Required for Laravel routing |
 | `config/permission.php` | Must reference `App\Models\Role` |
 
@@ -75,3 +75,34 @@ Required but not always installed. Install with: `apt-get install php8.3-mysql`
 
 ## Asset URLs
 `ASSET_URL` must equal `APP_URL` (not `${APP_URL}/public`) — Laravel appends `/public` itself. Double `/public/` in CSS/JS paths means misconfigured `ASSET_URL`.
+
+## Telegram Integration
+
+### 3 features
+- **Notifications** — 10 event types pushed to Telegram group via `sendTelegramNotification()` in `app/Helpers/notification_helper.php`. Silent-fail pattern (never throws).
+- **Backup** — `php artisan telegram:send-backup` (or `--force`). Scheduled every minute in Kernel.php, self-checks frequency. `mysqldump → gzip → sendDocument`.
+- **Bot** — Client search via `/client <name>` or `/عميل <name>` + inline mode. Runs 24/7 under Supervisor.
+
+### Key files
+| File | Role |
+|------|------|
+| `app/Helpers/notification_helper.php` | `sendTelegramNotification()`, `sendTelegramDocument()`, `getTelegramUpdates()`, `sendTelegramAnswerInlineQuery()` |
+| `app/Console/Commands/TelegramBackupCommand.php` | Backup logic + frequency scheduling |
+| `app/Console/Commands/TelegramPollCommand.php` | Infinite polling loop (2s sleep) |
+| `app/Services/TelegramBotService.php` | Message/inline query handlers |
+| `app/Console/Commands/SendOverdueReminders.php` | Daily overdue reminders (replaced boot method) |
+| `resources/views/dashbord/config_app/form.blade.php` | Settings form (3 cards: auth, toggles, backup) |
+| `/etc/supervisor/conf.d/tahseel-telegram-bot.conf` | Supervisor process definition |
+
+### Setup after fresh clone
+```bash
+composer dump-autoload  # ensures Telegram helper functions are loaded
+php artisan telegram:send-backup --force  # test backup
+supervisorctl restart tahseel-telegram-bot  # restart poll bot after code changes
+```
+
+### Infrastructure
+- Supervisor runs polling bot: `supervisorctl {status|restart|start|stop} tahseel-telegram-bot`
+- Crontab (www-data): `* * * * * php /var/www/html/tahseel/artisan schedule:run`
+- Telegram bot token + chat ID stored in `app_config` (set via Settings → App Config)
+- 18 `telegram_*` keys seeded in `app_config` table
