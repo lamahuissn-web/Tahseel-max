@@ -1,0 +1,203 @@
+@font-face {
+    font-family: 'ar-coder';
+    src: url('fonts/ar-coder.eot?wzgkvs');
+    src: url('fonts/ar-coder.eot?wzgkvs#iefix') format('embedded-opentype'),
+        url('fonts/ar-coder.ttf?wzgkvs') format('truetype'),
+        url('fonts/ar-coder.woff?wzgkvs') format('woff'),
+        url('fonts/ar-coder.svg?wzgkvs#ar-coder') format('svg');
+    font-weight: normal;
+    font-style: normal;
+    font-display: block;
+}
+[class^="ar-icons-"],
+[class*=" ar-icons-"] {
+    font-family: 'ar-coder' !important;
+    font-style: normal;
+    line-height: 1;
+}
+.ar-icons-architect:before {
+  content: "\e900";
+}
+.ar-icons-back:before {
+  content: "\e901";
+}
+.ar-icons-bolt:before {
+  content: "\e902";
+}
+.ar-icons-bottle:before {
+  content: "\e903";
+}
+.ar-icons-calculator:before {
+  content: "\e904";
+}
+.ar-icons-call:before {
+  content: "\e905";
+}
+.ar-icons-cargo:before {
+  content: "\e906";
+}
+.ar-icons-car-manufacturing-1:before {
+  content: "\e907";
+}
+.ar-icons-car-manufacturing:before {
+  content: "\e908";
+}
+.ar-icons-checklist:before {
+  content: "\e909";
+}
+.ar-icons-check-list:before {
+  content: "\e90a";
+}
+.ar-icons-computer:before {
+  content: "\e90b";
+}
+.ar-icons-container:before {
+  content: "\e90c";
+}
+.ar-icons-conveyor-1:before {
+  content: "\e90d";
+}
+.ar-icons-conveyor-2:before {
+  content: "\e90e";
+}
+.ar-icons-conveyor-3:before {
+  content: "\e90f";
+}
+.ar-icons-conveyor:before {
+  content: "\e910";
+}
+.ar-icons-cutting:before {
+  content: "\e911";
+}
+.ar-icons-drill:before {
+  content: "\e912";
+}
+.ar-icons-electricity:before {
+  content: "\e913";
+}
+.ar-icons-email:before {
+  content: "\e914";
+}
+.ar-icons-employee:before {
+  content: "\e915";
+}
+.ar-icons-factory:before {
+  content: "\e916";
+}
+.ar-icons-factory-machine:before {
+  content: "\e917";
+}
+.ar-icons-foreman:before {
+  content: "\e918";
+}
+.ar-icons-forklift:before {
+  content: "\e919";
+}
+.ar-icons-freight-wagon:before {
+  content: "\e91a";
+}
+.ar-icons-green-factory:before {
+  content: "\e91b";
+}
+.ar-icons-hook:before {
+  content: "\e91c";
+}
+.ar-icons-idea:before {
+  content: "\e91d";
+}
+.ar-icons-laser:before {
+  content: "\e91e";
+}
+.ar-icons-left-chevron:before {
+  content: "\e91f";
+}
+.ar-icons-left-quote:before {
+  content: "\e920";
+}
+.ar-icons-location:before {
+  content: "\e921";
+}
+.ar-icons-next:before {
+  content: "\e922";
+}
+.ar-icons-oil-tank:before {
+  content: "\e923";
+}
+.ar-icons-pallet-1:before {
+  content: "\e924";
+}
+.ar-icons-pallet:before {
+  content: "\e925";
+}
+.ar-icons-phone:before {
+  content: "\e926";
+}
+.ar-icons-plan-1:before {
+  content: "\e927";
+}
+.ar-icons-plan:before {
+  content: "\e928";
+}
+.ar-icons-play-button:before {
+  content: "\e929";
+}
+.ar-icons-pressure-gauge:before {
+  content: "\e92a";
+}
+.ar-icons-radioactive:before {
+  content: "\e92b";
+}
+.ar-icons-right-chevron:before{
+    content: "\e92c";
+}
+.ar-icons-right-quote:before {
+  content: "\e92e";
+}
+.ar-icons-robotic-arm:before {
+  content: "\e92f";
+}
+.ar-icons-saw-machine:before {
+  content: "\e930";
+}
+.ar-icons-shipping-truck:before {
+  content: "\e931";
+}
+.ar-icons-spray-gun:before {
+  content: "\e932";
+}
+.ar-icons-support:before {
+  content: "\e933";
+}
+.ar-icons-tank:before {
+  content: "\e934";
+}
+.ar-icons-toolbox:before {
+  content: "\e935";
+}
+.ar-icons-tools:before {
+  content: "\e936";
+}
+.ar-icons-trolley-1:before {
+  content: "\e937";
+}
+.ar-icons-trolley:before {
+  content: "\e938";
+}
+.ar-icons-truck:before {
+  content: "\e939";
+}
+.ar-icons-warehouse:before {
+  content: "\e93a";
+}
+.ar-icons-water-machine:before {
+  content: "\e93b";
+}
+.ar-icons-weld:before {
+  content: "\e93c";
+}
+.ar-icons-worker:before {
+  content: "\e93d";
+}
+.ar-icons-wrench:before {
+  content: "\e93e";
+}

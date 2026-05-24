@@ -1,0 +1,118 @@
+#table1{
+    font-size: 12px !important;
+}
+
+.text-sm .select2-container--default .select2-selection--single, select.form-control-sm~.select2-container--default .select2-selection--single {
+    height: calc(2.25rem + 2px) !important;
+}
+
+
+
+.text-blue {
+    color: blue!important;
+}
+.margin_top_5{
+    margin-top: 5px;
+}
+.margin_top_10{
+    margin-top: 10px;
+}
+.margin_top_15{
+    margin-top: 15px;
+}
+.margin_top_20{
+    margin-top: 20px;
+}
+.margin_top_25{
+    margin-top: 25px;
+}
+.span_error_field_msg{
+    color: #c90000;
+    font-size: 11px;
+}
+
+.float_right{
+    float: right !important;
+
+}
+
+.float_left{
+    float: left !important;
+    margin-left: 2px;
+}
+.modal-content{
+    left: 115px !important;
+    width: 179% !important;
+}
+
+.fnt_center_blue{
+    text-align: center;
+    color: blue;
+    font-weight: bold;
+}
+.fnt_center_purple{
+    text-align: center;
+    color: #5306b9;
+    font-weight: bold;
+}
+.fnt_center_black{
+    text-align: center;
+    color: black;
+    font-weight: bold;
+}
+
+.fnt_center_green{
+    text-align: center;
+    color: green;
+    font-weight: bold;
+}
+.fnt_center_red{
+    text-align: center;
+    color: red;
+    font-weight: bold;
+}
+
+.text_decoration{
+    text-decoration: underline;
+}
+
+.text_decoration_blue{
+    text-decoration: underline;
+    color: blue;
+    font-weight: 600;
+}
+
+
+
+
+.th_size_11{
+    text-align: center;
+    color: black;
+    font-size: 11px;
+    font-weight: bold;
+    background: #d5d5d5;
+}
+
+.tfoot_td_khaki{
+    text-align: center;
+    color: black;
+    background-color: khaki;
+    font-weight: bold;
+}
+
+.tfoot_td_rmady{
+    text-align: center;
+    color: black;
+    background-color: #d5d5d5;
+    font-weight: bold;
+}
+.t_container{
+    padding: 20px;
+}
+.margin_top{
+    margin-top: 10px;
+}
+
+
+
+

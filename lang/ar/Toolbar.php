@@ -1,0 +1,21 @@
+<?php return array (
+  'home' => 'الرئيسية',
+  'clients' => 'الجهه المستفيده',
+  'company' => 'شركة',
+  'companies' => 'شركات',
+  'projects' => 'مشاريع',
+  'masrofat' => 'المصروفات',
+  'tests' => 'الفحوصات',
+  'users' => 'المستخدمين',
+  'employees' => 'الموظفين',
+  'roles' => 'الادوار',
+  'invoices' => 'الفواتير',
+  'revenues' => 'الايرادات',
+  'reports' => 'التقارير',
+  'accounts' => 'الحسابات',
+  'account_settings' => 'اعدادات الحسابات',
+  'financial_transactions' => 'الحركات المالية',
+  'account_transfers' => 'التحويلات',
+  'add_invoice' => 'اضافة الفواتير',
+  'logs' => 'سجلات النظام'
+);

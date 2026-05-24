@@ -1,0 +1,68 @@
+<?php
+
+namespace App\Notifications;
+
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Notifications\Notification;
+
+class InvoiceDeletedNotification extends Notification
+{
+    use Queueable;
+
+    protected $invoiceData;
+    protected $user;
+    protected $message;
+
+    /**
+     * Create a new notification instance.
+     */
+    public function __construct($invoiceData, $user, $message)
+    {
+        $this->invoiceData = $invoiceData;
+        $this->user = $user;
+        $this->message = $message;
+    }
+
+    /**
+     * Get the notification's delivery channels.
+     *
+     * @return array<int, string>
+     */
+    public function via(object $notifiable): array
+    {
+        return ['database'];
+    }
+
+    /**
+     * Get the mail representation of the notification.
+     */
+    public function toMail(object $notifiable): MailMessage
+    {
+        return (new MailMessage)
+                    ->line('The introduction to the notification.')
+                    ->action('Notification Action', url('/'))
+                    ->line('Thank you for using our application!');
+    }
+
+    /**
+     * Get the array representation of the notification.
+     *
+     * @return array<string, mixed>
+     */
+    public function toArray(object $notifiable): array
+    {
+        return [
+            'message' => $this->message,
+            'invoice_id' => $this->invoiceData['invoice_id'],
+            'invoice_number' => $this->invoiceData['invoice_number'],
+            'amount' => $this->invoiceData['amount'],
+            'client_name' => $this->invoiceData['client_name'],
+            'user_name' => $this->user->name,
+            'type' => 'invoice_deleted',
+            'category' => 'invoices',
+            'color' => 'danger'
+        ];
+    }
+}

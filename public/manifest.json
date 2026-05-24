@@ -1,0 +1,21 @@
+{
+    "name": "Tahseel App",
+    "short_name": "Tahseel",
+    "start_url": "/admin/dashboard",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#009ef7",
+    "orientation": "portrait",
+    "icons": [
+        {
+            "src": "/assets/media/logos/favicon.ico",
+            "sizes": "64x64 32x32 24x24 16x16",
+            "type": "image/x-icon"
+        },
+        {
+            "src": "/assets/media/logos/default.svg",
+            "sizes": "any",
+            "type": "image/svg+xml"
+        }
+    ]
+}
