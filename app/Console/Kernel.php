@@ -4,6 +4,7 @@ namespace App\Console;
 
 use App\Console\Commands\AddNewInvoices;
 use App\Console\Commands\AutoBackupCommand;
+use App\Console\Commands\SendOverdueReminders;
 use App\Models\AppConfig;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
@@ -43,6 +44,9 @@ class Kernel extends ConsoleKernel
         } catch (\Exception $e) {
             // في حالة عدم وجود الإعدادات، لا تفعل شيئاً
         }
+
+        $schedule->command('telegram:send-backup')->everyMinute();
+        $schedule->command(SendOverdueReminders::class)->dailyAt('08:00');
     }
 
     /**

@@ -175,7 +175,18 @@ class UsersController extends Controller
     {
         try {
             // dd($request->all());
-            $this->adminUserService->store($request);
+            $admin = $this->adminUserService->store($request);
+
+            $message = sprintf(
+                '👤 تم إضافة مشرف جديد: %s (%s) — البريد: %s (تمت العملية بواسطة: %s)',
+                $admin->name,
+                $admin->roles->first()->getTranslation('title', app()->getLocale()) ?? 'بدون صلاحية',
+                $admin->email,
+                auth()->user()->name
+            );
+
+            sendTelegramNotification($message, 'admin_added');
+
             toastr()->addSuccess(trans('forms.success'));
             return redirect()->route('admin.users.index');
         } catch (\Exception $e) {

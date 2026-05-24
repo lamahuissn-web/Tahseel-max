@@ -314,6 +314,8 @@ class AccountTransferController extends Controller
 
                 }
 
+            sendTelegramNotification($notificationMessage, 'transfer_created');
+
             DB::commit();
 
             log_helper(
@@ -468,6 +470,8 @@ class AccountTransferController extends Controller
                     null
                 );
             }
+
+            sendTelegramNotification($notificationMessage, 'transfer_redone');
 
             DB::commit();
             toastr()->addSuccess(trans('account_transfers.transfer_redone_successfully'));

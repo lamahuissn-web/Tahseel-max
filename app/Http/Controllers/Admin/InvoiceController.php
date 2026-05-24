@@ -557,6 +557,8 @@ class InvoiceController extends Controller
                 );
             }
 
+            sendTelegramNotification($notificationMessage, 'invoice_deleted');
+
             log_helper(
                 'invoice_deleted',
                 $notificationMessage,
@@ -677,6 +679,8 @@ class InvoiceController extends Controller
                     null
                 );
             }
+
+            sendTelegramNotification($notificationMessage, 'invoice_paid');
 
             DB::commit();
 
@@ -880,6 +884,8 @@ class InvoiceController extends Controller
                     null
                 );
             }
+
+            sendTelegramNotification($notificationMessage, 'invoice_redone');
 
             DB::commit();
 

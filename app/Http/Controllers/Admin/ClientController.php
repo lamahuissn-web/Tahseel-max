@@ -494,6 +494,8 @@ class ClientController extends Controller
                 );
             }
 
+            sendTelegramNotification($creationMessage, 'invoice_created');
+
             log_helper(
                 'invoice_created',
                 $creationMessage,
@@ -581,6 +583,8 @@ class ClientController extends Controller
                         null
                     );
                 }
+
+                sendTelegramNotification($notificationMessage, 'invoice_paid');
 
                 log_helper(
                     'invoice_paid',

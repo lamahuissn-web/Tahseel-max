@@ -66,7 +66,7 @@ class AppServiceProvider extends ServiceProvider
 
 
         // $this->checkAndGenerateInvoices();
-        $this->sendOverdueInvoiceNotifications();
+        // $this->sendOverdueInvoiceNotifications(); // moved to SendOverdueReminders command
     }
 
     private function checkAndGenerateInvoices()

@@ -95,6 +95,8 @@ class ClientService
             );
         }
 
+        sendTelegramNotification($notificationMessage, 'client_added');
+
         return $client;
     }
     /************************************************/

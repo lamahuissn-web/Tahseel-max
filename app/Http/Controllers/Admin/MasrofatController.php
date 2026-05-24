@@ -145,6 +145,9 @@ class MasrofatController extends Controller
                     'model' => $masrofat
                 ]
             );
+
+            sendTelegramNotification($message, 'expense_added');
+
             toastr()->addSuccess(trans('forms.success'));
             return redirect()->route('admin.masrofat.index');
         } catch (\Exception $e) {
