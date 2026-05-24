@@ -861,4 +861,21 @@ class ClientController extends Controller
         return view($this->admin_view . '.remaining_invoices_modal_content', compact('client', 'unpaidInvoices'))->render();
     }
 
+    public function getSas4Info($id)
+    {
+        $client = $this->ClientsRepository->getById($id);
+        if (!$client || !$client->sas_username) {
+            return response()->json(['error' => trans('clients.no_sas4_username_linked')], 404);
+        }
+
+        $sas4Service = app(\App\Services\Sas4\Sas4ApiService::class);
+        $info = $sas4Service->getUserFullInfo($client->sas_username);
+
+        if (!$info) {
+            return response()->json(['error' => trans('clients.sas4_user_not_found')], 404);
+        }
+
+        return response()->json($info);
+    }
+
 }

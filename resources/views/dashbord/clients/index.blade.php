@@ -592,6 +592,7 @@
                 $('#modalLoader').hide();
                 $('#clientDetailsContent').html(response);
                 $('#editClientBtn').attr('href', "{{ route('admin.clients.edit', '') }}/" + clientId).show();
+                loadSas4Info(clientId);
             },
             error: function(xhr, status, error) {
                 $('#modalLoader').hide();
@@ -602,6 +603,77 @@
                     '<p class="mb-0">{{ trans("clients.please_try_again") }}</p>' +
                     '</div>'
                 );
+            }
+        });
+    }
+
+    function loadSas4Info(clientId) {
+        $.ajax({
+            url: '{{ route('admin.clients.sas4_info', ['id' => '__ID__']) }}'.replace('__ID__', clientId),
+            type: 'GET',
+            dataType: 'json',
+            success: function(res) {
+                var user = res.user || {};
+                var overview = res.overview || {};
+                var traffic = res.traffic || {};
+                var trafficData = traffic.data || traffic.daily || [];
+
+                var statusBadge = '';
+                if (user.enabled == 1 && user.online == 1) {
+                    statusBadge = '<span class="badge bg-success">{{ trans('clients.sas4_online') }}</span>';
+                } else if (user.enabled == 0) {
+                    statusBadge = '<span class="badge bg-danger">{{ trans('clients.sas4_disabled') }}</span>';
+                } else if (user.expired == 1) {
+                    statusBadge = '<span class="badge bg-warning text-dark">{{ trans('clients.sas4_expired') }}</span>';
+                } else {
+                    statusBadge = '<span class="badge bg-secondary">{{ trans('clients.sas4_offline') }}</span>';
+                }
+
+                var profileName = user.profile_name || user.profile || 'N/A';
+                var speedDown = user.speed_down || overview.speed_down || 'N/A';
+                var speedUp = user.speed_up || overview.speed_up || 'N/A';
+                var speed = speedDown + ' / ' + speedUp + ' Mbps';
+
+                var html = '<div class="card mt-3" style="border:1px solid #0d6efd;">' +
+                    '<div class="card-header" style="background:#0d6efd;color:#fff;padding:8px 16px;">' +
+                    '<i class="bi bi-wifi"></i> {{ trans('clients.sas4_internet_info') }}</div>' +
+                    '<div class="card-body p-2">' +
+                    '<div class="row g-2" style="font-size:13px;">' +
+                    '<div class="col-6"><strong>{{ trans('clients.sas4_username') }}:</strong> ' + (user.username || 'N/A') + '</div>' +
+                    '<div class="col-6"><strong>{{ trans('clients.sas4_status') }}:</strong> ' + statusBadge + '</div>' +
+                    '<div class="col-6"><strong>{{ trans('clients.sas4_plan') }}:</strong> ' + profileName + '</div>' +
+                    '<div class="col-6"><strong>{{ trans('clients.sas4_speed') }}:</strong> ' + speed + '</div>' +
+                    '<div class="col-6"><strong>{{ trans('clients.sas4_balance') }}:</strong> ' + (user.balance || '0.00') + '</div>' +
+                    '<div class="col-6"><strong>{{ trans('clients.sas4_expiration') }}:</strong> ' + (user.expiration || 'N/A') + '</div>' +
+                    '<div class="col-6"><strong>{{ trans('clients.sas4_last_online') }}:</strong> ' + (user.last_login || 'N/A') + '</div>' +
+                    '<div class="col-6"><strong>{{ trans('clients.sas4_last_ip') }}:</strong> ' + (user.last_ip || 'N/A') + '</div>' +
+                    '<div class="col-6"><strong>{{ trans('clients.sas4_created') }}:</strong> ' + (user.created_at || 'N/A') + '</div>' +
+                    '</div>';
+
+                if (trafficData && trafficData.length > 0) {
+                    html += '<table class="table table-sm table-bordered mt-2" style="font-size:12px;"><thead class="table-light"><tr>' +
+                        '<th>{{ trans('clients.sas4_download') }}</th>' +
+                        '<th>{{ trans('clients.sas4_upload') }}</th>' +
+                        '<th>{{ trans('clients.sas4_total') }}</th>' +
+                        '<th>{{ trans('clients.sas4_uptime') }}</th>' +
+                        '</tr></thead><tbody>';
+                    var last7 = trafficData.slice(-7);
+                    last7.forEach(function(day) {
+                        html += '<tr>' +
+                            '<td>' + (day.download || day.bytes_in || '0 B') + '</td>' +
+                            '<td>' + (day.upload || day.bytes_out || '0 B') + '</td>' +
+                            '<td>' + (day.total || day.bytes_total || '0 B') + '</td>' +
+                            '<td>' + (day.uptime || day.session_time || 'N/A') + '</td>' +
+                            '</tr>';
+                    });
+                    html += '</tbody></table>';
+                }
+
+                html += '</div></div>';
+                $('#clientDetailsContent').append(html);
+            },
+            error: function(xhr) {
+                // Silently fail if SAS 4 is not configured or user not found
             }
         });
     }

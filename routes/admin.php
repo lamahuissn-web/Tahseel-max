@@ -117,6 +117,7 @@ Route::group(
             Route::get('clients/change_status/{id}/{status}', [ClientController::class, 'change_status'])->name('clients.change_status');
             Route::get('/clients/details/{id}', [ClientController::class, 'getClientDetails'])->name('clients.details');
             Route::get('/clients/{id}/remaining-invoices', [ClientController::class, 'remainingInvoices'])->name('clients.remaining_invoices');
+            Route::get('/clients/{id}/sas4-info', [ClientController::class, 'getSas4Info'])->name('clients.sas4_info');
 
             Route::resource('roles', RolesController::class);
             Route::get('role/delete/{id}', [RolesController::class, 'destroy'])->name('delete_role');
