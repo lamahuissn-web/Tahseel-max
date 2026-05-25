@@ -155,8 +155,31 @@ Replicates CryptoJS key derivation: MD5 salted key+IV derivation → AES-256-CBC
 - `ClientController::handleSas4Operations()` processes on save
 - Routes: `/sas4/search-users`, `/sas4/profiles`
 
-### Phase 2 Part 2 (Pending): Control
-- Enable/Disable/Disconnect/Change Plan actions in client detail modal
+### Phase 2 Part 2 (Done): Control Actions
+- Enable/Disable/Disconnect/Change Plan with expiration date support
+- Bulk AJAX endpoint `POST /sas4/online-status` for table status indicators
+- Online status column in clients table (mobile-responsive)
+- Routes: `/clients/{id}/sas4-control`, `/sas4/online-status`
+
+### Phase 3 (Done): Traffic & Sessions Tab
+- Client detail modal converted to tabbed interface (Details / Traffic & Sessions)
+- **Session Info Card**: online status, username, IP, last seen, sessions, plan, expiration, balance
+- **Traffic Quota Card**: remaining download/upload/total/uptime (or "Unlimited")
+- **Daily Traffic Report**: month/year selector, 31-day table (Day/Download/Upload/Total/Real Traffic), monthly summary footer
+- Lazy-loaded on tab click, auto-refreshes every 60s while tab visible
+- SAS 4 API endpoints used:
+  - `POST /api/user/traffic` with `report_type: daily` → daily rx/tx/total/total_real arrays
+  - `POST /api/index/UserSessions` with `username` filter → session history (future)
+  - `POST /api/index/online` → active sessions with live data
+- Routes: `/clients/{id}/sas4-traffic`, `/clients/{id}/sas4-daily-traffic`
+
+### Key API Endpoints Discovered
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/user/traffic` | POST + AES | Daily/monthly traffic report (rx, tx, total, total_real arrays) |
+| `/api/index/UserSessions` | POST + AES | Full session history (start/stop time, IP, MAC, bytes, disconnect reason) |
+| `/api/index/online` | POST + AES | Active sessions (live session time, IP, MAC, NAS, user details) |
+| `/api/index/user` | POST + AES | User search with `daily_traffic_details`, `profile_details` |
 
 ### Config keys (`.env`)
 ```

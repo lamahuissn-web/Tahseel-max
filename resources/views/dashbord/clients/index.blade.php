@@ -71,6 +71,17 @@
         vertical-align: middle;
     }
 
+    #clientDetailTabs .nav-link {
+        font-size: 14px;
+        padding: 8px 16px;
+    }
+    #clientDetailTabs .nav-link.active {
+        font-weight: 600;
+    }
+    #clientDetailTabs .nav-link i {
+        margin-left: 4px;
+    }
+
 </style>
 @endsection
 
@@ -324,6 +335,38 @@
         'actionSuccess' => trans('clients.sas4_action_success'),
         'cancel' => trans('clients.cancel'),
         'confirmBtn' => trans('forms.action_yes'),
+        'sessionInfo' => trans('clients.sas4_session_info'),
+        'trafficQuota' => trans('clients.sas4_traffic_quota'),
+        'dailyUsage' => trans('clients.sas4_daily_usage'),
+        'monthlySummary' => trans('clients.sas4_monthly_summary'),
+        'remainingDownload' => trans('clients.sas4_remaining_download'),
+        'remainingUpload' => trans('clients.sas4_remaining_upload'),
+        'remainingTotal' => trans('clients.sas4_remaining_total'),
+        'remainingUptime' => trans('clients.sas4_remaining_uptime'),
+        'currentIp' => trans('clients.sas4_current_ip'),
+        'lastSeen' => trans('clients.sas4_last_seen'),
+        'sessions' => trans('clients.sas4_sessions'),
+        'maxSessions' => trans('clients.sas4_max_sessions'),
+        'connected' => trans('clients.sas4_connected'),
+        'notConnected' => trans('clients.sas4_not_connected'),
+        'noTrafficData' => trans('clients.sas4_no_traffic_data'),
+        'unlimited' => trans('clients.sas4_unlimited'),
+        'day' => trans('clients.sas4_day'),
+        'date' => trans('clients.sas4_date'),
+        'downloadShort' => trans('clients.sas4_download_short'),
+        'uploadShort' => trans('clients.sas4_upload_short'),
+        'totalShort' => trans('clients.sas4_total_short'),
+        'sessionTime' => trans('clients.sas4_session_time'),
+        'refresh' => trans('clients.sas4_refresh'),
+        'autoRefresh' => trans('clients.sas4_auto_refresh'),
+        'realTraffic' => trans('clients.sas4_real_traffic'),
+        'trafficSummary' => trans('clients.sas4_traffic_summary'),
+        'totalMonthly' => trans('clients.sas4_total_monthly'),
+        'selectMonth' => trans('clients.sas4_select_month'),
+        'selectYear' => trans('clients.sas4_select_year'),
+        'dayLabel' => trans('clients.sas4_day'),
+        'noTraffic' => trans('clients.sas4_no_traffic'),
+        'trafficReport' => trans('clients.sas4_traffic_report'),
     ]) !!};
 
     var sas4StatusLabels = {!! json_encode([
@@ -671,7 +714,16 @@
 </script>
 
 <script>
+    var sas4TrafficInterval = null;
+    var sas4CurrentClientId = null;
+
     function showClientDetails(clientId) {
+        if (sas4TrafficInterval) {
+            clearInterval(sas4TrafficInterval);
+            sas4TrafficInterval = null;
+        }
+        sas4CurrentClientId = clientId;
+
         $('#clientDetailsModal').modal('show');
 
         $('#modalLoader').show();
@@ -686,6 +738,19 @@
                 $('#clientDetailsContent').html(response);
                 $('#editClientBtn').attr('href', "{{ route('admin.clients.edit', '') }}/" + clientId).show();
                 loadSas4Info(clientId);
+
+                $('#clientDetailTabs').off('shown.bs.tab').on('shown.bs.tab', function(e) {
+                    if ($(e.target).attr('id') === 'traffic-tab') {
+                        loadSas4Traffic(clientId);
+                        if (!sas4TrafficInterval) {
+                            sas4TrafficInterval = setInterval(function() {
+                                if ($('#tabTraffic').is(':visible') && sas4CurrentClientId) {
+                                    loadSas4Traffic(sas4CurrentClientId);
+                                }
+                            }, 60000);
+                        }
+                    }
+                });
             },
             error: function(xhr, status, error) {
                 $('#modalLoader').hide();
@@ -699,6 +764,105 @@
             }
         });
     }
+
+    function populateTrafficSelectors() {
+        var monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        var currentMonth = new Date().getMonth() + 1;
+        var currentYear = new Date().getFullYear();
+
+        var monthSelect = $('#sas4TrafficMonth');
+        var yearSelect = $('#sas4TrafficYear');
+        if (!monthSelect.length || !yearSelect.length) return;
+
+        monthSelect.empty();
+        yearSelect.empty();
+
+        for (var m = 1; m <= 12; m++) {
+            monthSelect.append('<option value="' + m + '"' + (m === currentMonth ? ' selected' : '') + '>' + monthNames[m - 1] + '</option>');
+        }
+
+        for (var y = currentYear; y >= currentYear - 2; y--) {
+            yearSelect.append('<option value="' + y + '"' + (y === currentYear ? ' selected' : '') + '>' + y + '</option>');
+        }
+    }
+
+    function loadDailyTraffic(clientId) {
+        var container = $('#dailyTrafficTableContainer');
+        if (!container.length) return;
+
+        var month = $('#sas4TrafficMonth').val();
+        var year = $('#sas4TrafficYear').val();
+
+        container.html('<div class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm"></div></div>');
+
+        $.ajax({
+            url: '{{ route('admin.clients.sas4_daily_traffic', ['id' => '__ID__']) }}'.replace('__ID__', clientId) + '?month=' + month + '&year=' + year,
+            type: 'GET',
+            dataType: 'json',
+            success: function(res) {
+                if (res.error) {
+                    container.html('<div class="text-center text-muted py-3">' + res.error + '</div>');
+                    return;
+                }
+
+                var days = res.days || [];
+                var summary = res.summary || {};
+                var monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                var monthName = monthNames[parseInt(month) - 1] || month;
+
+                var html = '<div class="table-responsive" dir="ltr" style="max-height:400px;overflow-y:auto;">';
+                html += '<table class="table table-sm table-bordered table-striped mb-0" style="font-size:12px;">';
+                html += '<thead class="table-light"><tr>';
+                html += '<th style="width:80px;">' + t2('dayLabel') + '</th>';
+                html += '<th>' + t2('downloadShort') + '</th>';
+                html += '<th>' + t2('uploadShort') + '</th>';
+                html += '<th>' + t2('totalShort') + '</th>';
+                html += '<th>' + t2('realTraffic') + '</th>';
+                html += '</tr></thead><tbody>';
+
+                var daysWithTraffic = 0;
+                days.forEach(function(day) {
+                    var rowClass = day.has_traffic ? '' : 'text-muted';
+                    var dateStr = year + '-' + monthName + '-' + day.day;
+                    html += '<tr class="' + rowClass + '">';
+                    html += '<td class="fw-bold">' + dateStr + '</td>';
+                    html += '<td>' + (day.has_traffic ? formatBytes(day.download) : '-') + '</td>';
+                    html += '<td>' + (day.has_traffic ? formatBytes(day.upload) : '-') + '</td>';
+                    html += '<td>' + (day.has_traffic ? formatBytes(day.total) : '-') + '</td>';
+                    html += '<td>' + (day.has_traffic ? formatBytes(day.total_real) : '-') + '</td>';
+                    html += '</tr>';
+                    if (day.has_traffic) daysWithTraffic++;
+                });
+
+                html += '</tbody>';
+                html += '<tfoot class="table-dark"><tr>';
+                html += '<td class="fw-bold">' + t2('totalMonthly') + '</td>';
+                html += '<td class="fw-bold">' + formatBytes(summary.total_download) + '</td>';
+                html += '<td class="fw-bold">' + formatBytes(summary.total_upload) + '</td>';
+                html += '<td class="fw-bold">' + formatBytes(summary.total_traffic) + '</td>';
+                html += '<td class="fw-bold">' + formatBytes(summary.total_real) + '</td>';
+                html += '</tr></tfoot>';
+                html += '</table></div>';
+
+                if (daysWithTraffic === 0) {
+                    html = '<div class="text-center text-muted py-4"><i class="bi bi-bar-chart-line fs-1"></i><p class="mb-0 mt-2">' + t2('noTraffic') + '</p></div>';
+                }
+
+                container.html(html);
+            },
+            error: function() {
+                container.html('<div class="text-center text-danger py-3">' + t2('actionFailed') + '</div>');
+            }
+        });
+    }
+
+    $('#clientDetailsModal').on('hidden.bs.modal', function() {
+        if (sas4TrafficInterval) {
+            clearInterval(sas4TrafficInterval);
+            sas4TrafficInterval = null;
+        }
+        sas4CurrentClientId = null;
+    });
 
     function loadSas4Info(clientId) {
         $.ajax({
@@ -796,7 +960,12 @@
                     '</div></div></div>';
 
                 $('#sas4Container_' + clientId).remove();
-                $('#clientDetailsContent').append(html);
+                var target = $('#sas4InfoCard_' + clientId);
+                if (target.length) {
+                    target.html(html);
+                } else {
+                    $('#clientDetailsContent').append(html);
+                }
 
                 var expDate = user.expiration || '';
                 if (expDate) {
@@ -827,6 +996,137 @@
                 });
             },
             error: function() {}
+        });
+    }
+
+    function formatBytes(bytes) {
+        if (!bytes || bytes === '' || bytes === null) return t2('unlimited');
+        bytes = parseInt(bytes);
+        if (isNaN(bytes) || bytes === 0) return '0 B';
+        var sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        var i = Math.floor(Math.log(bytes) / Math.log(1024));
+        return (bytes / Math.pow(1024, i)).toFixed(2) + ' ' + sizes[i];
+    }
+
+    function t2(key) {
+        return sas4Labels[key] || key;
+    }
+
+    function loadSas4Traffic(clientId) {
+        var loader = $('#sas4TrafficLoader');
+        var content = $('#sas4TrafficContent');
+
+        loader.show();
+        content.hide();
+
+        $.ajax({
+            url: '{{ route('admin.clients.sas4_traffic', ['id' => '__ID__']) }}'.replace('__ID__', clientId),
+            type: 'GET',
+            dataType: 'json',
+            success: function(res) {
+                loader.hide();
+
+                if (res.error) {
+                    content.html('<div class="alert alert-warning text-center"><i class="bi bi-exclamation-triangle"></i> ' + res.error + '</div>').show();
+                    return;
+                }
+
+                var user = res.user || {};
+                var overview = res.overview || {};
+                var profileDetails = res.profile_details || {};
+                var dailyTraffic = res.daily_traffic || [];
+                var totalTrafficBytes = res.total_traffic_bytes || null;
+                var onlineStatus = res.online_status || 0;
+
+                var onlineBadge = onlineStatus == 1
+                    ? '<span class="badge bg-success fs-6"><i class="bi bi-wifi"></i> ' + t2('connected') + '</span>'
+                    : '<span class="badge bg-secondary fs-6"><i class="bi bi-wifi-off"></i> ' + t2('notConnected') + '</span>';
+
+                var html = '<div class="row g-3">';
+
+                html += '<div class="col-md-6">';
+                html += '<div class="card h-100" style="border:1px solid #0d6efd;">';
+                html += '<div class="card-header text-white" style="background:#0d6efd;padding:8px 16px;">';
+                html += '<i class="bi bi-info-circle-fill"></i> ' + t2('sessionInfo');
+                html += '</div>';
+                html += '<div class="card-body p-3" style="font-size:13px;">';
+                html += '<div class="row g-2">';
+                html += '<div class="col-6"><strong>' + t2('status') + ':</strong><br>' + onlineBadge + '</div>';
+                html += '<div class="col-6"><strong>' + t2('username') + ':</strong><br>' + (user.username || 'N/A') + '</div>';
+                html += '<div class="col-6"><strong>' + t2('currentIp') + ':</strong><br>' + (user.last_ip_address || user.last_ip || 'N/A') + '</div>';
+                html += '<div class="col-6"><strong>' + t2('lastSeen') + ':</strong><br>' + (user.last_login || user.last_online || 'N/A') + '</div>';
+                html += '<div class="col-6"><strong>' + t2('sessions') + ':</strong><br>' + (user.simultaneous_sessions || '1') + '</div>';
+                html += '<div class="col-6"><strong>' + t2('plan') + ':</strong><br>' + (user.profile_name || profileDetails.name || 'N/A') + '</div>';
+                html += '<div class="col-6"><strong>' + t2('expiration') + ':</strong><br>' + (user.expiration || 'N/A') + '</div>';
+                html += '<div class="col-6"><strong>' + t2('balance') + ':</strong><br>' + (user.balance || '0.00') + '</div>';
+                html += '</div>';
+                html += '</div></div>';
+                html += '</div>';
+
+                html += '<div class="col-md-6">';
+                html += '<div class="card h-100" style="border:1px solid #198754;">';
+                html += '<div class="card-header text-white" style="background:#198754;padding:8px 16px;">';
+                html += '<i class="bi bi-speedometer2"></i> ' + t2('trafficQuota');
+                html += '</div>';
+                html += '<div class="card-body p-3" style="font-size:13px;">';
+
+                var rx = overview.remaining_rx;
+                var tx = overview.remaining_tx;
+                var rxtx = overview.remaining_rxtx;
+                var rUptime = overview.remaining_uptime;
+
+                var hasQuota = (rx !== null && rx !== '' && rx !== undefined) || (tx !== null && tx !== '' && tx !== undefined) || (rxtx !== null && rxtx !== '' && rxtx !== undefined) || (rUptime !== null && rUptime !== '' && rUptime !== undefined);
+
+                if (hasQuota) {
+                    html += '<table class="table table-sm table-bordered mb-0" style="font-size:12px;">';
+                    html += '<tbody>';
+                    html += '<tr><td class="fw-bold text-success" style="width:40%;">' + t2('remainingDownload') + '</td><td>' + (rx ? formatBytes(rx) : t2('unlimited')) + '</td></tr>';
+                    html += '<tr><td class="fw-bold text-primary">' + t2('remainingUpload') + '</td><td>' + (tx ? formatBytes(tx) : t2('unlimited')) + '</td></tr>';
+                    html += '<tr><td class="fw-bold text-info">' + t2('remainingTotal') + '</td><td>' + (rxtx ? formatBytes(rxtx) : t2('unlimited')) + '</td></tr>';
+                    html += '<tr><td class="fw-bold text-warning">' + t2('remainingUptime') + '</td><td>' + (rUptime || t2('unlimited')) + '</td></tr>';
+                    html += '</tbody></table>';
+                } else {
+                    html += '<div class="text-center text-muted py-2">';
+                    html += '<i class="bi bi-infinity fs-1"></i>';
+                    html += '<p class="mb-0 mt-1">' + t2('unlimited') + '</p>';
+                    html += '</div>';
+                    if (totalTrafficBytes) {
+                        html += '<hr>';
+                        html += '<div class="text-center">';
+                        html += '<small class="text-muted">' + t2('totalShort') + ': </small>';
+                        html += '<span class="fw-bold text-primary">' + formatBytes(totalTrafficBytes) + '</span>';
+                        html += '</div>';
+                    }
+                }
+
+                html += '</div></div>';
+                html += '</div>';
+                html += '</div>';
+
+                html += '<div class="mt-3">';
+                html += '<div class="card" style="border:1px solid #6c757d;">';
+                html += '<div class="card-header d-flex justify-content-between align-items-center text-white" style="background:#6c757d;padding:8px 16px;">';
+                html += '<span><i class="bi bi-bar-chart-line"></i> ' + t2('trafficReport') + '</span>';
+                html += '<div class="d-flex align-items-center gap-2">';
+                html += '<select id="sas4TrafficMonth" class="form-select form-select-sm" style="width:auto;font-size:12px;" onchange="loadDailyTraffic(' + clientId + ')"></select>';
+                html += '<select id="sas4TrafficYear" class="form-select form-select-sm" style="width:auto;font-size:12px;" onchange="loadDailyTraffic(' + clientId + ')"></select>';
+                html += '<button class="btn btn-sm btn-light" onclick="loadDailyTraffic(' + clientId + ')" style="font-size:11px;padding:2px 8px;">';
+                html += '<i class="bi bi-arrow-clockwise"></i> ' + t2('refresh');
+                html += '</button>';
+                html += '</div></div>';
+                html += '<div class="card-body p-2">';
+                html += '<div id="dailyTrafficTableContainer"><div class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm"></div></div></div>';
+                html += '</div></div>';
+                html += '</div>';
+
+                content.html(html).show();
+                populateTrafficSelectors();
+                loadDailyTraffic(clientId);
+            },
+            error: function(xhr) {
+                loader.hide();
+                content.html('<div class="alert alert-danger text-center"><i class="bi bi-exclamation-triangle"></i> ' + t2('actionFailed') + '</div>').show();
+            }
         });
     }
 
@@ -917,6 +1217,9 @@
                     showConfirmButton: false
                 }).then(() => {
                     loadSas4Info(clientId);
+                    if ($('#tabTraffic').is(':visible') && sas4CurrentClientId) {
+                        loadSas4Traffic(sas4CurrentClientId);
+                    }
                 });
             }
         });

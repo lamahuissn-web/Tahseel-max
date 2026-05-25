@@ -890,6 +890,43 @@ class ClientController extends Controller
         return response()->json($info);
     }
 
+    public function getSas4Traffic($id)
+    {
+        $client = $this->ClientsRepository->getById($id);
+        if (!$client || !$client->sas_username) {
+            return response()->json(['error' => trans('clients.no_sas4_username_linked')], 404);
+        }
+
+        $sas4Service = app(\App\Services\Sas4\Sas4ApiService::class);
+        $data = $sas4Service->getTrafficAndSessions($client->sas_username);
+
+        if (!$data) {
+            return response()->json(['error' => trans('clients.sas4_user_not_found')], 404);
+        }
+
+        return response()->json($data);
+    }
+
+    public function getSas4DailyTraffic($id)
+    {
+        $client = $this->ClientsRepository->getById($id);
+        if (!$client || !$client->sas_username) {
+            return response()->json(['error' => trans('clients.no_sas4_username_linked')], 404);
+        }
+
+        $month = request('month', date('n'));
+        $year = request('year', date('Y'));
+
+        $sas4Service = app(\App\Services\Sas4\Sas4ApiService::class);
+        $data = $sas4Service->getDailyTrafficReport($client->sas_username, $month, $year);
+
+        if (!$data) {
+            return response()->json(['error' => trans('clients.sas4_user_not_found')], 404);
+        }
+
+        return response()->json($data);
+    }
+
     public function searchSas4Users()
     {
         $query = request('q', '');

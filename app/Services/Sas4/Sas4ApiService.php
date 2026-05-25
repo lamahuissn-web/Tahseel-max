@@ -201,6 +201,81 @@ class Sas4ApiService
         ]);
     }
 
+    public function getDailyTrafficReport($username, $month, $year)
+    {
+        $user = $this->getUserByUsername($username);
+        if (!$user || !isset($user['data'])) {
+            return null;
+        }
+
+        $userId = $user['data']['id'];
+        $daysInMonth = (int) date('t', mktime(0, 0, 0, $month, 1, $year));
+
+        $payload = $this->aesEncrypt(json_encode([
+            'user_id' => $userId,
+            'month' => (int) $month,
+            'year' => (int) $year,
+            'report_type' => 'daily',
+        ]));
+
+        $response = $this->request('POST', '/admin/api/index.php/api/user/traffic', [
+            'payload' => $payload,
+        ]);
+
+        if (!$response || !isset($response['data'])) {
+            return null;
+        }
+
+        $data = $response['data'];
+        $rx = $data['rx'] ?? [];
+        $tx = $data['tx'] ?? [];
+        $total = $data['total'] ?? [];
+        $totalReal = $data['total_real'] ?? [];
+        $freeTraffic = $data['free_traffic'] ?? [];
+
+        $days = [];
+        $summary = [
+            'total_download' => 0,
+            'total_upload' => 0,
+            'total_traffic' => 0,
+            'total_real' => 0,
+        ];
+
+        for ($d = 1; $d <= $daysInMonth; $d++) {
+            $idx = $d - 1;
+            $rxVal = (int) ($rx[$idx] ?? 0);
+            $txVal = (int) ($tx[$idx] ?? 0);
+            $totalVal = (int) ($total[$idx] ?? 0);
+            $totalRealVal = (int) ($totalReal[$idx] ?? 0);
+            $freeVal = (int) ($freeTraffic[$idx] ?? 0);
+
+            $days[] = [
+                'day' => $d,
+                'date' => sprintf('%d-%d-%d', $year, $month, $d),
+                'download' => $rxVal,
+                'upload' => $txVal,
+                'total' => $totalVal,
+                'total_real' => $totalRealVal,
+                'free_traffic' => $freeVal,
+                'has_traffic' => ($rxVal > 0 || $txVal > 0),
+            ];
+
+            $summary['total_download'] += $rxVal;
+            $summary['total_upload'] += $txVal;
+            $summary['total_traffic'] += $totalVal;
+            $summary['total_real'] += $totalRealVal;
+        }
+
+        return [
+            'user_id' => $userId,
+            'username' => $user['data']['username'],
+            'month' => (int) $month,
+            'year' => (int) $year,
+            'days' => $days,
+            'summary' => $summary,
+        ];
+    }
+
     /**
      * Get list of profiles (bandwidth plans)
      */
@@ -237,6 +312,79 @@ class Sas4ApiService
         return $this->request('POST', '/admin/api/index.php/api/user/ping', [
             'payload' => $payload,
         ]);
+    }
+
+    public function getTrafficAndSessions($username)
+    {
+        $user = $this->getUserByUsername($username);
+        if (!$user || !isset($user['data'])) {
+            return null;
+        }
+
+        $userData = $user['data'];
+        $userId = $userData['id'];
+
+        $overview = $this->getUserOverview($userId);
+        $overviewData = $overview ? ($overview['data'] ?? $overview) : null;
+
+        $searchResult = $this->searchUsers($username, 1, 1);
+        $searchUser = null;
+        if ($searchResult && isset($searchResult['data'])) {
+            foreach ($searchResult['data'] as $u) {
+                if (strtolower($u['username']) === strtolower($username)) {
+                    $searchUser = $u;
+                    break;
+                }
+            }
+        }
+
+        $userData['online'] = $userData['online_status'] ?? ($searchUser['online_status'] ?? 0);
+
+        if ($overviewData && isset($overviewData['last_online'])) {
+            $userData['last_login'] = $overviewData['last_online'];
+        }
+
+        $dailyTrafficDetails = $searchUser['daily_traffic_details'] ?? null;
+        $totalTrafficBytes = null;
+        $trafficDetailsArray = [];
+
+        if ($dailyTrafficDetails && is_array($dailyTrafficDetails)) {
+            if (isset($dailyTrafficDetails['traffic'])) {
+                $totalTrafficBytes = $dailyTrafficDetails['traffic'];
+            }
+            if (isset($dailyTrafficDetails['data']) && is_array($dailyTrafficDetails['data'])) {
+                $trafficDetailsArray = $dailyTrafficDetails['data'];
+            } elseif (isset($dailyTrafficDetails['daily']) && is_array($dailyTrafficDetails['daily'])) {
+                $trafficDetailsArray = $dailyTrafficDetails['daily'];
+            } elseif (isset($dailyTrafficDetails[0])) {
+                $trafficDetailsArray = $dailyTrafficDetails;
+            }
+        }
+
+        $trafficApiResponse = $this->getUserTraffic($userId);
+        if ($trafficApiResponse) {
+            $trafficData = $trafficApiResponse['data'] ?? $trafficApiResponse;
+            if (is_array($trafficData)) {
+                if (isset($trafficData['total_bytes']) || isset($trafficData['total'])) {
+                    $totalTrafficBytes = $totalTrafficBytes ?? ($trafficData['total_bytes'] ?? $trafficData['total'] ?? null);
+                }
+                if (isset($trafficData['daily']) && is_array($trafficData['daily'])) {
+                    $trafficDetailsArray = $trafficDetailsArray ?: $trafficData['daily'];
+                }
+                if (isset($trafficData['data']) && is_array($trafficData['data']) && empty($trafficDetailsArray)) {
+                    $trafficDetailsArray = $trafficData['data'];
+                }
+            }
+        }
+
+        return [
+            'user' => $userData,
+            'overview' => $overviewData,
+            'profile_details' => $searchUser['profile_details'] ?? null,
+            'total_traffic_bytes' => $totalTrafficBytes,
+            'daily_traffic' => $trafficDetailsArray,
+            'online_status' => (int)($searchUser['online_status'] ?? $userData['online_status'] ?? 0),
+        ];
     }
 
     /**
