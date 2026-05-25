@@ -110,7 +110,7 @@
 @endsection
 @section('content')
 
-<div id="kt_app_content_container" class="app-container container-xxxl">
+<div id="kt_app_content_container" class="app-container container-xxl">
     <div class="card shadow-sm mb-4 border-top border-4 border-primary">
         <div class="card-body text-center">
             <div>
@@ -120,11 +120,11 @@
         </div>
     </div>
 
-    <div class="card shadow-sm" style="margin-bottom: 20px;">
+    <div class="card shadow-sm mb-4">
         <div class="card-body">
-            <div class="col-md-12 row">
+            <div class="row g-3">
 
-                <div class="col-md-3" style="margin-bottom: 10px;">
+                <div class="col-md-3">
                     <label for="nameSearch" class="form-label">{{ trans('clients.search_by_name') }}</label>
                     <div class="input-group flex-nowrap">
                         <span class="input-group-text">{!! form_icon('text') !!}</span>
@@ -133,7 +133,7 @@
                     </div>
                 </div>
 
-                <div class="col-md-3" style="margin-bottom: 10px;">
+                <div class="col-md-3">
                     <label for="otherFieldsSearch" class="form-label">{{ trans('clients.search_other_fields') }}</label>
                     <div class="input-group flex-nowrap">
                         <span class="input-group-text">{!! form_icon('text') !!}</span>
@@ -143,7 +143,7 @@
                     </div>
                 </div>
 
-                <div class="col-md-3" style="margin-bottom: 10px;">
+                <div class="col-md-3">
                     <label for="clientTypeFilter" class="form-label">{{ trans('clients.client_type') }}</label>
                     <div class="input-group flex-nowrap">
                         <span class="input-group-text">{!! form_icon('select2') !!}</span>
@@ -155,13 +155,12 @@
                     </div>
                 </div>
 
-                <div class="col-md-3" style="margin-bottom: 10px;">
-                    <label class="form-check-label ms-2" for="showInactiveOnly" style="cursor: pointer; ">
+                <div class="col-md-3">
+                    <label class="form-check-label ms-2" for="showInactiveOnly" style="cursor: pointer;">
                         <strong>{{ trans('clients.show_inactive_only') }}</strong>
                     </label>
                     <div class="form-check form-switch mt-2">
-                        <input class="form-check-input" type="checkbox" id="showInactiveOnly" style="width: 50px; height: 25px; cursor: pointer;">
-
+                        <input class="form-check-input toggle-switch-sm" type="checkbox" id="showInactiveOnly" style="cursor: pointer;">
                     </div>
                 </div>
 
@@ -169,7 +168,7 @@
         </div>
     </div>
 
-    <div class="card shadow-sm" style="border-top: 3px solid #007bff;">
+    <div class="card shadow-sm card-border-top-primary">
         @php
         $headers = [
         'clients.ID',
@@ -811,7 +810,7 @@
                 var monthName = monthNames[parseInt(month) - 1] || month;
 
                 var html = '<div class="table-responsive" dir="ltr" style="max-height:400px;overflow-y:auto;">';
-                html += '<table class="table table-sm table-bordered table-striped mb-0" style="font-size:12px;">';
+                html += '<table class="table table-sm table-bordered table-striped mb-0 data-table">';
                 html += '<thead class="table-light"><tr>';
                 html += '<th style="width:80px;">' + t2('dayLabel') + '</th>';
                 html += '<th>' + t2('downloadShort') + '</th>';
@@ -894,11 +893,11 @@
                 var t = sas4Labels;
 
                 var html = '<div id="sas4Container_' + clientId + '">' +
-                    '<div class="card mt-3" style="border:1px solid #0d6efd;">' +
-                    '<div class="card-header" style="background:#0d6efd;color:#fff;padding:8px 16px;">' +
+                    '<div class="card mt-3 sas4-card sas4-card-info">' +
+                    '<div class="card-header card-header-primary">' +
                     '<i class="bi bi-wifi"></i> ' + t.internetInfo + '</div>' +
-                    '<div class="card-body p-2">' +
-                    '<div class="row g-2" style="font-size:13px;">' +
+                    '<div class="card-body p-3">' +
+                    '<div class="row g-2">' +
                     '<div class="col-6"><strong>' + t.username + ':</strong> ' + (user.username || 'N/A') + '</div>' +
                     '<div class="col-6"><strong>' + t.status + ':</strong> ' + statusBadge + '</div>' +
                     '<div class="col-6"><strong>' + t.plan + ':</strong> ' + profileName + '</div>' +
@@ -911,7 +910,7 @@
                     '</div>';
 
                 if (trafficData && trafficData.length > 0) {
-                    html += '<table class="table table-sm table-bordered mt-2" style="font-size:12px;"><thead class="table-light"><tr>' +
+                    html += '<table class="table table-sm table-bordered mt-2 data-table"><thead class="table-light"><tr>' +
                         '<th>' + t.download + '</th>' +
                         '<th>' + t.upload + '</th>' +
                         '<th>' + t.total + '</th>' +
@@ -931,10 +930,10 @@
 
                 html += '</div></div>';
 
-                html += '<div class="card mt-2" style="border:1px solid #6c757d;">' +
-                    '<div class="card-header" style="background:#6c757d;color:#fff;padding:8px 16px;">' +
+                html += '<div class="card mt-2 sas4-card sas4-card-control">' +
+                    '<div class="card-header card-header-secondary">' +
                     '<i class="bi bi-gear-fill"></i> ' + t.control + '</div>' +
-                    '<div class="card-body p-2">' +
+                    '<div class="card-body p-3">' +
                     '<div class="d-flex flex-wrap gap-2">' +
                     '<button class="btn btn-sm btn-success" onclick="sas4ControlAction(' + clientId + ', \'enable\')">' +
                     '<i class="bi bi-check-circle"></i> ' + t.enable + '</button>' +
@@ -943,16 +942,16 @@
                     '<button class="btn btn-sm btn-warning" onclick="sas4ControlAction(' + clientId + ', \'disconnect\')">' +
                     '<i class="bi bi-plug-fill"></i> ' + t.disconnect + '</button>' +
                     '</div>' +
-                    '<div class="d-flex flex-wrap gap-2 mt-2 align-items-end">' +
+                    '<div class="d-flex flex-wrap gap-2 mt-3 align-items-end">' +
                     '<div class="flex-grow-1">' +
-                    '<label class="form-label mb-1" style="font-size:12px;">' + t.selectPlan + '</label>' +
-                    '<select class="form-select form-select-sm" id="sas4ProfileSelect_' + clientId + '" style="font-size:12px;">' +
+                    '<label class="form-label mb-1 small">' + t.selectPlan + '</label>' +
+                    '<select class="form-select form-select-sm" id="sas4ProfileSelect_' + clientId + '">' +
                     '<option value="">-- ' + t.profile + ' --</option>' +
                     '</select>' +
                     '</div>' +
                     '<div>' +
-                    '<label class="form-label mb-1" style="font-size:12px;">@lang('clients.sas4_expiration')</label>' +
-                    '<input type="date" class="form-control form-control-sm" id="sas4ExpirationInput_' + clientId + '" style="font-size:12px;width:150px;">' +
+                    '<label class="form-label mb-1 small">@lang('clients.sas4_expiration')</label>' +
+                    '<input type="date" class="form-control form-control-sm" id="sas4ExpirationInput_' + clientId + '" style="width:150px;">' +
                     '</div>' +
                     '<button class="btn btn-sm btn-primary" onclick="sas4ControlAction(' + clientId + ', \'change_profile\')">' +
                     '<i class="bi bi-arrow-repeat"></i> ' + t.changePlan + '</button>' +
@@ -1042,14 +1041,14 @@
                     ? '<span class="badge bg-success fs-6"><i class="bi bi-wifi"></i> ' + t2('connected') + '</span>'
                     : '<span class="badge bg-secondary fs-6"><i class="bi bi-wifi-off"></i> ' + t2('notConnected') + '</span>';
 
-                var html = '<div class="row g-3">';
+                var html = '<div class="row g-3 sas4-tab-content">';
 
                 html += '<div class="col-md-6">';
-                html += '<div class="card h-100" style="border:1px solid #0d6efd;">';
-                html += '<div class="card-header text-white" style="background:#0d6efd;padding:8px 16px;">';
+                html += '<div class="card h-100 sas4-card sas4-card-info">';
+                html += '<div class="card-header card-header-primary">';
                 html += '<i class="bi bi-info-circle-fill"></i> ' + t2('sessionInfo');
                 html += '</div>';
-                html += '<div class="card-body p-3" style="font-size:13px;">';
+                html += '<div class="card-body p-3">';
                 html += '<div class="row g-2">';
                 html += '<div class="col-6"><strong>' + t2('status') + ':</strong><br>' + onlineBadge + '</div>';
                 html += '<div class="col-6"><strong>' + t2('username') + ':</strong><br>' + (user.username || 'N/A') + '</div>';
@@ -1064,11 +1063,11 @@
                 html += '</div>';
 
                 html += '<div class="col-md-6">';
-                html += '<div class="card h-100" style="border:1px solid #198754;">';
-                html += '<div class="card-header text-white" style="background:#198754;padding:8px 16px;">';
+                html += '<div class="card h-100 sas4-card sas4-card-quota">';
+                html += '<div class="card-header card-header-success">';
                 html += '<i class="bi bi-speedometer2"></i> ' + t2('trafficQuota');
                 html += '</div>';
-                html += '<div class="card-body p-3" style="font-size:13px;">';
+                html += '<div class="card-body p-3">';
 
                 var rx = overview.remaining_rx;
                 var tx = overview.remaining_tx;
@@ -1078,11 +1077,11 @@
                 var hasQuota = (rx !== null && rx !== '' && rx !== undefined) || (tx !== null && tx !== '' && tx !== undefined) || (rxtx !== null && rxtx !== '' && rxtx !== undefined) || (rUptime !== null && rUptime !== '' && rUptime !== undefined);
 
                 if (hasQuota) {
-                    html += '<table class="table table-sm table-bordered mb-0" style="font-size:12px;">';
+                    html += '<table class="table table-sm table-bordered mb-0 data-table">';
                     html += '<tbody>';
-                    html += '<tr><td class="fw-bold text-success" style="width:40%;">' + t2('remainingDownload') + '</td><td>' + (rx ? formatBytes(rx) : t2('unlimited')) + '</td></tr>';
+                    html += '<tr><td class="fw-bold text-success-contrast" style="width:40%;">' + t2('remainingDownload') + '</td><td>' + (rx ? formatBytes(rx) : t2('unlimited')) + '</td></tr>';
                     html += '<tr><td class="fw-bold text-primary">' + t2('remainingUpload') + '</td><td>' + (tx ? formatBytes(tx) : t2('unlimited')) + '</td></tr>';
-                    html += '<tr><td class="fw-bold text-info">' + t2('remainingTotal') + '</td><td>' + (rxtx ? formatBytes(rxtx) : t2('unlimited')) + '</td></tr>';
+                    html += '<tr><td class="fw-bold text-info-contrast">' + t2('remainingTotal') + '</td><td>' + (rxtx ? formatBytes(rxtx) : t2('unlimited')) + '</td></tr>';
                     html += '<tr><td class="fw-bold text-warning">' + t2('remainingUptime') + '</td><td>' + (rUptime || t2('unlimited')) + '</td></tr>';
                     html += '</tbody></table>';
                 } else {
@@ -1104,17 +1103,17 @@
                 html += '</div>';
 
                 html += '<div class="mt-3">';
-                html += '<div class="card" style="border:1px solid #6c757d;">';
-                html += '<div class="card-header d-flex justify-content-between align-items-center text-white" style="background:#6c757d;padding:8px 16px;">';
+                html += '<div class="card sas4-card sas4-card-traffic">';
+                html += '<div class="card-header d-flex justify-content-between align-items-center card-header-secondary">';
                 html += '<span><i class="bi bi-bar-chart-line"></i> ' + t2('trafficReport') + '</span>';
                 html += '<div class="d-flex align-items-center gap-2">';
-                html += '<select id="sas4TrafficMonth" class="form-select form-select-sm" style="width:auto;font-size:12px;" onchange="loadDailyTraffic(' + clientId + ')"></select>';
-                html += '<select id="sas4TrafficYear" class="form-select form-select-sm" style="width:auto;font-size:12px;" onchange="loadDailyTraffic(' + clientId + ')"></select>';
-                html += '<button class="btn btn-sm btn-light" onclick="loadDailyTraffic(' + clientId + ')" style="font-size:11px;padding:2px 8px;">';
+                html += '<select id="sas4TrafficMonth" class="form-select form-select-sm" style="width:auto;" onchange="loadDailyTraffic(' + clientId + ')"></select>';
+                html += '<select id="sas4TrafficYear" class="form-select form-select-sm" style="width:auto;" onchange="loadDailyTraffic(' + clientId + ')"></select>';
+                html += '<button class="btn btn-sm btn-light" onclick="loadDailyTraffic(' + clientId + ')" style="padding:2px 8px;">';
                 html += '<i class="bi bi-arrow-clockwise"></i> ' + t2('refresh');
                 html += '</button>';
                 html += '</div></div>';
-                html += '<div class="card-body p-2">';
+                html += '<div class="card-body p-3">';
                 html += '<div id="dailyTrafficTableContainer"><div class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm"></div></div></div>';
                 html += '</div></div>';
                 html += '</div>';

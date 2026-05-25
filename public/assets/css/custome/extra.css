@@ -217,6 +217,16 @@
     padding: 16px;
 }
 
+/* SAS4 card border variants */
+.sas4-card { border-radius: 6px; overflow: hidden; }
+.sas4-card-info { border: 1px solid #0d6efd; }
+.sas4-card-success { border: 1px solid #198754; }
+.sas4-card-warning { border: 1px solid #ffc107; }
+.sas4-card-danger { border: 1px solid #dc3545; }
+.sas4-card-control { border: 1px solid #6c757d; }
+.sas4-card-quota { border: 1px solid #198754; }
+.sas4-card-traffic { border: 1px solid #6c757d; }
+
 /* Tab navigation improvements */
 .nav-tabs .nav-link {
     transition: all 0.15s ease;

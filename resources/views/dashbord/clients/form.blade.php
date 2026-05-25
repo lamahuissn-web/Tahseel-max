@@ -23,9 +23,9 @@
 @endsection
 @section('content')
 
-    <div id="kt_app_content_container" class="t_container">
+    <div id="kt_app_content_container" class="app-container container-xxl">
 
-        <div class="card shadow-sm" style="border-top: 3px solid #007bff;">
+        <div class="card shadow-sm card-border-top-primary">
             @php
                 generateCardHeader('clients.add_client', 'admin.clients.index', ' ');
             @endphp
@@ -34,8 +34,8 @@
             <form action="{{ route('admin.clients.store') }}" method="post" enctype="multipart/form-data" id="store_form">
                 @csrf
                 <div class="card-body">
-                    <div class="col-md-12 row" style="margin-top: 10px">
-                        <div class="col-md-3" style="margin-top: 10px">
+                    <div class="row g-3">
+                        <div class="col-md-3 form-field">
                             <label for="emp_code" class="form-label">{{ trans('clients.client_code') }}</label>
                             <div class="input-group">
                                 <span class="input-group-text" id="basic-addon3">{!! form_icon('text') !!}</span>
@@ -47,7 +47,7 @@
                             @enderror
                         </div>
 
-                        <div class="col-md-3" style="margin-top: 10px">
+                        <div class="col-md-3" form-field>
                             <label for="first_name" class="form-label">{{ trans('clients.name') }}</label>
                             <div class="input-group">
                                 <span class="input-group-text" id="basic-addon3">{!! form_icon('text') !!}</span>
@@ -59,7 +59,7 @@
                             @enderror
                         </div>
 
-                        {{-- <div class="col-md-3" style="margin-top: 10px">
+                        {{-- <div class="col-md-3" form-field>
                             <label for="last_name" class="form-label">{{ trans('clients.phone') }}</label>
                             <div class="input-group">
                                 <span class="input-group-text" id="basic-addon3">{!! form_icon('phone') !!}</span>
@@ -70,7 +70,7 @@
                                 <span class="invalid-feedback d-block" role="alert">{{ $message }}</span>
                             @enderror
                         </div> --}}
-                        <div class="col-md-3" style="margin-top: 10px">
+                        <div class="col-md-3" form-field>
                             <label for="phone" class="form-label">{{ trans('clients.phone') }}</label>
                             <div class="input-group">
                                 <span class="input-group-text">{!! form_icon('phone') !!}</span>
@@ -105,7 +105,7 @@
                                 <span class="invalid-feedback d-block" role="alert">{{ $message }}</span>
                             @enderror
                         </div>
-                        {{-- <div class="col-md-3" style="margin-top: 10px">
+                        {{-- <div class="col-md-3" form-field>
                             <label for="email" class="form-label">{{ trans('clients.email') }}</label>
                             <div class="input-group">
                                 <span class="input-group-text" id="basic-addon3">{!! form_icon('email') !!}</span>
@@ -115,7 +115,7 @@
                             <span class="invalid-feedback d-block" role="alert">{{ $message }}</span>
                             @enderror
                         </div> --}}
-                        <div class="col-md-3" style="margin-top: 10px">
+                        <div class="col-md-3" form-field>
                             <label for="user" class="form-label">{{ trans('clients.user') }}</label>
                             <div class="input-group">
                                 <span class="input-group-text" id="basic-addon3">{!! form_icon('text') !!}</span>
@@ -128,8 +128,8 @@
                         </div>
                         {{-- </div>
 
-                    <div class="col-md-12 row" style="margin-top: 10px"> --}}
-                        <div class="col-md-3" style="margin-top: 10px">
+                    <div class="col-md-12 row" form-field> --}}
+                        <div class="col-md-3" form-field>
                             <label for="national_id" class="form-label">{{ trans('clients.address1') }}</label>
                             <div class="input-group">
                                 <span class="input-group-text" id="basic-addon3">{!! form_icon('address') !!}</span>
@@ -141,7 +141,7 @@
                             @enderror
                         </div>
 
-                        {{-- <div class="col-md-3" style="margin-top: 10px">
+                        {{-- <div class="col-md-3" form-field>
                             <label for="national_id" class="form-label">{{ trans('clients.address2') }}</label>
                             <div class="input-group">
                                 <span class="input-group-text" id="basic-addon3">{!! form_icon('address') !!}</span>
@@ -151,7 +151,7 @@
                             <span class="invalid-feedback d-block" role="alert">{{ $message }}</span>
                             @enderror
                         </div> --}}
-                        <div class="col-md-3" style="margin-top: 10px">
+                        <div class="col-md-3" form-field>
                             <label for="national_id" class="form-label">{{ trans('clients.box_switch') }}</label>
                             <div class="input-group">
                                 <span class="input-group-text" id="basic-addon3">{!! form_icon('text') !!}</span>
@@ -163,7 +163,7 @@
                             @enderror
                         </div>
 
-                        <div class="col-md-3" style="margin-top: 10px">
+                        <div class="col-md-3" form-field>
                             <label for="client_type" class="form-label">{{ trans('clients.client_type') }}</label>
                             <div class="input-group">
                                 <span class="input-group-text" id="basic-addon4">{!! form_icon('select2') !!}</span>
@@ -181,7 +181,7 @@
                             @enderror
                         </div>
 
-                        <div class="col-md-3" style="margin-top: 10px">
+                        <div class="col-md-3" form-field>
                             <label for="phone" class="form-label">{{ trans('clients.image') }}</label>
                             <div class="input-group">
                                 <span class="input-group-text" id="basic-addon3">{!! form_icon('image') !!}</span>
@@ -193,7 +193,7 @@
                             @enderror
                         </div>
 
-                        {{-- <div class="col-md-3" style="margin-top: 10px">
+                        {{-- <div class="col-md-3" form-field>
                             <label for="whatsapp_num" class="form-label">{{ trans('clients.commercial_register') }}</label>
                             <div class="input-group">
                                 <span class="input-group-text" id="basic-addon3">{!! form_icon('number') !!}</span>
@@ -204,7 +204,7 @@
                             @enderror
                         </div> --}}
 
-                        <div class="col-md-3" style="margin-top: 10px">
+                        <div class="col-md-3" form-field>
                             <label for="basic-url"class="form-label">{{ trans('clients.subscription') }}</label>
                             <div class="input-group ">
                                 <span class="input-group-text" id="basic-addon3">{!! form_icon('select1') !!}</i></span>
@@ -227,15 +227,15 @@
                         </div>
                         {{-- </div>
 
-                    <div class="col-md-12 row" style="margin-top: 10px"> --}}
-                        <div class="col-md-3" style="margin-top: 10px">
+                    <div class="col-md-12 row" form-field> --}}
+                        <div class="col-md-3" form-field>
                             <label for="price" class="form-label">{{ trans('clients.price') }}</label>
                             <div class="input-group">
                                 <span class="input-group-text" id="basic-addon3">{!! form_icon('price') !!}</span>
                                 <input type="text" class="form-control" id="price" name="price" >
                             </div>
                         </div>
-                        <div class="col-md-3" style="margin-top: 10px">
+                        <div class="col-md-3" form-field>
                             <label for="subscription_date"
                                 class="form-label">{{ trans('clients.subscription_date') }}</label>
                             <div class="input-group">
@@ -248,7 +248,7 @@
                             @enderror
                         </div>
 
-                        <div class="col-md-3" style="margin-top: 10px">
+                        <div class="col-md-3" form-field>
                             <label for="start_date" class="form-label">{{ trans('clients.start_date') }}</label>
                             <div class="input-group ">
                                 <span class="input-group-text" id="basic-addon3">{!! form_icon('date') !!}</span>
@@ -260,7 +260,7 @@
                             @enderror
                         </div>
 
-                        <div class="col-md-3" style="margin-top: 10px">
+                        <div class="col-md-3" form-field>
                             <label for="is_active" class="form-label">{{ trans('clients.is_active') }}</label>
                             <div class="input-group ">
                                 <span class="input-group-text" id="basic-addon3">{!! form_icon('select1') !!}</span>
