@@ -4,105 +4,170 @@
 - Laravel 10, PHP 8.1+, MySQL 8.0
 - Multi-lang: `mcamara/laravel-localization` (prefix: `{locale}/admin/*`)
 - Auth: custom admin guard (`auth:admin`), JWT for API
-- Permissions: `spatie/laravel-permission` v5, custom `App\Models\Role` (has `HasTranslations`, `$translatable = ['title']`)
-- `config/permission.php` line 27 must use `App\Models\Role::class` (not the Spatie default)
+- Permissions: `spatie/laravel-permission` v5, custom `App\Models\Role` (HasTranslations)
+- `config/permission.php` line 27 must use `App\Models\Role::class` (not Spatie default)
+- Assets: Vite 5 (`npm run dev` / `npm run build`)
+- Tables: most business tables use `tbl_` prefix (`tbl_clients`, `tbl_invoices`, etc.)
+
+## Server Environment
+- **Server**: LAN at `192.168.0.83`, served from `/var/www/html/tahseel`
+- **APP_URL**: `http://192.168.0.83`
+- **DB**: `tahseel` / `tahseelusr` / `Tahseel@2024!`
+- **Web owner**: `www-data` — run `chown -R www-data:www-data storage bootstrap/cache` after changes
+- **Crontab** (www-data): `* * * * * php /var/www/html/tahseel/artisan schedule:run`
+- **Supervisor**: `tahseel-telegram-bot` polling process
+
+## Branch Strategy
+- `main` — production, stable
+- `feature-sas4-integration` — SAS 4 integration work-in-progress
+- **Never commit directly to `main`** — work on feature branches, merge after testing
+- To switch branches on server: `git checkout <branch> && git pull && php artisan view:clear config:clear route:clear`
+
+## Key Commands
+```bash
+# After code changes on server
+php artisan view:clear && php artisan config:clear && php artisan route:clear
+
+# Run a single migration
+php artisan migrate --path=database/migrations/<file>.php --force
+
+# Run all migrations
+php artisan migrate --force
+
+# Refresh views/assets after Blade or Vite changes
+php artisan view:clear
+npm run build          # production assets
+npm run dev            # dev server (rarely used on this server)
+
+# Telegram bot
+supervisorctl restart tahseel-telegram-bot
+php artisan telegram:send-backup --force
+
+# SAS 4 auto-match (dry-run first)
+php artisan sas4:auto-match --dry-run
+php artisan sas4:auto-match
+
+# Clear all caches
+php artisan optimize:clear
+```
 
 ## Setup (fresh clone)
 ```bash
 cp .env.example .env
 # Edit .env: DB_DATABASE, DB_USERNAME, DB_PASSWORD, APP_URL
 composer install
+npm install && npm run build
 php artisan key:generate
 php artisan migrate
 php artisan db:seed --class=PermissionsSeeder
-# ... other seeders per QUICK_SETUP.md
 chown -R www-data:www-data storage bootstrap/cache
+composer dump-autoload  # loads Telegram helper
 ```
 
 ## Critical Gotchas
 
-### AppServiceProvider boot query
-`AppServiceProvider::boot()` **used** to call `sendOverdueInvoiceNotifications()` which hit the DB. This was moved to a scheduled command (`overdue:remind`). No longer blocks setup. If you see `Call to undefined function sendTelegramNotification()`, run `composer dump-autoload`.
-
 ### Custom Role model
-Missing `app/Models/Role.php` causes `Call to undefined method Role::getTranslation()` errors. If absent, create it:
-```php
-use Spatie\Permission\Models\Role as SpatieRole;
-use Spatie\Translatable\HasTranslations;
-class Role extends SpatieRole { use HasTranslations; public $translatable = ['title']; }
-```
-Then update these files to import `App\Models\Role` instead of `Spatie\Permission\Models\Role`:
+`app/Models/Role.php` extends `Spatie\Permission\Models\Role` with `HasTranslations`. If missing, all role/permission pages crash. Update these files to import `App\Models\Role`:
 - `app/Http/Controllers/Admin/RolesController.php`
 - `app/Http/Controllers/Admin/UsersController.php`
 - `app/Http/Controllers/Admin/Users/RolesController.php`
 - `app/Services/RoleService.php`
 - `app/Models/Admin.php`
 
+### AppServiceProvider boot
+Previously called `sendOverdueInvoiceNotifications()` on every request (DB hit). Moved to scheduled command `SendOverdueReminders`. If you see DB errors in boot, check this.
+
 ### Helper file crash
-`get_app_config_data()` in `app/Helpers/main_helper.php:138` returns `$data->value` — crashes if no record found. Fixed version returns `$data?->value ?? null`. If helper errors appear, check this.
+`get_app_config_data()` in `app/Helpers/main_helper.php:138` — fixed to use `$data?->value ?? null`. If helper errors appear, check this.
 
-### PHP extension `pdo_mysql`
-Required but not always installed. Install with: `apt-get install php8.3-mysql`
+### Asset URLs
+`ASSET_URL` must equal `APP_URL` (not `${APP_URL}/public`). Laravel appends `/public` itself. Double `/public/` in paths = misconfigured.
 
-## Key paths
+### `.env` is gitignored
+Server `.env` is not committed. Contains SAS 4 credentials, JWT secret, FCM key, OneSignal keys. Copy from server when setting up locally.
+
+## Key Paths
 | Path | Purpose |
 |------|---------|
-| `app/Helpers/main_helper.php` | Auto-loaded helper functions |
-| `app/Helpers/notification_helper.php` | Auto-loaded notification helpers (FCM + Telegram) |
-| `app/Models/Role.php` | Custom Role model (critical) |
 | `routes/admin.php` | All admin routes (`{locale}/admin/*`) |
-| `routes/adminauth.php` | Auth routes (login, etc.) |
-| `app/Providers/AppServiceProvider.php` | Boot — no longer calls DB queries |
-| `public/.htaccess` | Required for Laravel routing |
+| `routes/adminauth.php` | Auth routes (login, logout) |
+| `app/Helpers/main_helper.php` | Auto-loaded helper functions |
+| `app/Helpers/notification_helper.php` | FCM + Telegram helpers |
+| `app/Models/Role.php` | Custom Role model (critical) |
 | `config/permission.php` | Must reference `App\Models\Role` |
+| `public/.htaccess` | Required for Laravel routing |
+| `config/sas4.php` | SAS 4 API config |
+| `app/Services/Sas4/Sas4ApiService.php` | SAS 4 API client |
 
-## Admin login
+## Admin Login
 - URL: `/{locale}/admin/login`
-- Default credentials: `main_admin@yahoo.com` / `main_admin010`
+- Default: `main_admin@yahoo.com` / `main_admin010`
 - Imported admin password: `123456789`
 - Locale: `ar` (Arabic) is primary
 
-## DB notes
-- Database: `tahseel`, user: `tahseelusr` / `Tahseel@2024!`
-- To restore from backup: `mysql tahseel < dump.sql` (strip `mysqldump:` warning lines first)
-- Key tables: `admins` (12), `tbl_clients` (~1470), `tbl_invoices` (~11750), `tbl_subscriptions` (28), `tbl_revenues`, `tbl_financial_transactions`
-- 41 migrations applied (do not re-run fresh unless resetting)
+## Database
+- 42 migrations applied. Key tables: `admins` (12), `tbl_clients` (~1470), `tbl_invoices` (~11750), `tbl_subscriptions` (28), `tbl_revenues`, `tbl_financial_transactions`
+- Restore: `mysql tahseel < dump.sql` (strip `mysqldump:` warning lines first)
 
 ## Git
 - Remote: `https://github.com/lamahuissn-web/tahseel-v2`
-- Credentials stored in `~/.git-credentials`
+- Credentials: `~/.git-credentials`
 - Workflow: `git add . && git commit -m "msg" && git push`
-
-## Asset URLs
-`ASSET_URL` must equal `APP_URL` (not `${APP_URL}/public`) — Laravel appends `/public` itself. Double `/public/` in CSS/JS paths means misconfigured `ASSET_URL`.
 
 ## Telegram Integration
 
 ### 3 features
-- **Notifications** — 10 event types pushed to Telegram group via `sendTelegramNotification()` in `app/Helpers/notification_helper.php`. Silent-fail pattern (never throws).
-- **Backup** — `php artisan telegram:send-backup` (or `--force`). Scheduled every minute in Kernel.php, self-checks frequency. `mysqldump → gzip → sendDocument`.
-- **Bot** — Client search via `/client <name>` or `/عميل <name>` + inline mode. Runs 24/7 under Supervisor.
+- **Notifications** — 10 event types via `sendTelegramNotification()` (silent-fail, never throws)
+- **Backup** — `php artisan telegram:send-backup` (or `--force`). Scheduled every minute, self-checks frequency
+- **Bot** — Client search via `/client <name>` or `/عميل <name>` + inline mode. Runs 24/7 under Supervisor
 
 ### Key files
 | File | Role |
 |------|------|
-| `app/Helpers/notification_helper.php` | `sendTelegramNotification()`, `sendTelegramDocument()`, `getTelegramUpdates()`, `sendTelegramAnswerInlineQuery()` |
-| `app/Console/Commands/TelegramBackupCommand.php` | Backup logic + frequency scheduling |
+| `app/Helpers/notification_helper.php` | Telegram send/recv functions |
+| `app/Console/Commands/TelegramBackupCommand.php` | Backup logic |
 | `app/Console/Commands/TelegramPollCommand.php` | Infinite polling loop (2s sleep) |
 | `app/Services/TelegramBotService.php` | Message/inline query handlers |
-| `app/Console/Commands/SendOverdueReminders.php` | Daily overdue reminders (replaced boot method) |
-| `resources/views/dashbord/config_app/form.blade.php` | Settings form (3 cards: auth, toggles, backup) |
-| `/etc/supervisor/conf.d/tahseel-telegram-bot.conf` | Supervisor process definition |
+| `/etc/supervisor/conf.d/tahseel-telegram-bot.conf` | Supervisor process |
 
-### Setup after fresh clone
-```bash
-composer dump-autoload  # ensures Telegram helper functions are loaded
-php artisan telegram:send-backup --force  # test backup
-supervisorctl restart tahseel-telegram-bot  # restart poll bot after code changes
+### 18 `telegram_*` keys in `app_config` table (set via Settings → App Config)
+
+## SAS 4 Integration (feature branch)
+
+### Architecture
+- SAS 4 server: `192.168.0.101` (LAN), login: `admin/admin`
+- API requires AES-256-CBC encryption (CryptoJS-compatible) for all POST requests
+- JWT tokens cached 55 minutes (`sas4_token` cache key)
+- `tbl_clients.sas_username` links clients to SAS 4 users
+
+### AES Encryption
+Replicates CryptoJS key derivation: MD5 salted key+IV derivation → AES-256-CBC → `Salted__` prefix → base64. See `Sas4ApiService::aesEncrypt()`.
+
+### Phase 1 (Done): Read-only
+- SAS 4 info card in client detail modal (status, plan, speed, balance, expiration, traffic)
+- `Sas4AutoMatch` command — dry-run matched 618/1472 clients by name normalization
+- Routes: `/clients/{id}/sas4-info`
+
+### Phase 2 Part 1 (Done): Link/Create
+- SAS 4 account section in Client Create/Edit forms
+- "Link Existing" — AJAX search autocomplete
+- "Create New" — username, password, profile dropdown
+- `ClientController::handleSas4Operations()` processes on save
+- Routes: `/sas4/search-users`, `/sas4/profiles`
+
+### Phase 2 Part 2 (Pending): Control
+- Enable/Disable/Disconnect/Change Plan actions in client detail modal
+
+### Config keys (`.env`)
+```
+SAS4_URL=http://192.168.0.101
+SAS4_USERNAME=admin
+SAS4_PASSWORD=admin
+SAS4_AES_KEY=abcdefghijuklmno0123456789012345
 ```
 
-### Infrastructure
-- Supervisor runs polling bot: `supervisorctl {status|restart|start|stop} tahseel-telegram-bot`
-- Crontab (www-data): `* * * * * php /var/www/html/tahseel/artisan schedule:run`
-- Telegram bot token + chat ID stored in `app_config` (set via Settings → App Config)
-- 18 `telegram_*` keys seeded in `app_config` table
+## Testing
+- PHPUnit 10: `./vendor/bin/phpunit`
+- Test suites: `tests/Unit`, `tests/Feature`
+- Testing env: array cache/session, sync queue, no mail/telescope
+- No custom test fixtures or integration test prerequisites documented

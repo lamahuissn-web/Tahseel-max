@@ -176,6 +176,7 @@
         'clients.start_date',
         'clients.remaining_amount',
         'clients.status',
+        'clients.sas4_column',
         'clients.action',
         ];
 
@@ -290,6 +291,48 @@
 
 @stop
 @section('js')
+
+<script>
+    var sas4Labels = {!! json_encode([
+        'internetInfo' => trans('clients.sas4_internet_info'),
+        'username' => trans('clients.sas4_username'),
+        'status' => trans('clients.sas4_status'),
+        'plan' => trans('clients.sas4_plan'),
+        'speed' => trans('clients.sas4_speed'),
+        'balance' => trans('clients.sas4_balance'),
+        'expiration' => trans('clients.sas4_expiration'),
+        'lastOnline' => trans('clients.sas4_last_online'),
+        'lastIp' => trans('clients.sas4_last_ip'),
+        'created' => trans('clients.sas4_created'),
+        'download' => trans('clients.sas4_download'),
+        'upload' => trans('clients.sas4_upload'),
+        'total' => trans('clients.sas4_total'),
+        'uptime' => trans('clients.sas4_uptime'),
+        'control' => trans('clients.sas4_control'),
+        'enable' => trans('clients.sas4_enable'),
+        'disable' => trans('clients.sas4_disable'),
+        'disconnect' => trans('clients.sas4_disconnect'),
+        'selectPlan' => trans('clients.sas4_select_plan'),
+        'profile' => trans('clients.sas4_profile'),
+        'changePlan' => trans('clients.sas4_change_plan'),
+        'confirmEnable' => trans('clients.sas4_confirm_enable'),
+        'confirmDisable' => trans('clients.sas4_confirm_disable'),
+        'confirmDisconnect' => trans('clients.sas4_confirm_disconnect'),
+        'confirmChangePlan' => trans('clients.sas4_confirm_change_plan'),
+        'profileRequired' => trans('clients.sas4_profile_required'),
+        'actionFailed' => trans('clients.sas4_action_failed'),
+        'actionSuccess' => trans('clients.sas4_action_success'),
+        'cancel' => trans('clients.cancel'),
+        'confirmBtn' => trans('forms.action_yes'),
+    ]) !!};
+
+    var sas4StatusLabels = {!! json_encode([
+        'online' => trans('clients.sas4_online'),
+        'disabled' => trans('clients.sas4_disabled'),
+        'expired' => trans('clients.sas4_expired'),
+        'offline' => trans('clients.sas4_offline'),
+    ]) !!};
+</script>
 
 <script>
     $(document).ready(function() {
@@ -425,6 +468,12 @@
                     responsivePriority: 3
                 },
                 {
+                    data: 'sas4_status',
+                    className: 'text-center all',
+                    orderable: false,
+                    responsivePriority: 1
+                },
+                {
                     data: 'action',
                     name: 'action',
                     orderable: false,
@@ -555,7 +604,51 @@
             $(this).parent().parent().removeClass('has-error');
             $(this).next().empty();
         });
+
+        // Fetch SAS4 online status after table draws
+        table.on('draw', function() {
+            loadSas4TableStatus();
+        });
     });
+
+    function loadSas4TableStatus() {
+        var indicators = $('.sas4-indicator');
+        if (!indicators.length) return;
+
+        var usernames = [];
+        var map = {};
+        indicators.each(function() {
+            var username = $(this).data('username');
+            var id = $(this).data('id');
+            if (username) {
+                usernames.push(username);
+                map[username] = $(this);
+            }
+        });
+
+        if (!usernames.length) return;
+
+        $.ajax({
+            url: '{{ route('admin.sas4.online_status') }}',
+            type: 'POST',
+            data: { usernames: usernames },
+            dataType: 'json',
+            success: function(res) {
+                $.each(res, function(username, info) {
+                    var el = map[username];
+                    if (!el) return;
+
+                    if (info.online == 1 && info.enabled == 1) {
+                        el.html('<i class="bi bi-wifi text-success" title="Online"></i> ' + username);
+                    } else if (info.enabled == 0) {
+                        el.html('<i class="bi bi-wifi-off text-danger" title="Disabled"></i> ' + username);
+                    } else {
+                        el.html('<i class="bi bi-wifi text-secondary" title="Offline"></i> ' + username);
+                    }
+                });
+            }
+        });
+    }
 </script>
 
 <script>
@@ -620,13 +713,13 @@
 
                 var statusBadge = '';
                 if (user.enabled == 1 && user.online == 1) {
-                    statusBadge = '<span class="badge bg-success">{{ trans('clients.sas4_online') }}</span>';
+                    statusBadge = '<span class="badge bg-success">' + sas4StatusLabels.online + '</span>';
                 } else if (user.enabled == 0) {
-                    statusBadge = '<span class="badge bg-danger">{{ trans('clients.sas4_disabled') }}</span>';
+                    statusBadge = '<span class="badge bg-danger">' + sas4StatusLabels.disabled + '</span>';
                 } else if (user.expired == 1) {
-                    statusBadge = '<span class="badge bg-warning text-dark">{{ trans('clients.sas4_expired') }}</span>';
+                    statusBadge = '<span class="badge bg-warning text-dark">' + sas4StatusLabels.expired + '</span>';
                 } else {
-                    statusBadge = '<span class="badge bg-secondary">{{ trans('clients.sas4_offline') }}</span>';
+                    statusBadge = '<span class="badge bg-secondary">' + sas4StatusLabels.offline + '</span>';
                 }
 
                 var profileName = user.profile_name || user.profile || 'N/A';
@@ -634,28 +727,31 @@
                 var speedUp = user.speed_up || overview.speed_up || 'N/A';
                 var speed = speedDown + ' / ' + speedUp + ' Mbps';
 
-                var html = '<div class="card mt-3" style="border:1px solid #0d6efd;">' +
+                var t = sas4Labels;
+
+                var html = '<div id="sas4Container_' + clientId + '">' +
+                    '<div class="card mt-3" style="border:1px solid #0d6efd;">' +
                     '<div class="card-header" style="background:#0d6efd;color:#fff;padding:8px 16px;">' +
-                    '<i class="bi bi-wifi"></i> {{ trans('clients.sas4_internet_info') }}</div>' +
+                    '<i class="bi bi-wifi"></i> ' + t.internetInfo + '</div>' +
                     '<div class="card-body p-2">' +
                     '<div class="row g-2" style="font-size:13px;">' +
-                    '<div class="col-6"><strong>{{ trans('clients.sas4_username') }}:</strong> ' + (user.username || 'N/A') + '</div>' +
-                    '<div class="col-6"><strong>{{ trans('clients.sas4_status') }}:</strong> ' + statusBadge + '</div>' +
-                    '<div class="col-6"><strong>{{ trans('clients.sas4_plan') }}:</strong> ' + profileName + '</div>' +
-                    '<div class="col-6"><strong>{{ trans('clients.sas4_speed') }}:</strong> ' + speed + '</div>' +
-                    '<div class="col-6"><strong>{{ trans('clients.sas4_balance') }}:</strong> ' + (user.balance || '0.00') + '</div>' +
-                    '<div class="col-6"><strong>{{ trans('clients.sas4_expiration') }}:</strong> ' + (user.expiration || 'N/A') + '</div>' +
-                    '<div class="col-6"><strong>{{ trans('clients.sas4_last_online') }}:</strong> ' + (user.last_login || 'N/A') + '</div>' +
-                    '<div class="col-6"><strong>{{ trans('clients.sas4_last_ip') }}:</strong> ' + (user.last_ip || 'N/A') + '</div>' +
-                    '<div class="col-6"><strong>{{ trans('clients.sas4_created') }}:</strong> ' + (user.created_at || 'N/A') + '</div>' +
+                    '<div class="col-6"><strong>' + t.username + ':</strong> ' + (user.username || 'N/A') + '</div>' +
+                    '<div class="col-6"><strong>' + t.status + ':</strong> ' + statusBadge + '</div>' +
+                    '<div class="col-6"><strong>' + t.plan + ':</strong> ' + profileName + '</div>' +
+                    '<div class="col-6"><strong>' + t.speed + ':</strong> ' + speed + '</div>' +
+                    '<div class="col-6"><strong>' + t.balance + ':</strong> ' + (user.balance || '0.00') + '</div>' +
+                    '<div class="col-6"><strong>' + t.expiration + ':</strong> ' + (user.expiration || 'N/A') + '</div>' +
+                    '<div class="col-6"><strong>' + t.lastOnline + ':</strong> ' + (user.last_login || 'N/A') + '</div>' +
+                    '<div class="col-6"><strong>' + t.lastIp + ':</strong> ' + (user.last_ip || 'N/A') + '</div>' +
+                    '<div class="col-6"><strong>' + t.created + ':</strong> ' + (user.created_at || 'N/A') + '</div>' +
                     '</div>';
 
                 if (trafficData && trafficData.length > 0) {
                     html += '<table class="table table-sm table-bordered mt-2" style="font-size:12px;"><thead class="table-light"><tr>' +
-                        '<th>{{ trans('clients.sas4_download') }}</th>' +
-                        '<th>{{ trans('clients.sas4_upload') }}</th>' +
-                        '<th>{{ trans('clients.sas4_total') }}</th>' +
-                        '<th>{{ trans('clients.sas4_uptime') }}</th>' +
+                        '<th>' + t.download + '</th>' +
+                        '<th>' + t.upload + '</th>' +
+                        '<th>' + t.total + '</th>' +
+                        '<th>' + t.uptime + '</th>' +
                         '</tr></thead><tbody>';
                     var last7 = trafficData.slice(-7);
                     last7.forEach(function(day) {
@@ -670,10 +766,158 @@
                 }
 
                 html += '</div></div>';
+
+                html += '<div class="card mt-2" style="border:1px solid #6c757d;">' +
+                    '<div class="card-header" style="background:#6c757d;color:#fff;padding:8px 16px;">' +
+                    '<i class="bi bi-gear-fill"></i> ' + t.control + '</div>' +
+                    '<div class="card-body p-2">' +
+                    '<div class="d-flex flex-wrap gap-2">' +
+                    '<button class="btn btn-sm btn-success" onclick="sas4ControlAction(' + clientId + ', \'enable\')">' +
+                    '<i class="bi bi-check-circle"></i> ' + t.enable + '</button>' +
+                    '<button class="btn btn-sm btn-danger" onclick="sas4ControlAction(' + clientId + ', \'disable\')">' +
+                    '<i class="bi bi-x-circle"></i> ' + t.disable + '</button>' +
+                    '<button class="btn btn-sm btn-warning" onclick="sas4ControlAction(' + clientId + ', \'disconnect\')">' +
+                    '<i class="bi bi-plug-fill"></i> ' + t.disconnect + '</button>' +
+                    '</div>' +
+                    '<div class="d-flex flex-wrap gap-2 mt-2 align-items-end">' +
+                    '<div class="flex-grow-1">' +
+                    '<label class="form-label mb-1" style="font-size:12px;">' + t.selectPlan + '</label>' +
+                    '<select class="form-select form-select-sm" id="sas4ProfileSelect_' + clientId + '" style="font-size:12px;">' +
+                    '<option value="">-- ' + t.profile + ' --</option>' +
+                    '</select>' +
+                    '</div>' +
+                    '<div>' +
+                    '<label class="form-label mb-1" style="font-size:12px;">@lang('clients.sas4_expiration')</label>' +
+                    '<input type="date" class="form-control form-control-sm" id="sas4ExpirationInput_' + clientId + '" style="font-size:12px;width:150px;">' +
+                    '</div>' +
+                    '<button class="btn btn-sm btn-primary" onclick="sas4ControlAction(' + clientId + ', \'change_profile\')">' +
+                    '<i class="bi bi-arrow-repeat"></i> ' + t.changePlan + '</button>' +
+                    '</div>' +
+                    '</div></div></div>';
+
+                $('#sas4Container_' + clientId).remove();
                 $('#clientDetailsContent').append(html);
+
+                var expDate = user.expiration || '';
+                if (expDate) {
+                    var dateStr = expDate.substring(0, 10);
+                    $('#sas4ExpirationInput_' + clientId).val(dateStr);
+                }
+
+                loadSas4Profiles(clientId);
             },
             error: function(xhr) {
-                // Silently fail if SAS 4 is not configured or user not found
+                console.log('SAS4 info load failed:', xhr.status);
+            }
+        });
+    }
+
+    function loadSas4Profiles(clientId) {
+        $.ajax({
+            url: '{{ route('admin.sas4.profiles') }}',
+            type: 'GET',
+            dataType: 'json',
+            success: function(res) {
+                var profiles = res.data || [];
+                var select = $('#sas4ProfileSelect_' + clientId);
+                if (!select.length) return;
+
+                profiles.forEach(function(p) {
+                    select.append('<option value="' + p.id + '">' + (p.name || p.profilename || p.profile_name || p.id) + '</option>');
+                });
+            },
+            error: function() {}
+        });
+    }
+
+    function sas4ControlAction(clientId, action) {
+        var t = sas4Labels;
+
+        var confirmText = '';
+        var confirmIcon = 'question';
+
+        switch (action) {
+            case 'enable':
+                confirmText = t.confirmEnable;
+                confirmIcon = 'success';
+                break;
+            case 'disable':
+                confirmText = t.confirmDisable;
+                confirmIcon = 'warning';
+                break;
+            case 'disconnect':
+                confirmText = t.confirmDisconnect;
+                confirmIcon = 'warning';
+                break;
+            case 'change_profile':
+                var profileId = $('#sas4ProfileSelect_' + clientId).val();
+                if (!profileId) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: t.profileRequired,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                    return;
+                }
+                confirmText = t.confirmChangePlan;
+                confirmIcon = 'info';
+                break;
+        }
+
+        Swal.fire({
+            title: t.control,
+            text: confirmText,
+            icon: confirmIcon,
+            showCancelButton: true,
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33',
+            confirmButtonText: t.confirmBtn,
+            cancelButtonText: t.cancel,
+            showLoaderOnConfirm: true,
+            preConfirm: () => {
+                var data = { action: action };
+                if (action === 'change_profile') {
+                    data.profile_id = $('#sas4ProfileSelect_' + clientId).val();
+                    var expDate = $('#sas4ExpirationInput_' + clientId).val();
+                    if (expDate) {
+                        data.expiration_date = expDate;
+                    }
+                }
+
+                return fetch('{{ route('admin.clients.sas4_control', ['id' => '__ID__']) }}'.replace('__ID__', clientId), {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    },
+                    body: new URLSearchParams(data)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        return data;
+                    } else {
+                        Swal.showValidationMessage(data.message || t.actionFailed);
+                    }
+                })
+                .catch(error => {
+                    Swal.showValidationMessage(t.actionFailed);
+                });
+            },
+            allowOutsideClick: () => !Swal.isLoading()
+        }).then((result) => {
+            if (result.isConfirmed && result.value) {
+                Swal.fire({
+                    icon: 'success',
+                    title: t.actionSuccess,
+                    text: result.value.message,
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => {
+                    loadSas4Info(clientId);
+                });
             }
         });
     }

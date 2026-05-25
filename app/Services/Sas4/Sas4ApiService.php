@@ -94,6 +94,17 @@ class Sas4ApiService
                     $headers[] = 'Content-Type: application/json';
                 }
             }
+        } elseif ($method === 'PUT') {
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PUT');
+            if ($data !== null) {
+                if (isset($data['payload'])) {
+                    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
+                    $headers[] = 'Content-Type: application/x-www-form-urlencoded';
+                } else {
+                    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+                    $headers[] = 'Content-Type: application/json';
+                }
+            }
         } elseif ($data !== null) {
             $url .= '?' . http_build_query($data);
         }
@@ -144,7 +155,14 @@ class Sas4ApiService
 
         foreach ($result['data'] as $user) {
             if (strtolower($user['username']) === strtolower($username)) {
-                return $this->getUserById($user['id']);
+                $details = $this->getUserById($user['id']);
+                if ($details && isset($details['data'])) {
+                    // Preserve online_status from search results
+                    if (isset($user['online_status'])) {
+                        $details['data']['online_status'] = $user['online_status'];
+                    }
+                }
+                return $details;
             }
         }
 
@@ -174,6 +192,8 @@ class Sas4ApiService
     {
         $payload = $this->aesEncrypt(json_encode([
             'user_id' => $userId,
+            'month' => date('m'),
+            'year' => date('Y'),
         ]));
 
         return $this->request('POST', '/admin/api/index.php/api/user/traffic', [
@@ -235,6 +255,14 @@ class Sas4ApiService
         $overview = $this->getUserOverview($userId);
         $traffic = $this->getUserTraffic($userId);
 
+        // Use online_status from search results (0 = offline, 1 = online)
+        $userData['online'] = $userData['online_status'] ?? 0;
+
+        // Add last_online from overview if available
+        if ($overview && isset($overview['data']['last_online'])) {
+            $userData['last_login'] = $overview['data']['last_online'];
+        }
+
         return [
             'user' => $userData,
             'overview' => $overview ? ($overview['data'] ?? $overview) : null,
@@ -277,5 +305,90 @@ class Sas4ApiService
         }
 
         return false;
+    }
+
+    /**
+     * Enable a SAS 4 user
+     */
+    public function enableUser($userId)
+    {
+        $payload = $this->aesEncrypt(json_encode([
+            'enabled' => 1,
+        ]));
+
+        return $this->request('PUT', "/admin/api/index.php/api/user/{$userId}", [
+            'payload' => $payload,
+        ]);
+    }
+
+    /**
+     * Disable a SAS 4 user
+     */
+    public function disableUser($userId)
+    {
+        $payload = $this->aesEncrypt(json_encode([
+            'enabled' => 0,
+        ]));
+
+        return $this->request('PUT', "/admin/api/index.php/api/user/{$userId}", [
+            'payload' => $payload,
+        ]);
+    }
+
+    /**
+     * Disconnect a SAS 4 user (kick online session)
+     */
+    public function disconnectUser($userId)
+    {
+        $payload = $this->aesEncrypt(json_encode([
+            'user_id' => $userId,
+        ]));
+
+        return $this->request('POST', '/admin/api/index.php/api/user/disconnect', [
+            'payload' => $payload,
+        ]);
+    }
+
+    /**
+     * Change a SAS 4 user's profile (plan)
+     */
+    public function changeProfile($userId, $profileId)
+    {
+        $payload = $this->aesEncrypt(json_encode([
+            'profile_id' => $profileId,
+        ]));
+
+        return $this->request('PUT', "/admin/api/index.php/api/user/{$userId}", [
+            'payload' => $payload,
+        ]);
+    }
+
+    /**
+     * Change a SAS 4 user's expiration date
+     */
+    public function changeExpiration($userId, $expirationDate)
+    {
+        $payload = $this->aesEncrypt(json_encode([
+            'expiration' => $expirationDate,
+        ]));
+
+        return $this->request('PUT', "/admin/api/index.php/api/user/{$userId}", [
+            'payload' => $payload,
+        ]);
+    }
+
+    /**
+     * Change profile and expiration date together
+     */
+    public function changeProfileAndExpiration($userId, $profileId, $expirationDate)
+    {
+        $payload = $this->aesEncrypt(json_encode([
+            'profile_id' => $profileId,
+            'expiration' => $expirationDate,
+        ]));
+
+        return $this->request('PUT', "/admin/api/index.php/api/user/{$userId}", [
+            'payload' => $payload,
+        ]);
     }
 }

@@ -118,6 +118,8 @@ Route::group(
             Route::get('/clients/details/{id}', [ClientController::class, 'getClientDetails'])->name('clients.details');
             Route::get('/clients/{id}/remaining-invoices', [ClientController::class, 'remainingInvoices'])->name('clients.remaining_invoices');
             Route::get('/clients/{id}/sas4-info', [ClientController::class, 'getSas4Info'])->name('clients.sas4_info');
+            Route::post('/clients/{id}/sas4-control', [ClientController::class, 'sas4Control'])->name('clients.sas4_control');
+            Route::post('/sas4/online-status', [ClientController::class, 'getSas4OnlineStatus'])->name('sas4.online_status');
             Route::get('/sas4/search-users', [ClientController::class, 'searchSas4Users'])->name('sas4.search_users');
             Route::get('/sas4/profiles', [ClientController::class, 'getSas4Profiles'])->name('sas4.profiles');
 

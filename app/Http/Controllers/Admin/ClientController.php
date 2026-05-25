@@ -76,6 +76,7 @@ class ClientController extends Controller
                 'tbl_clients.start_date',
                 'tbl_clients.is_active',
                 'tbl_clients.subscription_id',
+                'tbl_clients.sas_username',
                 'tbl_clients.created_at'
             ])
             ->with(['subscription:id,name']) 
@@ -186,6 +187,14 @@ class ClientController extends Controller
                         return $badge;
                     }
                 })
+                ->addColumn('sas4_status', function ($row) {
+                    if (!$row->sas_username) {
+                        return '<span class="badge bg-light text-muted">—</span>';
+                    }
+                    return '<span class="sas4-indicator" data-id="' . $row->id . '" data-username="' . e($row->sas_username) . '">' .
+                        '<i class="bi bi-wifi text-secondary"></i> ' . e($row->sas_username) .
+                        '</span>';
+                })
                 ->addColumn('action', function ($row) {
                     $actionButtons = '<div class="btn-group">';
                     $actionButtons .= '<button type="button" style="font-size: 16px" class="btn btn-sm btn-secondary">' . trans('employees.actions') . '</button>';
@@ -217,7 +226,7 @@ class ClientController extends Controller
 
                     return $actionButtons;
                 })
-                ->rawColumns(['subscription', 'action', 'status'])
+                ->rawColumns(['subscription', 'action', 'status', 'sas4_status'])
                 ->make(true);
         }
         return view($this->admin_view . '.index');
@@ -279,7 +288,8 @@ class ClientController extends Controller
     {
         try {
             $oldClientData = $this->ClientsRepository->getById($id)->toArray();
-            $client = $this->clientService->update($request, $id);
+            $this->clientService->update($request, $id);
+            $client = $this->ClientsRepository->getById($id);
             $this->handleSas4Operations($client, $request);
             $notificationMessage = sprintf(
                 'تم تحديث بيانات العميل: %s - تم التحديث بواسطة %s',
@@ -889,12 +899,98 @@ class ClientController extends Controller
         return response()->json($result ?? ['data' => []]);
     }
 
+    public function getSas4OnlineStatus()
+    {
+        $usernames = request('usernames', []);
+        if (empty($usernames)) {
+            return response()->json([]);
+        }
+
+        $sas4Service = app(\App\Services\Sas4\Sas4ApiService::class);
+        $statusMap = [];
+
+        foreach ($usernames as $username) {
+            $user = $sas4Service->getUserByUsername($username);
+            if ($user && isset($user['data'])) {
+                $userData = $user['data'];
+                $statusMap[$username] = [
+                    'online' => $userData['online_status'] ?? 0,
+                    'enabled' => $userData['enabled'] ?? 0,
+                    'expiration' => $userData['expiration'] ?? '',
+                ];
+            }
+        }
+
+        return response()->json($statusMap);
+    }
+
     public function getSas4Profiles()
     {
         $sas4Service = app(\App\Services\Sas4\Sas4ApiService::class);
         $result = $sas4Service->getProfiles();
 
         return response()->json($result ?? ['data' => []]);
+    }
+
+    public function sas4Control($id)
+    {
+        $client = $this->ClientsRepository->getById($id);
+        if (!$client || !$client->sas_username) {
+            return response()->json(['success' => false, 'message' => trans('clients.no_sas4_username_linked')], 404);
+        }
+
+        $action = request('action');
+        $profileId = request('profile_id');
+
+        $sas4Service = app(\App\Services\Sas4\Sas4ApiService::class);
+        $sas4User = $sas4Service->getUserByUsername($client->sas_username);
+
+        if (!$sas4User || !isset($sas4User['data']['id'])) {
+            return response()->json(['success' => false, 'message' => trans('clients.sas4_user_not_found')], 404);
+        }
+
+        $sas4UserId = $sas4User['data']['id'];
+
+        $result = null;
+        $message = '';
+
+        switch ($action) {
+            case 'enable':
+                $result = $sas4Service->enableUser($sas4UserId);
+                $message = trans('clients.sas4_enabled_success');
+                break;
+            case 'disable':
+                $result = $sas4Service->disableUser($sas4UserId);
+                $message = trans('clients.sas4_disabled_success');
+                break;
+            case 'disconnect':
+                $result = $sas4Service->disconnectUser($sas4UserId);
+                $message = trans('clients.sas4_disconnected_success');
+                break;
+            case 'change_profile':
+                if (!$profileId) {
+                    return response()->json(['success' => false, 'message' => trans('clients.sas4_profile_required')], 400);
+                }
+                $expirationDate = request('expiration_date');
+                if ($expirationDate) {
+                    $result = $sas4Service->changeProfileAndExpiration($sas4UserId, $profileId, $expirationDate);
+                } else {
+                    $result = $sas4Service->changeProfile($sas4UserId, $profileId);
+                }
+                $message = trans('clients.sas4_profile_changed_success');
+                break;
+            default:
+                return response()->json(['success' => false, 'message' => trans('clients.sas4_invalid_action')], 400);
+        }
+
+        if ($result && isset($result['status']) && $result['status'] == 200) {
+            return response()->json(['success' => true, 'message' => $message]);
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => trans('clients.sas4_action_failed')
+        ], 500);
     }
 
     protected function handleSas4Operations($client, $request)
