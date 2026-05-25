@@ -33,17 +33,17 @@
 
 .float_right{
     float: right !important;
-
 }
 
 .float_left{
     float: left !important;
-    margin-left: 2px;
 }
-.modal-content{
-    left: 115px !important;
-    width: 179% !important;
-}
+
+/* RTL-aware float utilities */
+[dir="rtl"] .float-start { float: right !important; }
+[dir="rtl"] .float-end { float: left !important; }
+
+/* Removed broken modal override - Bootstrap handles modal positioning correctly */
 
 .fnt_center_blue{
     text-align: center;
@@ -111,6 +111,171 @@
 }
 .margin_top{
     margin-top: 10px;
+}
+
+/* ============================================
+   UI/UX Improvement Utilities (Phase 1-3)
+   ============================================ */
+
+/* Card top border colors (replaces inline styles) */
+.card-border-top-primary { border-top: 3px solid #0d6efd; }
+.card-border-top-success { border-top: 3px solid #198754; }
+.card-border-top-warning { border-top: 3px solid #ffc107; }
+.card-border-top-danger { border-top: 3px solid #dc3545; }
+.card-border-top-info { border-top: 3px solid #0dcaf0; }
+.card-border-top-secondary { border-top: 3px solid #6c757d; }
+
+/* Card header backgrounds (replaces inline styles) */
+.card-header-primary { background: #0d6efd; color: #fff; padding: 8px 16px; }
+.card-header-success { background: #198754; color: #fff; padding: 8px 16px; }
+.card-header-info { background: #0dcaf0; color: #fff; padding: 8px 16px; }
+.card-header-light { background: #f8f9fa; color: #333; padding: 8px 16px; }
+
+/* DataTable improvements */
+#table1, .data-table {
+    font-size: 13px !important;
+}
+.data-table thead th {
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.data-table tbody tr {
+    transition: background-color 0.15s ease;
+}
+.data-table tbody tr:hover {
+    background-color: rgba(13, 110, 253, 0.04);
+}
+
+/* Action buttons in tables */
+.table-action-btn {
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.table-action-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Status badges with better hover */
+.status-badge {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.status-badge:hover {
+    transform: scale(1.08);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+
+/* Color contrast improvements */
+.text-success-contrast { color: #0f5132 !important; }
+.text-danger-contrast { color: #842029 !important; }
+.text-info-contrast { color: #055160 !important; }
+
+/* Smooth AJAX content transitions */
+.ajax-content-fade {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+.ajax-content-fade.loaded {
+    opacity: 1;
+}
+
+/* Skeleton loading states */
+.skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite;
+    border-radius: 4px;
+}
+@keyframes skeleton-loading {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+.skeleton-text { height: 14px; margin-bottom: 8px; }
+.skeleton-title { height: 20px; width: 60%; margin-bottom: 12px; }
+.skeleton-avatar { height: 48px; width: 48px; border-radius: 50%; }
+
+/* SAS4 tab improvements */
+.sas4-tab-content .card {
+    border: none;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    transition: box-shadow 0.2s ease;
+}
+.sas4-tab-content .card:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+.sas4-tab-content .card-header {
+    font-weight: 600;
+    font-size: 14px;
+    padding: 10px 16px;
+}
+.sas4-tab-content .card-body {
+    padding: 16px;
+}
+
+/* Tab navigation improvements */
+.nav-tabs .nav-link {
+    transition: all 0.15s ease;
+    border-radius: 6px 6px 0 0;
+}
+.nav-tabs .nav-link:hover:not(.active) {
+    background-color: rgba(13, 110, 253, 0.06);
+}
+.nav-tabs .nav-link i {
+    transition: transform 0.15s ease;
+}
+.nav-tabs .nav-link:hover i {
+    transform: scale(1.1);
+}
+
+/* Form field spacing (replaces inline margin-top) */
+.form-field {
+    margin-top: 12px;
+}
+.form-field:first-child {
+    margin-top: 0;
+}
+
+/* Better toggle switch sizing */
+.toggle-switch-sm {
+    width: 44px;
+    height: 22px;
+}
+
+/* Container standardization */
+.app-container {
+    padding-left: 16px;
+    padding-right: 16px;
+}
+
+/* Header bar improvements */
+.header-actions {
+    gap: 8px;
+}
+.header-actions .btn-icon {
+    padding: 6px 10px;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+.header-actions .btn-icon:hover {
+    background-color: rgba(0,0,0,0.06);
+}
+
+/* Sidebar improvements */
+.sidebar-nav .nav-link {
+    transition: all 0.15s ease;
+}
+.sidebar-nav .nav-link:hover {
+    background-color: rgba(0, 0, 0, 0.08);
+}
+.sidebar-nav .nav-link.active {
+    border-inline-start: 3px solid #0d6efd;
+}
+.sidebar-nav .sub-menu {
+    padding-inline-start: 1.5rem;
 }
 
 
