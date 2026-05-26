@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Admin\Invoice;
+use App\Models\Clients;
 use App\Services\WhatsAppService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -919,6 +920,80 @@ class WhatsAppSettingsController extends Controller
             'sent' => $sentCount,
             'failed' => $failedCount,
             'results' => $results,
+        ]);
+    }
+
+    public function sendClientReminder($id)
+    {
+        $enabled = DB::table('app_config')->where('key', 'whatsapp_enabled')->value('value');
+        if ($enabled != '1') {
+            return response()->json(['success' => false, 'error' => trans('clients.whatsapp_disabled')]);
+        }
+
+        $status = $this->whatsapp->status();
+        if (!$status['connected']) {
+            return response()->json(['success' => false, 'error' => trans('clients.whatsapp_not_connected')]);
+        }
+
+        $client = Clients::find($id);
+        if (!$client) {
+            return response()->json(['success' => false, 'error' => trans('clients.client_not_found')]);
+        }
+
+        if (empty($client->phone)) {
+            return response()->json(['success' => false, 'error' => trans('clients.whatsapp_no_phone')]);
+        }
+
+        if (!$this->isValidPhone($client->phone)) {
+            return response()->json(['success' => false, 'error' => trans('clients.whatsapp_invalid_phone')]);
+        }
+
+        $unpaidInvoices = Invoice::where('client_id', $id)
+            ->whereIn('status', ['unpaid', 'partial'])
+            ->orderBy('due_date', 'asc')
+            ->get();
+
+        if ($unpaidInvoices->isEmpty()) {
+            return response()->json(['success' => false, 'error' => trans('clients.no_unpaid_invoices')]);
+        }
+
+        $template = DB::table('app_config')->where('key', 'whatsapp_message_template')->value('value')
+            ?? $this->defaultTemplate();
+
+        $totalAmount = $unpaidInvoices->sum('remaining_amount');
+        $invoiceDetailsList = $this->buildInvoiceDetailsList($unpaidInvoices);
+        $message = $this->buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
+        $phone = preg_replace('/[^0-9]/', '', $client->phone);
+        $invoiceIds = $unpaidInvoices->pluck('id')->toArray();
+
+        $result = $this->whatsapp->send($phone, $message);
+
+        DB::table('whatsapp_message_logs')->insert([
+            'client_id' => $id,
+            'invoice_id' => $unpaidInvoices->first()->id,
+            'invoice_ids' => json_encode($invoiceIds),
+            'phone' => $phone,
+            'message' => $message,
+            'status' => $result['success'] ? 'sent' : 'failed',
+            'error' => $result['error'] ?? null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        if ($result['success']) {
+            Invoice::where('client_id', $id)
+                ->whereIn('status', ['unpaid', 'partial'])
+                ->update(['last_notified_at' => now()]);
+
+            return response()->json([
+                'success' => true,
+                'message' => trans('clients.whatsapp_reminder_sent'),
+            ]);
+        }
+
+        return response()->json([
+            'success' => false,
+            'error' => $result['error'] ?? trans('clients.whatsapp_send_failed'),
         ]);
     }
 }

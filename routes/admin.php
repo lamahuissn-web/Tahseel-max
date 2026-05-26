@@ -234,6 +234,7 @@ Route::group(
             Route::get('settings/whatsapp/daily-preview', [WhatsAppSettingsController::class, 'dailyPreview'])->name('settings.whatsapp.daily_preview');
             Route::post('settings/whatsapp/send-daily', [WhatsAppSettingsController::class, 'sendDaily'])->name('settings.whatsapp.send_daily');
             Route::post('settings/whatsapp/send-selected', [WhatsAppSettingsController::class, 'sendSelected'])->name('settings.whatsapp.send_selected');
+            Route::post('/clients/{id}/whatsapp-reminder', [WhatsAppSettingsController::class, 'sendClientReminder'])->name('clients.whatsapp_reminder');
 
             Route::get('/logs', [LogController::class, 'index'])->name('logs.index');
             Route::get('/logs/{id}', [LogController::class, 'show'])->name('logs.show');

@@ -308,4 +308,12 @@
         'whatsapp_send_daily_confirm' => 'هل تريد إرسال رسائل واتساب لعملاء هذا اليوم؟',
         'whatsapp_phone_warning' => 'رقم هاتف مشكوك فيه',
         'whatsapp_no_clients_selected' => 'لم يتم تحديد أي عملاء',
+        'whatsapp_disabled' => 'تذكيرات واتساب غير مفعلة',
+        'whatsapp_not_connected' => 'واتساب غير متصل',
+        'whatsapp_no_phone' => 'لا يوجد رقم هاتف لهذا العميل',
+        'whatsapp_invalid_phone' => 'رقم هاتف غير صالح',
+        'whatsapp_reminder_sent' => 'تم إرسال التذكير بنجاح',
+        'whatsapp_send_failed' => 'فشل إرسال الرسالة',
+        'whatsapp_send_reminder' => 'إرسال تذكير',
+        'client_not_found' => 'العميل غير موجود',
      );

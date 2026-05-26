@@ -99,9 +99,21 @@
 
 <div class="inv-header-summary">
     <span class="client-name">{{ $client->name ?? trans('clients.client_details') }}</span>
-    <span class="total-remaining">
-        {{ number_format($unpaidInvoices->sum('remaining_amount'), 2) }} {{ get_app_config_data('currency') }}
-    </span>
+    <div class="d-flex align-items-center gap-2">
+        <span class="total-remaining">
+            {{ number_format($unpaidInvoices->sum('remaining_amount'), 2) }} {{ get_app_config_data('currency') }}
+        </span>
+        @php
+            $cleanPhone = preg_replace('/[^0-9]/', '', $client->phone ?? '');
+            $hasValidPhone = strlen($cleanPhone) >= 7 && !preg_match('/^0+$/', $cleanPhone);
+        @endphp
+        @if($hasValidPhone)
+        <button class="btn btn-sm btn-success d-flex align-items-center gap-1 whatsapp-reminder-btn" onclick="sendWhatsAppReminder({{ $client->id }})">
+            <i class="bi bi-whatsapp fs-6"></i>
+            <span class="d-none d-sm-inline">{{ trans('clients.whatsapp_send_reminder') }}</span>
+        </button>
+        @endif
+    </div>
 </div>
 
 @if($unpaidInvoices->isEmpty())
@@ -195,6 +207,45 @@
                 text: xhr.responseJSON ? xhr.responseJSON.message : '{{ trans("forms.delete_error") }}'
             });
             $btn.prop('disabled', false).html('<i class="bi bi-currency-dollar"></i> {{ trans('invoices.pay') }}');
+        });
+    }
+
+    function sendWhatsAppReminder(clientId) {
+        var $btn = $('.whatsapp-reminder-btn');
+        var originalHtml = $btn.html();
+
+        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+
+        $.ajax({
+            url: '{{ route('admin.clients.whatsapp_reminder', ['id' => '__ID__']) }}'.replace('__ID__', clientId),
+            type: 'POST',
+            data: { _token: '{{ csrf_token() }}' },
+            success: function(res) {
+                if (res.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: '{{ trans("clients.whatsapp_reminder_sent") }}',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '{{ trans("forms.error") }}',
+                        text: res.error
+                    });
+                }
+            },
+            error: function() {
+                Swal.fire({
+                    icon: 'error',
+                    title: '{{ trans("forms.error") }}',
+                    text: '{{ trans("clients.whatsapp_send_failed") }}'
+                });
+            },
+            complete: function() {
+                $btn.prop('disabled', false).html(originalHtml);
+            }
         });
     }
 </script>
