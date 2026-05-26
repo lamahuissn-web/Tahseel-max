@@ -306,4 +306,6 @@
         'whatsapp_select_day_hint' => 'اختر يوماً من التقويم لعرض العملاء',
         'whatsapp_back_to_months' => 'العودة للأشهر',
         'whatsapp_send_daily_confirm' => 'هل تريد إرسال رسائل واتساب لعملاء هذا اليوم؟',
+        'whatsapp_phone_warning' => 'رقم هاتف مشكوك فيه',
+        'whatsapp_no_clients_selected' => 'لم يتم تحديد أي عملاء',
      );

@@ -233,6 +233,7 @@ Route::group(
             Route::post('settings/whatsapp/send-monthly', [WhatsAppSettingsController::class, 'sendMonthly'])->name('settings.whatsapp.send_monthly');
             Route::get('settings/whatsapp/daily-preview', [WhatsAppSettingsController::class, 'dailyPreview'])->name('settings.whatsapp.daily_preview');
             Route::post('settings/whatsapp/send-daily', [WhatsAppSettingsController::class, 'sendDaily'])->name('settings.whatsapp.send_daily');
+            Route::post('settings/whatsapp/send-selected', [WhatsAppSettingsController::class, 'sendSelected'])->name('settings.whatsapp.send_selected');
 
             Route::get('/logs', [LogController::class, 'index'])->name('logs.index');
             Route::get('/logs/{id}', [LogController::class, 'show'])->name('logs.show');

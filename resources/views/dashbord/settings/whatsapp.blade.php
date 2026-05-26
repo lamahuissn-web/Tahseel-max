@@ -61,6 +61,11 @@
 .wa-back-btn { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; color: #0d6efd; font-size: 13px; margin-bottom: 10px; border: none; background: none; padding: 4px 8px; border-radius: 4px; }
 .wa-back-btn:hover { background: #e7f1ff; text-decoration: none; }
 .wa-day-hint { text-align: center; color: #888; font-size: 13px; margin-top: 8px; }
+.wa-client-check { width: 16px; height: 16px; cursor: pointer; vertical-align: middle; }
+.wa-phone-warning { color: #dc3545; font-size: 14px; margin-left: 4px; cursor: help; }
+.wa-selection-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px; padding: 10px; background: #f8f9fa; border-radius: 8px; }
+.wa-selection-controls #wa_selected_count { font-weight: 600; font-size: 13px; color: #333; }
+.wa-preview-table th:first-child, .wa-preview-table td:first-child { width: 40px; text-align: center; }
 </style>
 @endsection
 
@@ -522,13 +527,19 @@ function loadRemindersPreview() {
                 : ['Client', 'Phone', 'Total', 'Invoices'];
 
             var html = '<table class="wa-preview-table"><thead><tr>';
+            html += '<th><input type="checkbox" id="wa_select_all_rem" checked onchange="toggleSelectAll()"></th>';
             headers.forEach(function(h) { html += '<th>' + h + '</th>'; });
             html += '</tr></thead><tbody>';
 
             res.clients.forEach(function(c) {
-                html += '<tr>';
+                var phoneHtml = c.phone;
+                if (c.suspicious_phone) {
+                    phoneHtml += ' <span class="wa-phone-warning" title="{{ trans("clients.whatsapp_phone_warning") }}">⚠</span>';
+                }
+                html += '<tr data-client-id="' + c.client_id + '" data-phone="' + c.phone + '">';
+                html += '<td><input type="checkbox" class="wa-client-check" checked onchange="updateSelectedCount()"></td>';
                 html += '<td>' + c.client_name + '</td>';
-                html += '<td dir="ltr">' + c.phone + '</td>';
+                html += '<td dir="ltr">' + phoneHtml + '</td>';
                 html += '<td>$' + c.total_amount + '</td>';
                 html += '<td>';
                 c.invoice_lines.forEach(function(line) {
@@ -542,9 +553,15 @@ function loadRemindersPreview() {
             html += '<div class="wa-preview-summary">' +
                 (isArabic ? 'العملاء: ' + res.total + ' | الإجمالي: $' + res.grandTotal : 'Clients: ' + res.total + ' | Total: $' + res.grandTotal) +
                 '</div>';
+            html += '<div class="wa-selection-controls">';
+            html += '<span id="wa_selected_count">' + res.total + ' ' + (isArabic ? 'عملاء محددين' : 'clients selected') + '</span>';
+            html += '<button class="btn btn-success btn-sm" id="btn_send_selected" onclick="sendSelectedClients(\'reminders\')">';
+            html += '<i class="bi bi-send me-1"></i> ' + (isArabic ? 'إرسال المحدد' : 'Send Selected') + ' (' + res.total + ')</button>';
+            html += '<button class="btn btn-outline-secondary btn-sm" onclick="toggleSelectAll()">';
+            html += '<i class="bi bi-check-square me-1"></i> ' + (isArabic ? 'تحديد/إلغاء الكل' : 'Select/Deselect All') + '</button>';
+            html += '</div>';
 
             $container.html(html);
-            $('#btn_send_reminders').prop('disabled', false);
         },
         error: function() {
             $container.html('<div class="alert alert-danger">{{ trans("clients.whatsapp_preview_error") }}</div>');
@@ -553,53 +570,7 @@ function loadRemindersPreview() {
 }
 
 function sendReminders() {
-    if (!confirm('{{ trans("clients.whatsapp_confirm_send") }}')) return;
-
-    $('#btn_send_reminders').prop('disabled', true);
-    $('#reminders_progress').show();
-    $('#reminders_result').hide().empty();
-
-    $.ajax({
-        url: '{{ route('admin.settings.whatsapp.send_reminders') }}',
-        type: 'POST',
-        data: { _token: '{{ csrf_token() }}' },
-        xhr: function() {
-            var xhr = new window.XMLHttpRequest();
-            return xhr;
-        },
-        success: function(res) {
-            if (res.error) {
-                $('#reminders_result').html('<div class="alert alert-danger">' + res.error + '</div>').show();
-                $('#btn_send_reminders').prop('disabled', false);
-                return;
-            }
-
-            $('#reminders_progress_bar').css('width', '100%').text('100%');
-            $('#reminders_progress_text').text('');
-
-            var isArabic = '{{ app()->getLocale() }}' === 'ar';
-            var summaryHtml = '<div class="alert alert-success text-center fw-bold">';
-            summaryHtml += isArabic ? 'تم الإرسال: ' + res.sent + ' | فشل: ' + res.failed : 'Sent: ' + res.sent + ' | Failed: ' + res.failed;
-            summaryHtml += '</div>';
-
-            var detailsHtml = '';
-            res.results.forEach(function(r) {
-                var cls = r.status === 'sent' ? 'sent' : 'failed';
-                var icon = r.status === 'sent' ? '✓' : '✗';
-                detailsHtml += '<div class="wa-result-item ' + cls + '">' + icon + ' ' + r.client + ' (' + r.phone + ')';
-                if (r.error) detailsHtml += ' - ' + r.error;
-                detailsHtml += '</div>';
-            });
-
-            $('#reminders_result').html(summaryHtml + detailsHtml).show();
-            $('#btn_send_reminders').prop('disabled', false);
-            toastr.success(isArabic ? 'تم الانتهاء' : 'Done');
-        },
-        error: function() {
-            $('#reminders_result').html('<div class="alert alert-danger">{{ trans("clients.whatsapp_send_error") }}</div>').show();
-            $('#btn_send_reminders').prop('disabled', false);
-        }
-    });
+    sendSelectedClients('reminders');
 }
 
 window.addEventListener('load', function() {
@@ -835,14 +806,20 @@ function loadDailyPreview(year, month, day) {
 
             var html = '<h6 class="fw-bold mb-3"><i class="bi bi-calendar-day me-2"></i>' + res.month_name + ' ' + res.day + ', ' + res.year + '</h6>';
             html += '<table class="wa-preview-table"><thead><tr>';
+            html += '<th><input type="checkbox" id="wa_select_all" checked onchange="toggleSelectAll()"></th>';
             var headers = isArabic ? ['العميل', 'الهاتف', 'الإجمالي', 'الفواتير'] : ['Client', 'Phone', 'Total', 'Invoices'];
             headers.forEach(function(h) { html += '<th>' + h + '</th>'; });
             html += '</tr></thead><tbody>';
 
             res.clients.forEach(function(c) {
-                html += '<tr>';
+                var phoneHtml = c.phone;
+                if (c.suspicious_phone) {
+                    phoneHtml += ' <span class="wa-phone-warning" title="{{ trans("clients.whatsapp_phone_warning") }}">⚠</span>';
+                }
+                html += '<tr data-client-id="' + c.client_id + '" data-phone="' + c.phone + '">';
+                html += '<td><input type="checkbox" class="wa-client-check" checked onchange="updateSelectedCount()"></td>';
                 html += '<td>' + c.client_name + '</td>';
-                html += '<td dir="ltr">' + c.phone + '</td>';
+                html += '<td dir="ltr">' + phoneHtml + '</td>';
                 html += '<td>$' + c.total_amount + '</td>';
                 html += '<td>';
                 c.invoice_lines.forEach(function(line) {
@@ -856,9 +833,12 @@ function loadDailyPreview(year, month, day) {
             html += '<div class="wa-preview-summary">' +
                 (isArabic ? 'العملاء: ' + res.total + ' | الإجمالي: $' + res.grandTotal : 'Clients: ' + res.total + ' | Total: $' + res.grandTotal) +
                 '</div>';
-            html += '<div class="mt-3 text-center">';
-            html += '<button class="btn btn-success btn-sm" onclick="sendDailyReminders()">';
-            html += '<i class="bi bi-send me-1"></i> ' + (isArabic ? 'إرسال رسائل واتساب' : 'Send WhatsApp Messages') + '</button>';
+            html += '<div class="wa-selection-controls">';
+            html += '<span id="wa_selected_count">' + res.total + ' ' + (isArabic ? 'عملاء محددين' : 'clients selected') + '</span>';
+            html += '<button class="btn btn-success btn-sm" id="btn_send_selected" onclick="sendSelectedClients(\'daily\')">';
+            html += '<i class="bi bi-send me-1"></i> ' + (isArabic ? 'إرسال المحدد' : 'Send Selected') + ' (' + res.total + ')</button>';
+            html += '<button class="btn btn-outline-secondary btn-sm" onclick="toggleSelectAll()">';
+            html += '<i class="bi bi-check-square me-1"></i> ' + (isArabic ? 'تحديد/إلغاء الكل' : 'Select/Deselect All') + '</button>';
             html += '</div>';
 
             $container.html(html);
@@ -869,20 +849,37 @@ function loadDailyPreview(year, month, day) {
     });
 }
 
-function sendDailyReminders() {
+function sendSelectedClients(type) {
+    var selected = [];
+    $('.wa-client-check:checked').each(function() {
+        var $row = $(this).closest('tr');
+        selected.push(parseInt($row.data('client-id')));
+    });
+
+    if (selected.length === 0) {
+        var isArabic = '{{ app()->getLocale() }}' === 'ar';
+        alert(isArabic ? 'لم يتم تحديد أي عملاء' : 'No clients selected');
+        return;
+    }
+
     var isArabic = '{{ app()->getLocale() }}' === 'ar';
-    if (!confirm(isArabic ? 'هل تريد إرسال رسائل واتساب لعملاء هذا اليوم؟' : 'Send WhatsApp messages to clients for this day?')) return;
+    if (!confirm(isArabic ? 'هل تريد إرسال رسائل واتساب للعملاء المحددين؟' : 'Send WhatsApp messages to selected clients?')) return;
 
     $('#wa_month_progress').show();
     $('#wa_month_result').hide().empty();
+    $('#btn_send_selected').prop('disabled', true);
+
+    var data = { _token: '{{ csrf_token() }}', clients: selected, type: type, month: currentCalMonth, year: currentCalYear };
+    if (type === 'daily') { data.day = selectedDay; }
 
     $.ajax({
-        url: '{{ route('admin.settings.whatsapp.send_daily') }}',
+        url: '{{ route('admin.settings.whatsapp.send_selected') }}',
         type: 'POST',
-        data: { _token: '{{ csrf_token() }}', month: currentCalMonth, year: currentCalYear, day: selectedDay },
+        data: data,
         success: function(res) {
             if (res.error) {
                 $('#wa_month_result').html('<div class="alert alert-danger">' + res.error + '</div>').show();
+                $('#btn_send_selected').prop('disabled', false);
                 return;
             }
 
@@ -903,14 +900,46 @@ function sendDailyReminders() {
             });
 
             $('#wa_month_result').html(summaryHtml + detailsHtml).show();
+            $('#btn_send_selected').prop('disabled', false);
             toastr.success(isArabic ? 'تم الانتهاء' : 'Done');
 
-            loadMonthForDayCalendar(currentCalMonth, currentCalYear);
+            if (type === 'daily') {
+                loadMonthForDayCalendar(currentCalMonth, currentCalYear);
+            }
         },
         error: function() {
             $('#wa_month_result').html('<div class="alert alert-danger">{{ trans("clients.whatsapp_send_error") }}</div>').show();
+            $('#btn_send_selected').prop('disabled', false);
         }
     });
+}
+
+function toggleSelectAll() {
+    var $checks = $('.wa-client-check');
+    var $selectAll = $('#wa_select_all');
+    if ($selectAll.length) {
+        var checked = $selectAll.prop('checked');
+        $checks.prop('checked', checked);
+    } else {
+        var allChecked = $checks.length === $checks.filter(':checked').length;
+        $checks.prop('checked', !allChecked);
+    }
+    updateSelectedCount();
+}
+
+function updateSelectedCount() {
+    var count = $('.wa-client-check:checked').length;
+    var total = $('.wa-client-check').length;
+    var isArabic = '{{ app()->getLocale() }}' === 'ar';
+    $('#wa_selected_count').text(count + ' ' + (isArabic ? 'عملاء محددين' : 'clients selected'));
+    $('#btn_send_selected').html('<i class="bi bi-send me-1"></i> ' + (isArabic ? 'إرسال المحدد' : 'Send Selected') + ' (' + count + ')');
+    $('#btn_send_selected').prop('disabled', count === 0);
+
+    var $selectAll = $('#wa_select_all');
+    if ($selectAll.length) {
+        $selectAll.prop('checked', count === total);
+        $selectAll.prop('indeterminate', count > 0 && count < total);
+    }
 }
 
 function loadMonthlyPreview(month, year) {

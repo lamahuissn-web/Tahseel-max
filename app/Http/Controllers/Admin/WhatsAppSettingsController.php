@@ -20,6 +20,24 @@ class WhatsAppSettingsController extends Controller
         9 => 'سبتمبر', 10 => 'أكتوبر', 11 => 'نوفمبر', 12 => 'ديسمبر'
     ];
 
+    protected function isValidPhone($phone)
+    {
+        $clean = preg_replace('/[^0-9]/', '', $phone);
+        if (empty($clean)) return false;
+        if (preg_match('/^0+$/', $clean)) return false;
+        if (strlen($clean) < 7) return false;
+        return true;
+    }
+
+    protected function isSuspiciousPhone($phone)
+    {
+        $clean = preg_replace('/[^0-9]/', '', $phone);
+        if (preg_match('/^0+$/', $clean)) return true;
+        if (strlen($clean) < 7) return true;
+        if (preg_match('/^9610{5,}/', $clean)) return true;
+        return false;
+    }
+
     public function __construct(WhatsAppService $whatsapp)
     {
         $this->whatsapp = $whatsapp;
@@ -191,6 +209,7 @@ class WhatsAppSettingsController extends Controller
         foreach ($invoices as $clientId => $clientInvoices) {
             $client = $clientInvoices->first()->client;
             if (!$client || !$client->phone) continue;
+            if (!$this->isValidPhone($client->phone)) continue;
 
             $alreadyNotifiedToday = Invoice::where('client_id', $clientId)
                 ->whereNotNull('last_notified_at')
@@ -201,6 +220,7 @@ class WhatsAppSettingsController extends Controller
                 continue;
             }
 
+            $suspicious = $this->isSuspiciousPhone($client->phone);
             $totalAmount = $clientInvoices->sum('remaining_amount');
             $invoiceDetailsList = $this->buildInvoiceDetailsList($clientInvoices);
             $message = $this->buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
@@ -224,6 +244,7 @@ class WhatsAppSettingsController extends Controller
                 'invoice_lines' => $invoiceLines,
                 'message' => $message,
                 'invoices' => $clientInvoices->pluck('id')->toArray(),
+                'suspicious_phone' => $suspicious,
             ];
         }
 
@@ -294,6 +315,7 @@ class WhatsAppSettingsController extends Controller
         foreach ($invoices as $clientId => $clientInvoices) {
             $client = $clientInvoices->first()->client;
             if (!$client || !$client->phone) continue;
+            if (!$this->isValidPhone($client->phone)) continue;
 
             $alreadyNotifiedToday = Invoice::where('client_id', $clientId)
                 ->whereNotNull('last_notified_at')
@@ -311,6 +333,7 @@ class WhatsAppSettingsController extends Controller
         foreach ($invoices as $clientId => $clientInvoices) {
             $client = $clientInvoices->first()->client;
             if (!$client || !$client->phone) continue;
+            if (!$this->isValidPhone($client->phone)) continue;
 
             $alreadyNotifiedToday = Invoice::where('client_id', $clientId)
                 ->whereNotNull('last_notified_at')
@@ -441,7 +464,9 @@ class WhatsAppSettingsController extends Controller
         foreach ($invoices as $clientId => $clientInvoices) {
             $client = $clientInvoices->first()->client;
             if (!$client || !$client->phone) continue;
+            if (!$this->isValidPhone($client->phone)) continue;
 
+            $suspicious = $this->isSuspiciousPhone($client->phone);
             $totalAmount = $clientInvoices->sum('remaining_amount');
             $invoiceDetailsList = $this->buildInvoiceDetailsList($clientInvoices);
             $message = $this->buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
@@ -465,6 +490,7 @@ class WhatsAppSettingsController extends Controller
                 'invoice_lines' => $invoiceLines,
                 'message' => $message,
                 'invoices' => $clientInvoices->pluck('id')->toArray(),
+                'suspicious_phone' => $suspicious,
             ];
         }
 
@@ -549,7 +575,9 @@ class WhatsAppSettingsController extends Controller
         foreach ($invoices as $clientId => $clientInvoices) {
             $client = $clientInvoices->first()->client;
             if (!$client || !$client->phone) continue;
+            if (!$this->isValidPhone($client->phone)) continue;
 
+            $suspicious = $this->isSuspiciousPhone($client->phone);
             $totalAmount = $clientInvoices->sum('remaining_amount');
             $invoiceDetailsList = $this->buildInvoiceDetailsList($clientInvoices);
             $message = $this->buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
@@ -573,6 +601,7 @@ class WhatsAppSettingsController extends Controller
                 'invoice_lines' => $invoiceLines,
                 'message' => $message,
                 'invoices' => $clientInvoices->pluck('id')->toArray(),
+                'suspicious_phone' => $suspicious,
             ];
         }
 
@@ -636,6 +665,7 @@ class WhatsAppSettingsController extends Controller
         foreach ($invoices as $clientId => $clientInvoices) {
             $client = $clientInvoices->first()->client;
             if (!$client || !$client->phone) continue;
+            if (!$this->isValidPhone($client->phone)) continue;
 
             if ($currentIndex > 0) {
                 sleep(10);
@@ -681,6 +711,107 @@ class WhatsAppSettingsController extends Controller
             'year' => $year,
             'day' => $day,
             'date' => $targetDate,
+            'sent' => $sentCount,
+            'failed' => $failedCount,
+            'results' => $results,
+        ]);
+    }
+
+    public function sendSelected(Request $request)
+    {
+        $selectedIds = $request->input('clients');
+        $type = $request->input('type');
+        $month = $request->input('month');
+        $year = $request->input('year');
+        $day = $request->input('day');
+
+        if (empty($selectedIds) || !is_array($selectedIds)) {
+            return response()->json(['error' => 'No clients selected']);
+        }
+
+        $enabled = DB::table('app_config')->where('key', 'whatsapp_enabled')->value('value');
+        if ($enabled != '1') {
+            return response()->json(['error' => 'WhatsApp reminders are disabled']);
+        }
+
+        $status = $this->whatsapp->status();
+        if (!$status['connected']) {
+            return response()->json(['error' => 'WhatsApp is not connected']);
+        }
+
+        $template = DB::table('app_config')->where('key', 'whatsapp_message_template')->value('value')
+            ?? $this->defaultTemplate();
+
+        $query = Invoice::with(['client'])
+            ->whereIn('client_id', $selectedIds)
+            ->whereIn('status', ['unpaid', 'partial'])
+            ->whereHas('client', function ($q) {
+                $q->whereNotNull('phone')->where('phone', '!=', '');
+            });
+
+        if ($type === 'daily' && $day) {
+            $targetDate = Carbon::createFromDate($year, $month, $day)->format('Y-m-d');
+            $query->where('due_date', $targetDate);
+        } elseif ($type === 'monthly') {
+            $startDate = Carbon::createFromDate($year, $month, 1)->startOfMonth()->format('Y-m-d');
+            $endDate = Carbon::createFromDate($year, $month, 1)->endOfMonth()->format('Y-m-d');
+            $query->whereBetween('due_date', [$startDate, $endDate]);
+        }
+
+        $invoices = $query->orderBy('due_date')->get()->groupBy('client_id');
+
+        if ($invoices->isEmpty()) {
+            return response()->json(['error' => 'No unpaid invoices found for selected clients']);
+        }
+
+        $sentCount = 0;
+        $failedCount = 0;
+        $results = [];
+        $currentIndex = 0;
+
+        foreach ($invoices as $clientId => $clientInvoices) {
+            $client = $clientInvoices->first()->client;
+            if (!$client || !$client->phone) continue;
+            if (!$this->isValidPhone($client->phone)) continue;
+
+            if ($currentIndex > 0) {
+                sleep(10);
+            }
+
+            $totalAmount = $clientInvoices->sum('remaining_amount');
+            $invoiceDetailsList = $this->buildInvoiceDetailsList($clientInvoices);
+            $message = $this->buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
+            $phone = preg_replace('/[^0-9]/', '', $client->phone);
+            $invoiceIds = $clientInvoices->pluck('id')->toArray();
+
+            $result = $this->whatsapp->send($phone, $message);
+
+            DB::table('whatsapp_message_logs')->insert([
+                'client_id' => $clientId,
+                'invoice_id' => $clientInvoices->first()->id,
+                'invoice_ids' => json_encode($invoiceIds),
+                'phone' => $phone,
+                'message' => $message,
+                'status' => $result['success'] ? 'sent' : 'failed',
+                'error' => $result['error'] ?? null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            if ($result['success']) {
+                Invoice::whereIn('id', $invoiceIds)->update(['last_notified_at' => now()]);
+                $sentCount++;
+                $results[] = ['client' => $client->name, 'phone' => $phone, 'status' => 'sent'];
+            } else {
+                $failedCount++;
+                $results[] = ['client' => $client->name, 'phone' => $phone, 'status' => 'failed', 'error' => $result['error']];
+            }
+
+            $currentIndex++;
+        }
+
+        return response()->json([
+            'success' => true,
             'sent' => $sentCount,
             'failed' => $failedCount,
             'results' => $results,
