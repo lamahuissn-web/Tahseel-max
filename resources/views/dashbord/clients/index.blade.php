@@ -38,13 +38,7 @@
         opacity: 0.8;
     }
 
-    /* Responsive DataTable: hide default + icon, use name as trigger */
-    table.table-bordered > tbody > tr > td > .dtr-title {
-        display: none !important;
-    }
-    table.table-bordered > tbody > tr > td > .dtr-data {
-        display: block !important;
-    }
+    /* Responsive DataTable adjustments */
 
     @media (max-width: 991.98px) {
         td.name-trigger {
@@ -53,6 +47,11 @@
         }
         td.name-trigger::before {
             display: none !important;
+        }
+        .name-mobile-trigger {
+            cursor: pointer;
+            color: #0d6efd !important;
+            font-weight: 600;
         }
         .remaining-mobile-trigger {
             cursor: pointer;
@@ -353,6 +352,50 @@
     </div>
 </div>
 
+<!-- Client Quick Panel Modal -->
+<div class="modal fade" id="clientQuickPanelModal" tabindex="-1" aria-labelledby="clientQuickPanelModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen-sm-down modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="clientQuickPanelModalLabel">
+                    <i class="bi bi-person-badge"></i> {{ trans('clients.client_quick_panel') ?? 'Client Quick Panel' }}
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="clientQuickPanelBody">
+                <div class="text-center py-5" id="clientQuickPanelLoader">
+                    <div class="skeleton-loader">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <div class="skeleton skeleton-title mb-3"></div>
+                                <div class="skeleton skeleton-text mb-2" style="width: 80%;"></div>
+                                <div class="skeleton skeleton-text mb-2" style="width: 70%;"></div>
+                                <div class="skeleton skeleton-text mb-2" style="width: 90%;"></div>
+                            </div>
+                            <div class="col-12">
+                                <div class="skeleton skeleton-title mb-3"></div>
+                                <div class="skeleton skeleton-text mb-2" style="width: 75%;"></div>
+                                <div class="skeleton skeleton-text mb-2" style="width: 85%;"></div>
+                                <div class="skeleton skeleton-text" style="width: 65%;"></div>
+                            </div>
+                            <div class="col-12">
+                                <div class="skeleton skeleton-title mb-3"></div>
+                                <div class="skeleton skeleton-text mb-2" style="width: 80%;"></div>
+                                <div class="skeleton skeleton-text" style="width: 70%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> {{ trans('clients.close') }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 @stop
 @section('js')
 
@@ -444,12 +487,7 @@
             "order": [],
             "deferRender": true,
             "stateSave": false,
-            "responsive": {
-                "details": {
-                    "type": 'inline',
-                    "target": 'td.name-trigger'
-                }
-            },
+            "responsive": true,
             "pagingType": "simple_numbers",
             "ajax": {
                 url: "{{ route('admin.clients.index') }}",
@@ -484,7 +522,8 @@
                     responsivePriority: 1,
                     render: function(data, type, row) {
                         if (type === 'display' && data) {
-                            return '<span class="name-cell" title="' + $('<span>').text(data).html() + '">' + $('<span>').text(data).html() + '</span>';
+                            return '<span class="d-none d-lg-block name-cell" title="' + $('<span>').text(data).html() + '">' + $('<span>').text(data).html() + '</span>' +
+                                   '<span class="d-lg-none name-mobile-trigger" onclick="showClientQuickPanel(' + row.id + ')">' + $('<span>').text(data).html() + ' ◀</span>';
                         }
                         return data;
                     }
@@ -1767,5 +1806,30 @@
             // data-client-id is set in the partial view
         });
     });
+
+    function showClientQuickPanel(clientId) {
+        $('#clientQuickPanelModal').modal('show');
+        $('#clientQuickPanelLoader').show();
+        $('#clientQuickPanelBody').html($('#clientQuickPanelLoader'));
+
+        $.ajax({
+            url: '{{ route('admin.clients.quick_panel', ['id' => '__CLIENT_ID__']) }}'.replace('__CLIENT_ID__', clientId),
+            type: 'GET',
+            success: function(response) {
+                $('#clientQuickPanelLoader').hide();
+                $('#clientQuickPanelBody').html(response);
+            },
+            error: function() {
+                $('#clientQuickPanelLoader').hide();
+                $('#clientQuickPanelBody').html(
+                    '<div class="alert alert-danger text-center">' +
+                    '<i class="bi bi-exclamation-triangle fs-1 text-danger"></i>' +
+                    '<h4 class="mt-3">{{ trans("clients.error_loading_details") }}</h4>' +
+                    '<p class="mb-0">{{ trans("clients.please_try_again") }}</p>' +
+                    '</div>'
+                );
+            }
+        });
+    }
 </script>
 @endsection

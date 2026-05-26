@@ -873,6 +873,13 @@ class ClientController extends Controller
         return view($this->admin_view . '.remaining_invoices_modal_content', compact('client', 'unpaidInvoices'))->render();
     }
 
+    public function quickPanel($id)
+    {
+        $client = $this->ClientsRepository->getById($id);
+
+        return view($this->admin_view . '.quick_panel', compact('client'))->render();
+    }
+
     public function getSas4Info($id)
     {
         $client = $this->ClientsRepository->getById($id);

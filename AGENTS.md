@@ -8,6 +8,7 @@
 - `config/permission.php` line 27 must use `App\Models\Role::class` (not Spatie default)
 - Assets: Vite 5 (`npm run dev` / `npm run build`)
 - Tables: most business tables use `tbl_` prefix (`tbl_clients`, `tbl_invoices`, etc.)
+- EditorConfig: 4 spaces, LF line endings
 
 ## Server Environment
 - **Server**: LAN at `192.168.0.83`, served from `/var/www/html/tahseel`
@@ -19,13 +20,14 @@
 
 ## Branch Strategy
 - `main` — production, stable
-- `feature-sas4-integration` — SAS 4 integration work-in-progress
+- `feature-sas4-integration` — SAS 4 integration (merged)
+- `feature-ui-ux-improvements` — UI/UX improvements (current work)
 - **Never commit directly to `main`** — work on feature branches, merge after testing
 - To switch branches on server: `git checkout <branch> && git pull && php artisan view:clear config:clear route:clear`
 
 ## Key Commands
 ```bash
-# After code changes on server
+# After code changes on server (always run this)
 php artisan view:clear && php artisan config:clear && php artisan route:clear
 
 # Run a single migration
@@ -66,6 +68,12 @@ composer dump-autoload  # loads Telegram helper
 
 ## Critical Gotchas
 
+### Blade `@json()` parse error
+Never use `@json()` inside `<script>` tags — it causes parse errors. Always use:
+```blade
+{!! json_encode($variable) !!}
+```
+
 ### Custom Role model
 `app/Models/Role.php` extends `Spatie\Permission\Models\Role` with `HasTranslations`. If missing, all role/permission pages crash. Update these files to import `App\Models\Role`:
 - `app/Http/Controllers/Admin/RolesController.php`
@@ -98,6 +106,7 @@ Server `.env` is not committed. Contains SAS 4 credentials, JWT secret, FCM key,
 | `public/.htaccess` | Required for Laravel routing |
 | `config/sas4.php` | SAS 4 API config |
 | `app/Services/Sas4/Sas4ApiService.php` | SAS 4 API client |
+| `public/assets/css/custome/extra.css` | Main custom CSS (skeleton loaders, SAS4 styles, RTL utilities) |
 
 ## Admin Login
 - URL: `/{locale}/admin/login`
@@ -113,6 +122,30 @@ Server `.env` is not committed. Contains SAS 4 credentials, JWT secret, FCM key,
 - Remote: `https://github.com/lamahuissn-web/tahseel-v2`
 - Credentials: `~/.git-credentials`
 - Workflow: `git add . && git commit -m "msg" && git push`
+
+## UI Conventions
+
+### RTL Support
+- Use logical CSS properties: `border-inline-start` (not `border-left`), `padding-inline-start`, `margin-inline-end`
+- Use Bootstrap RTL utilities: `text-start`, `text-end`, `float-start`, `float-end`
+- Sidebar active state uses `border-inline-start` for the indicator line
+
+### Responsive Modals
+- Use `modal-fullscreen-sm-down` class: full-screen on mobile (<576px), centered on desktop
+- Quick panel modals stay on same page (no new browser tabs) — match remaining balance modal pattern
+
+### Translation Helper (JS)
+- Use `t2('key')` for JavaScript translations (defined in Blade, pulls from `lang/ar/clients.php`)
+- Add new Arabic keys to `lang/ar/clients.php` under the relevant section
+
+### AJAX Loading Pattern
+- Show skeleton loader while AJAX loads, then fade in content
+- Use `.sas4-skeleton` class for skeleton animation (defined in `extra.css`)
+- Container pattern: `<div id="container"><div class="sas4-skeleton"></div></div>` → replace on success
+
+### Abandoned Folder
+- `resources/views/dashbord/clients1/` — old abandoned views, safe to delete
+- Active views are in `resources/views/dashbord/clients/`
 
 ## Telegram Integration
 
@@ -132,7 +165,7 @@ Server `.env` is not committed. Contains SAS 4 credentials, JWT secret, FCM key,
 
 ### 18 `telegram_*` keys in `app_config` table (set via Settings → App Config)
 
-## SAS 4 Integration (feature branch)
+## SAS 4 Integration
 
 ### Architecture
 - SAS 4 server: `192.168.0.101` (LAN), login: `admin/admin`
@@ -167,18 +200,21 @@ Replicates CryptoJS key derivation: MD5 salted key+IV derivation → AES-256-CBC
 - **Traffic Quota Card**: remaining download/upload/total/uptime (or "Unlimited")
 - **Daily Traffic Report**: month/year selector, 31-day table (Day/Download/Upload/Total/Real Traffic), monthly summary footer
 - Lazy-loaded on tab click, auto-refreshes every 60s while tab visible
-- SAS 4 API endpoints used:
-  - `POST /api/user/traffic` with `report_type: daily` → daily rx/tx/total/total_real arrays
-  - `POST /api/index/UserSessions` with `username` filter → session history (future)
-  - `POST /api/index/online` → active sessions with live data
 - Routes: `/clients/{id}/sas4-traffic`, `/clients/{id}/sas4-daily-traffic`
 
-### Key API Endpoints Discovered
+### Phase 4 (Done): Quick Panel Modal
+- Click SAS 4 status cell in clients table → opens `#sas4QuickPanelModal`
+- Shows: info card, traffic quota, daily report (all devices), control actions, "View Full Details" link
+- Reuses `GET /clients/{id}/sas4-traffic` endpoint and `sas4ControlAction()` JS function
+- Uses `modal-fullscreen-sm-down` for responsive sizing
+- JS functions: `showSas4QuickPanel()`, `loadSas4ProfilesForQuickPanel()`, `populateQuickPanelTrafficSelectors()`, `loadQuickPanelDailyTraffic()`
+
+### Key API Endpoints
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
 | `/api/user/traffic` | POST + AES | Daily/monthly traffic report (rx, tx, total, total_real arrays) |
-| `/api/index/UserSessions` | POST + AES | Full session history (start/stop time, IP, MAC, bytes, disconnect reason) |
-| `/api/index/online` | POST + AES | Active sessions (live session time, IP, MAC, NAS, user details) |
+| `/api/index/UserSessions` | POST + AES | Full session history |
+| `/api/index/online` | POST + AES | Active sessions (live session time, IP, MAC, NAS) |
 | `/api/index/user` | POST + AES | User search with `daily_traffic_details`, `profile_details` |
 
 ### Config keys (`.env`)
