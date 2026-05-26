@@ -55,7 +55,7 @@ class WhatsAppSettingsController extends Controller
             'whatsapp_remind_on_due' => DB::table('app_config')->where('key', 'whatsapp_remind_on_due')->value('value') ?? '1',
             'whatsapp_remind_after' => DB::table('app_config')->where('key', 'whatsapp_remind_after')->value('value') ?? '1,3,7',
             'whatsapp_message_template' => DB::table('app_config')->where('key', 'whatsapp_message_template')->value('value')
-                ?? "مرحباً {name}،\nنود تذكيرك بوجود مبالغ مستحقة غير مدفوعة لحسابك بإجمالي {total_amount}$.\n\nتفاصيل الفواتير المستحقة:\n{invoice_details_list}\n\nيرجى التكرم بتسوية الرصيد المستحق في أقرب وقت ممكن. إذا كنت قد سددت هذا المبلغ مؤخراً، يرجى تجاهل هذه الرسالة. شكراً لتفهمك.",
+                ?? "👋 مرحباً {name}،\n\n📋 نود تذكيرك بوجود مبالغ مستحقة غير مدفوعة لحسابك بإجمالي {total_amount}$.\n\n📄 تفاصيل الفواتير المستحقة:\n{invoice_details_list}\n\n💳 يرجى التكرم بتسوية الرصيد المستحق في أقرب وقت ممكن.\nإذا كنت قد سددت هذا المبلغ مؤخراً، يرجى تجاهل هذه الرسالة.\n\n🙏 شكراً لتفهمك.",
         ];
 
         return view('dashbord.settings.whatsapp', compact('status', 'qr', 'logs', 'settings'));
@@ -369,7 +369,9 @@ class WhatsAppSettingsController extends Controller
             ]);
 
             if ($result['success']) {
-                Invoice::whereIn('id', $invoiceIds)->update(['last_notified_at' => now()]);
+                Invoice::where('client_id', $clientId)
+                    ->whereIn('status', ['unpaid', 'partial'])
+                    ->update(['last_notified_at' => now()]);
                 $sentCount++;
                 $results[] = ['client' => $client->name, 'phone' => $phone, 'status' => 'sent'];
             } else {
@@ -392,10 +394,18 @@ class WhatsAppSettingsController extends Controller
     {
         $lines = [];
         foreach ($clientInvoices as $invoice) {
-            $monthNum = (int) Carbon::parse($invoice->due_date)->format('n');
-            $monthName = $this->arabicMonths[$monthNum] ?? Carbon::parse($invoice->due_date)->format('M');
             $amount = number_format($invoice->remaining_amount, 2);
-            $lines[] = "فاتورة شهر {$monthName} (رقم {$invoice->invoice_number}) بمبلغ {$amount}$";
+            
+            if ($invoice->invoice_type === 'service') {
+                $label = !empty($invoice->notes) 
+                    ? preg_replace('/\s+/', ' ', trim($invoice->notes)) 
+                    : 'خدمة';
+                $lines[] = "🔧 فاتورة {$label} (رقم {$invoice->invoice_number}) بمبلغ {$amount}$";
+            } else {
+                $monthNum = (int) Carbon::parse($invoice->due_date)->format('n');
+                $monthName = $this->arabicMonths[$monthNum] ?? Carbon::parse($invoice->due_date)->format('M');
+                $lines[] = "📅 فاتورة شهر {$monthName} (رقم {$invoice->invoice_number}) بمبلغ {$amount}$";
+            }
         }
         return implode("\n", $lines);
     }
@@ -410,7 +420,7 @@ class WhatsAppSettingsController extends Controller
 
     protected function defaultTemplate()
     {
-        return "مرحباً {name}،\nنود تذكيرك بوجود مبالغ مستحقة غير مدفوعة لحسابك بإجمالي {total_amount}$.\n\nتفاصيل الفواتير المستحقة:\n{invoice_details_list}\n\nيرجى التكرم بتسوية الرصيد المستحق في أقرب وقت ممكن. إذا كنت قد سددت هذا المبلغ مؤخراً، يرجى تجاهل هذه الرسالة. شكراً لتفهمك.";
+        return "👋 مرحباً {name}،\n\n📋 نود تذكيرك بوجود مبالغ مستحقة غير مدفوعة لحسابك بإجمالي {total_amount}$.\n\n📄 تفاصيل الفواتير المستحقة:\n{invoice_details_list}\n\n💳 يرجى التكرم بتسوية الرصيد المستحق في أقرب وقت ممكن.\nإذا كنت قد سددت هذا المبلغ مؤخراً، يرجى تجاهل هذه الرسالة.\n\n🙏 شكراً لتفهمك.";
     }
 
     public function monthlyPreview(Request $request)
@@ -546,17 +556,12 @@ class WhatsAppSettingsController extends Controller
 
         $targetDate = Carbon::createFromDate($year, $month, $day)->format('Y-m-d');
 
-        $invoices = Invoice::with(['client'])
-            ->where('due_date', $targetDate)
+        $clientIdsOnDate = Invoice::where('due_date', $targetDate)
             ->whereIn('status', ['unpaid', 'partial'])
-            ->whereHas('client', function ($q) {
-                $q->whereNotNull('phone')->where('phone', '!=', '');
-            })
-            ->orderBy('due_date')
-            ->get()
-            ->groupBy('client_id');
+            ->pluck('client_id')
+            ->unique();
 
-        if ($invoices->isEmpty()) {
+        if ($clientIdsOnDate->isEmpty()) {
             $monthName = $this->arabicMonths[(int)$month] ?? Carbon::createFromDate($year, $month, 1)->format('F');
             return response()->json([
                 'month_name' => $monthName,
@@ -568,6 +573,16 @@ class WhatsAppSettingsController extends Controller
                 'grandTotal' => 0,
             ]);
         }
+
+        $invoices = Invoice::with(['client'])
+            ->whereIn('client_id', $clientIdsOnDate)
+            ->whereIn('status', ['unpaid', 'partial'])
+            ->whereHas('client', function ($q) {
+                $q->whereNotNull('phone')->where('phone', '!=', '');
+            })
+            ->orderBy('due_date')
+            ->get()
+            ->groupBy('client_id');
 
         $previewData = [];
         $grandTotal = 0;
@@ -643,8 +658,17 @@ class WhatsAppSettingsController extends Controller
 
         $targetDate = Carbon::createFromDate($year, $month, $day)->format('Y-m-d');
 
+        $clientIdsOnDate = Invoice::where('due_date', $targetDate)
+            ->whereIn('status', ['unpaid', 'partial'])
+            ->pluck('client_id')
+            ->unique();
+
+        if ($clientIdsOnDate->isEmpty()) {
+            return response()->json(['error' => 'No unpaid invoices found for this date']);
+        }
+
         $invoices = Invoice::with(['client'])
-            ->where('due_date', $targetDate)
+            ->whereIn('client_id', $clientIdsOnDate)
             ->whereIn('status', ['unpaid', 'partial'])
             ->whereHas('client', function ($q) {
                 $q->whereNotNull('phone')->where('phone', '!=', '');
@@ -652,10 +676,6 @@ class WhatsAppSettingsController extends Controller
             ->orderBy('due_date')
             ->get()
             ->groupBy('client_id');
-
-        if ($invoices->isEmpty()) {
-            return response()->json(['error' => 'No unpaid invoices found for this date']);
-        }
 
         $sentCount = 0;
         $failedCount = 0;
@@ -692,7 +712,9 @@ class WhatsAppSettingsController extends Controller
             ]);
 
             if ($result['success']) {
-                Invoice::whereIn('id', $invoiceIds)->update(['last_notified_at' => now()]);
+                Invoice::where('client_id', $clientId)
+                    ->whereIn('status', ['unpaid', 'partial'])
+                    ->update(['last_notified_at' => now()]);
                 $sentCount++;
                 $results[] = ['client' => $client->name, 'phone' => $phone, 'status' => 'sent'];
             } else {
@@ -751,7 +773,12 @@ class WhatsAppSettingsController extends Controller
 
         if ($type === 'daily' && $day) {
             $targetDate = Carbon::createFromDate($year, $month, $day)->format('Y-m-d');
-            $query->where('due_date', $targetDate);
+            $clientIdsOnDate = Invoice::whereIn('client_id', $selectedIds)
+                ->where('due_date', $targetDate)
+                ->whereIn('status', ['unpaid', 'partial'])
+                ->pluck('client_id')
+                ->unique();
+            $query->whereIn('client_id', $clientIdsOnDate);
         } elseif ($type === 'monthly') {
             $startDate = Carbon::createFromDate($year, $month, 1)->startOfMonth()->format('Y-m-d');
             $endDate = Carbon::createFromDate($year, $month, 1)->endOfMonth()->format('Y-m-d');
@@ -799,7 +826,9 @@ class WhatsAppSettingsController extends Controller
             ]);
 
             if ($result['success']) {
-                Invoice::whereIn('id', $invoiceIds)->update(['last_notified_at' => now()]);
+                Invoice::where('client_id', $clientId)
+                    ->whereIn('status', ['unpaid', 'partial'])
+                    ->update(['last_notified_at' => now()]);
                 $sentCount++;
                 $results[] = ['client' => $client->name, 'phone' => $phone, 'status' => 'sent'];
             } else {
