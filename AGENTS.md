@@ -279,14 +279,36 @@ SAS4_AES_KEY=abcdefghijuklmno0123456789012345
 | `whatsapp_remind_before` | `3` | Days before due date |
 | `whatsapp_remind_on_due` | `1` | Send on due date |
 | `whatsapp_remind_after` | `1,3,7` | Days after overdue (comma-separated) |
-| `whatsapp_message_template` | (Arabic) | Customizable message with `{name}`, `{amount}`, `{due_date}`, `{invoice_number}` |
+| `whatsapp_message_template` | (Arabic) | Customizable message with `{name}`, `{total_amount}`, `{invoice_details_list}` |
 
-### Scheduled Command
-- `whatsapp:reminders` — runs daily at 09:00
-- Finds unpaid/partial invoices matching reminder timing
-- Sends WhatsApp messages to clients with phone numbers
-- Logs results to `whatsapp_message_logs` table
-- Updates invoice `last_notified_at`
+### Command Usage
+- **Preview only**: `php artisan whatsapp:reminders`
+- **Actually send**: `php artisan whatsapp:reminders --send`
+- Groups unpaid/partial invoices by client (one message per client)
+- Shows preview table before sending (locale-aware: Arabic/English)
+- 10-second delay between each message (rate limiting to avoid WhatsApp blocking)
+- Duplicate prevention: skips clients already notified today
+- Logs results to `whatsapp_message_logs` table (with `invoice_ids` JSON column)
+- Updates invoice `last_notified_at` after successful send
+- Cron schedule is commented out (manual execution only for now)
+
+### Message Template Variables
+| Variable | Description |
+|----------|-------------|
+| `{name}` | Client name |
+| `{total_amount}` | Sum of all unpaid invoice remaining amounts |
+| `{invoice_details_list}` | Multi-line breakdown: `فاتورة شهر أبريل (رقم 10794) بمبلغ 25.00$` |
+
+### Default Template
+```
+مرحباً {name}،
+نود تذكيرك بوجود مبالغ مستحقة غير مدفوعة لحسابك بإجمالي {total_amount}$.
+
+تفاصيل الفواتير المستحقة:
+{invoice_details_list}
+
+يرجى التكرم بتسوية الرصيد المستحق في أقرب وقت ممكن. إذا كنت قد سددت هذا المبلغ مؤخراً، يرجى تجاهل هذه الرسالة. شكراً لتفهمك.
+```
 
 ### Setup / Restart
 ```bash

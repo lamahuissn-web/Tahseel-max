@@ -132,7 +132,7 @@
                             <label class="form-label fw-semibold">{{ trans('clients.whatsapp_template_label') }}</label>
                             <textarea class="form-control" id="wa_template" rows="8" dir="rtl" style="font-size: 14px; line-height: 1.8;">{{ $settings['whatsapp_message_template'] }}</textarea>
                             <div class="text-muted mt-2" style="font-size: 12px;">
-                                {{ trans('clients.whatsapp_variables') }}: <code>{name}</code> <code>{amount}</code> <code>{due_date}</code> <code>{invoice_number}</code>
+                                {{ trans('clients.whatsapp_variables') }}: <code>{name}</code> <code>{total_amount}</code> <code>{invoice_details_list}</code>
                             </div>
                         </div>
                         <div class="col-md-5">

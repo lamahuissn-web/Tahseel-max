@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Models\Admin\Invoice;
-use App\Models\Clients;
 use App\Services\WhatsAppService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
@@ -11,12 +10,18 @@ use Illuminate\Support\Facades\DB;
 
 class WhatsAppRemindersCommand extends Command
 {
-    protected $signature = 'whatsapp:reminders';
-    protected $description = 'Send WhatsApp reminders for unpaid invoices';
+    protected $signature = 'whatsapp:reminders {--send : Actually send messages}';
+    protected $description = 'Preview or send aggregated WhatsApp reminders for unpaid invoices';
 
     protected $whatsapp;
     protected $sentCount = 0;
     protected $failedCount = 0;
+
+    protected $arabicMonths = [
+        1 => 'يناير', 2 => 'فبراير', 3 => 'مارس', 4 => 'أبريل',
+        5 => 'مايو', 6 => 'يونيو', 7 => 'يوليو', 8 => 'أغسطس',
+        9 => 'سبتمبر', 10 => 'أكتوبر', 11 => 'نوفمبر', 12 => 'ديسمبر'
+    ];
 
     public function __construct(WhatsAppService $whatsapp)
     {
@@ -28,72 +33,127 @@ class WhatsAppRemindersCommand extends Command
     {
         $enabled = DB::table('app_config')->where('key', 'whatsapp_enabled')->value('value');
         if ($enabled != '1') {
-            $this->info('WhatsApp reminders are disabled.');
-            return;
+            $this->error('WhatsApp reminders are disabled.');
+            return Command::FAILURE;
         }
 
         $status = $this->whatsapp->status();
         if (!$status['connected']) {
             $this->error('WhatsApp is not connected.');
-            return;
+            return Command::FAILURE;
         }
 
         $template = DB::table('app_config')->where('key', 'whatsapp_message_template')->value('value')
             ?? $this->defaultTemplate();
 
         $today = Carbon::today();
+        $targetDates = [];
 
-        // Before due date
         $beforeDays = (int) (DB::table('app_config')->where('key', 'whatsapp_remind_before')->value('value') ?? 3);
         if ($beforeDays > 0) {
-            $beforeDate = $today->copy()->addDays($beforeDays);
-            $this->sendRemindersForDate($beforeDate, $template);
+            $targetDates[] = $today->copy()->addDays($beforeDays)->format('Y-m-d');
         }
 
-        // On due date
         $onDue = DB::table('app_config')->where('key', 'whatsapp_remind_on_due')->value('value');
         if ($onDue == '1') {
-            $this->sendRemindersForDate($today, $template);
+            $targetDates[] = $today->format('Y-m-d');
         }
 
-        // After due date (overdue)
         $afterDays = DB::table('app_config')->where('key', 'whatsapp_remind_after')->value('value') ?? '1,3,7';
         $afterDaysArray = array_map('intval', array_filter(explode(',', $afterDays)));
         foreach ($afterDaysArray as $days) {
             if ($days > 0) {
-                $afterDate = $today->copy()->subDays($days);
-                $this->sendRemindersForDate($afterDate, $template);
+                $targetDates[] = $today->copy()->subDays($days)->format('Y-m-d');
             }
         }
 
-        $this->info("WhatsApp reminders completed: {$this->sentCount} sent, {$this->failedCount} failed.");
-    }
-
-    protected function sendRemindersForDate($date, $template)
-    {
-        $dateStr = $date->format('Y-m-d');
+        $targetDates = array_unique($targetDates);
 
         $invoices = Invoice::with(['client'])
-            ->whereDate('due_date', $dateStr)
+            ->whereIn('due_date', $targetDates)
             ->whereIn('status', ['unpaid', 'partial'])
             ->whereHas('client', function ($q) {
                 $q->whereNotNull('phone')->where('phone', '!=', '');
             })
-            ->get();
+            ->orderBy('due_date')
+            ->get()
+            ->groupBy('client_id');
 
-        foreach ($invoices as $invoice) {
-            if (!$invoice->client || !$invoice->client->phone) continue;
+        if ($invoices->isEmpty()) {
+            $this->info('No unpaid invoices found for the configured reminder dates.');
+            return Command::SUCCESS;
+        }
 
-            $message = $this->buildMessage($template, $invoice);
-            $phone = preg_replace('/[^0-9]/', '', $invoice->client->phone);
+        $previewData = [];
 
-            $result = $this->whatsapp->send($phone, $message);
+        foreach ($invoices as $clientId => $clientInvoices) {
+            $client = $clientInvoices->first()->client;
+            if (!$client || !$client->phone) continue;
+
+            $alreadyNotifiedToday = Invoice::where('client_id', $clientId)
+                ->whereNotNull('last_notified_at')
+                ->whereDate('last_notified_at', $today)
+                ->exists();
+
+            if ($alreadyNotifiedToday) {
+                $this->info("Skipped {$client->name}: already notified today");
+                continue;
+            }
+
+            $totalAmount = $clientInvoices->sum('remaining_amount');
+            $invoiceDetailsList = $this->buildInvoiceDetailsList($clientInvoices);
+            $message = $this->buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
+            $phone = preg_replace('/[^0-9]/', '', $client->phone);
+
+            $invoiceSummary = $clientInvoices->map(function ($inv) {
+                $monthNum = (int) Carbon::parse($inv->due_date)->format('n');
+                $monthName = $this->arabicMonths[$monthNum] ?? Carbon::parse($inv->due_date)->format('M');
+                return "{$monthName} ({$inv->invoice_number})";
+            })->join(', ');
+
+            $previewData[] = [
+                'client_id' => $clientId,
+                'client_name' => $client->name,
+                'phone' => $phone,
+                'total_amount' => $totalAmount,
+                'invoice_details_list' => $invoiceDetailsList,
+                'invoice_summary' => $invoiceSummary,
+                'message' => $message,
+                'invoices' => $clientInvoices,
+            ];
+        }
+
+        if (empty($previewData)) {
+            $this->info('No clients to notify (all already notified today).');
+            return Command::SUCCESS;
+        }
+
+        $this->displayPreview($previewData);
+
+        if (!$this->option('send')) {
+            $this->info('');
+            $this->info('Run with --send flag to actually send messages.');
+            return Command::SUCCESS;
+        }
+
+        $this->info('');
+        $this->info('=== ' . $this->getTrans('sending') . ' ===');
+
+        $total = count($previewData);
+        foreach ($previewData as $index => $data) {
+            $step = $index + 1;
+            $this->info("[{$step}/{$total}] " . $this->getTrans('sending_to') . " {$data['client_name']} ({$data['phone']})...");
+
+            $result = $this->whatsapp->send($data['phone'], $data['message']);
+
+            $invoiceIds = $data['invoices']->pluck('id')->toArray();
 
             DB::table('whatsapp_message_logs')->insert([
-                'client_id' => $invoice->client_id,
-                'invoice_id' => $invoice->id,
-                'phone' => $invoice->client->phone,
-                'message' => $message,
+                'client_id' => $data['client_id'],
+                'invoice_id' => $data['invoices']->first()->id,
+                'invoice_ids' => json_encode($invoiceIds),
+                'phone' => $data['phone'],
+                'message' => $data['message'],
                 'status' => $result['success'] ? 'sent' : 'failed',
                 'error' => $result['error'] ?? null,
                 'created_at' => now(),
@@ -101,31 +161,110 @@ class WhatsAppRemindersCommand extends Command
             ]);
 
             if ($result['success']) {
-                $invoice->update(['last_notified_at' => now()]);
+                $this->info('✓ ' . $this->getTrans('sent_success'));
+                Invoice::whereIn('id', $invoiceIds)->update(['last_notified_at' => now()]);
                 $this->sentCount++;
-                $this->info("Sent to {$invoice->client->name} ({$phone})");
             } else {
+                $this->error('✗ ' . $this->getTrans('failed') . ": {$result['error']}");
                 $this->failedCount++;
-                $this->error("Failed for {$invoice->client->name} ({$phone}): {$result['error']}");
+            }
+
+            if ($index < $total - 1) {
+                $this->info($this->getTrans('waiting') . '...');
+                sleep(10);
             }
         }
+
+        $this->info('');
+        $this->info('=== ' . $this->getTrans('done') . ' ===');
+        $this->info($this->getTrans('summary', ['sent' => $this->sentCount, 'failed' => $this->failedCount]));
+
+        return Command::SUCCESS;
     }
 
-    protected function buildMessage($template, $invoice)
+    protected function buildInvoiceDetailsList($clientInvoices)
     {
-        $client = $invoice->client;
-        $dueDate = $invoice->due_date ? Carbon::parse($invoice->due_date)->format('Y-m-d') : 'غير محدد';
+        $lines = [];
+        foreach ($clientInvoices as $invoice) {
+            $monthNum = (int) Carbon::parse($invoice->due_date)->format('n');
+            $monthName = $this->arabicMonths[$monthNum] ?? Carbon::parse($invoice->due_date)->format('M');
+            $amount = number_format($invoice->remaining_amount, 2);
+            $lines[] = "فاتورة شهر {$monthName} (رقم {$invoice->invoice_number}) بمبلغ {$amount}$";
+        }
+        return implode("\n", $lines);
+    }
 
-        $message = str_replace('{name}', $client->name ?? 'العميل', $template);
-        $message = str_replace('{amount}', number_format($invoice->remaining_amount, 2), $message);
-        $message = str_replace('{due_date}', $dueDate, $message);
-        $message = str_replace('{invoice_number}', $invoice->invoice_number ?? $invoice->id, $message);
-
+    protected function buildMessage($template, $clientName, $totalAmount, $invoiceDetailsList)
+    {
+        $message = str_replace('{name}', $clientName, $template);
+        $message = str_replace('{total_amount}', number_format($totalAmount, 2), $message);
+        $message = str_replace('{invoice_details_list}', $invoiceDetailsList, $message);
         return $message;
+    }
+
+    protected function displayPreview($previewData)
+    {
+        $isArabic = app()->getLocale() === 'ar';
+
+        $headers = $isArabic
+            ? [$this->getTrans('client'), $this->getTrans('phone'), $this->getTrans('total_due'), $this->getTrans('invoices')]
+            : ['Client', 'Phone', 'Total Due', 'Invoices'];
+
+        $rows = [];
+        $grandTotal = 0;
+
+        foreach ($previewData as $data) {
+            $grandTotal += $data['total_amount'];
+            $invoiceLines = $data['invoices']->map(function ($inv) {
+                $monthNum = (int) Carbon::parse($inv->due_date)->format('n');
+                $monthName = $this->arabicMonths[$monthNum] ?? Carbon::parse($inv->due_date)->format('M');
+                $amount = number_format($inv->remaining_amount, 2);
+                return "{$monthName} ({$inv->invoice_number}) - {$amount}$";
+            })->toArray();
+
+            $rows[] = [
+                $data['client_name'],
+                $data['phone'],
+                '$' . number_format($data['total_amount'], 2),
+                implode("\n", $invoiceLines),
+            ];
+        }
+
+        $this->table($headers, $rows);
+
+        $clientCount = count($previewData);
+        if ($isArabic) {
+            $this->info("العملاء المراد إرسالهم: {$clientCount} | الإجمالي المستحق: $" . number_format($grandTotal, 2));
+        } else {
+            $this->info("Clients to notify: {$clientCount} | Total outstanding: $" . number_format($grandTotal, 2));
+        }
     }
 
     protected function defaultTemplate()
     {
-        return "مرحباً {name}،\n\nنود تذكيرك بأن فاتورتك رقم {invoice_number}\nبمبلغ {amount} مستحقة في {due_date}.\n\nيرجى السداد في أقرب وقت. شكراً لك.";
+        return "مرحباً {name}،\nنود تذكيرك بوجود مبالغ مستحقة غير مدفوعة لحسابك بإجمالي {total_amount}$.\n\nتفاصيل الفواتير المستحقة:\n{invoice_details_list}\n\nيرجى التكرم بتسوية الرصيد المستحق في أقرب وقت ممكن. إذا كنت قد سددت هذا المبلغ مؤخراً، يرجى تجاهل هذه الرسالة. شكراً لتفهمك.";
+    }
+
+    protected function getTrans($key, $replace = [])
+    {
+        $translations = [
+            'client' => 'العميل',
+            'phone' => 'الهاتف',
+            'total_due' => 'الإجمالي',
+            'invoices' => 'الفواتير',
+            'sending' => 'جاري الإرسال',
+            'sending_to' => 'جاري إرسال الرسالة إلى',
+            'sent_success' => 'تم الإرسال بنجاح',
+            'failed' => 'فشل الإرسال',
+            'waiting' => 'انتظار 10 ثوانٍ قبل الرسالة التالية',
+            'done' => 'تم الانتهاء',
+            'summary' => 'تم الإرسال: :sent | فشل: :failed',
+        ];
+
+        $text = $translations[$key] ?? $key;
+        foreach ($replace as $placeholder => $value) {
+            $text = str_replace(":{$placeholder}", $value, $text);
+        }
+        return $text;
     }
 }

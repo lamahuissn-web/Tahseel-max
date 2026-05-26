@@ -47,7 +47,8 @@ class Kernel extends ConsoleKernel
 
         $schedule->command('telegram:send-backup')->everyMinute();
         $schedule->command(SendOverdueReminders::class)->dailyAt('08:00');
-        $schedule->command('whatsapp:reminders')->dailyAt('09:00');
+        // $schedule->command('whatsapp:reminders')->dailyAt('09:00');
+        // TODO: Re-enable when automated scheduling is configured
     }
 
     /**

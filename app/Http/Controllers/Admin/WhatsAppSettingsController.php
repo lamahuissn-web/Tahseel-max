@@ -29,7 +29,7 @@ class WhatsAppSettingsController extends Controller
             'whatsapp_remind_on_due' => DB::table('app_config')->where('key', 'whatsapp_remind_on_due')->value('value') ?? '1',
             'whatsapp_remind_after' => DB::table('app_config')->where('key', 'whatsapp_remind_after')->value('value') ?? '1,3,7',
             'whatsapp_message_template' => DB::table('app_config')->where('key', 'whatsapp_message_template')->value('value')
-                ?? "مرحباً {name}،\n\nنود تذكيرك بأن فاتورتك رقم {invoice_number}\nبمبلغ {amount} مستحقة في {due_date}.\n\nيرجى السداد في أقرب وقت. شكراً لك.",
+                ?? "مرحباً {name}،\nنود تذكيرك بوجود مبالغ مستحقة غير مدفوعة لحسابك بإجمالي {total_amount}$.\n\nتفاصيل الفواتير المستحقة:\n{invoice_details_list}\n\nيرجى التكرم بتسوية الرصيد المستحق في أقرب وقت ممكن. إذا كنت قد سددت هذا المبلغ مؤخراً، يرجى تجاهل هذه الرسالة. شكراً لتفهمك.",
         ];
 
         return view('dashbord.settings.whatsapp', compact('status', 'qr', 'logs', 'settings'));
@@ -58,17 +58,16 @@ class WhatsAppSettingsController extends Controller
     public function preview(Request $request)
     {
         $template = $request->template ?? '';
+        $sampleDetails = "فاتورة شهر أبريل (رقم 12345) بمبلغ 25.00$\nفاتورة شهر مايو (رقم 12346) بمبلغ 25.00$";
         $sample = [
             'name' => 'أحمد محمد',
-            'amount' => number_format(1500.50, 2),
-            'due_date' => date('Y-m-d', strtotime('+7 days')),
-            'invoice_number' => 'INV-2026-001',
+            'total_amount' => number_format(50.00, 2),
+            'invoice_details_list' => $sampleDetails,
         ];
 
         $preview = str_replace('{name}', $sample['name'], $template);
-        $preview = str_replace('{amount}', $sample['amount'], $preview);
-        $preview = str_replace('{due_date}', $sample['due_date'], $preview);
-        $preview = str_replace('{invoice_number}', $sample['invoice_number'], $preview);
+        $preview = str_replace('{total_amount}', $sample['total_amount'], $preview);
+        $preview = str_replace('{invoice_details_list}', $sample['invoice_details_list'], $preview);
 
         return response()->json(['preview' => nl2br(e($preview))]);
     }
