@@ -1326,7 +1326,7 @@
                     html += '</tbody></table></div></div></div></div>';
                 }
 
-                html += '<div class="mt-3 d-none d-md-block">';
+                html += '<div class="mt-3">';
                 html += '<div class="card sas4-card sas4-card-traffic">';
                 html += '<div class="card-header card-header-secondary">';
                 html += '<span><i class="bi bi-bar-chart-line"></i> ' + t2('trafficReport') + '</span>';
