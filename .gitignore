@@ -26,3 +26,6 @@ yarn-error.log
 # WhatsApp service
 /whatsapp-service/session/
 /whatsapp-service/node_modules/
+/whatsapp-service/.cache/
+/whatsapp-service/.config/
+/whatsapp-service/.local/
