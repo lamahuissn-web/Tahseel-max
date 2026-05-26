@@ -362,7 +362,7 @@
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body" id="clientQuickPanelBody">
+            <div class="modal-body p-0" id="clientQuickPanelBody">
                 <div class="text-center py-5" id="clientQuickPanelLoader">
                     <div class="skeleton-loader">
                         <div class="row g-3">
@@ -1812,7 +1812,7 @@
     function showClientQuickPanel(clientId) {
         $('#clientQuickPanelModal').modal('show');
         $('#clientQuickPanelLoader').show();
-        $('#clientQuickPanelBody').html($('#clientQuickPanelLoader'));
+        $('#clientQuickPanelBody').html('<div class="p-4">' + $('#clientQuickPanelLoader').html() + '</div>');
 
         $.ajax({
             url: '{{ route('admin.clients.quick_panel', ['id' => '__CLIENT_ID__']) }}'.replace('__CLIENT_ID__', clientId),
@@ -1824,11 +1824,11 @@
             error: function() {
                 $('#clientQuickPanelLoader').hide();
                 $('#clientQuickPanelBody').html(
-                    '<div class="alert alert-danger text-center">' +
+                    '<div class="p-4"><div class="alert alert-danger text-center">' +
                     '<i class="bi bi-exclamation-triangle fs-1 text-danger"></i>' +
                     '<h4 class="mt-3">{{ trans("clients.error_loading_details") }}</h4>' +
                     '<p class="mb-0">{{ trans("clients.please_try_again") }}</p>' +
-                    '</div>'
+                    '</div></div>'
                 );
             }
         });
