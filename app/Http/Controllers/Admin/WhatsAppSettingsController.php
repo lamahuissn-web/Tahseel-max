@@ -395,16 +395,15 @@ class WhatsAppSettingsController extends Controller
         $lines = [];
         foreach ($clientInvoices as $invoice) {
             $amount = number_format($invoice->remaining_amount, 2);
+            $dateFormatted = Carbon::parse($invoice->due_date)->format('Y-m');
             
             if ($invoice->invoice_type === 'service') {
                 $label = !empty($invoice->notes) 
                     ? preg_replace('/\s+/', ' ', trim($invoice->notes)) 
                     : 'خدمة';
-                $lines[] = "🔧 فاتورة {$label} (رقم {$invoice->invoice_number}) بمبلغ {$amount}$";
+                $lines[] = "🔧 فاتورة {$label} {$dateFormatted} (رقم {$invoice->invoice_number}) بمبلغ {$amount}$";
             } else {
-                $monthNum = (int) Carbon::parse($invoice->due_date)->format('n');
-                $monthName = $this->arabicMonths[$monthNum] ?? Carbon::parse($invoice->due_date)->format('M');
-                $lines[] = "📅 فاتورة شهر {$monthName} (رقم {$invoice->invoice_number}) بمبلغ {$amount}$";
+                $lines[] = "📅 فاتورة {$dateFormatted} (رقم {$invoice->invoice_number}) بمبلغ {$amount}$";
             }
         }
         return implode("\n", $lines);
