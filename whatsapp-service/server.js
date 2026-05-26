@@ -1,7 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const pino = require('pino');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const path = require('path');
 
 const app = express();
@@ -11,56 +12,68 @@ app.use(cors());
 app.use(express.json());
 
 const sessionPath = path.join(__dirname, 'session');
-const client = new Client({
-    authStrategy: new LocalAuth({
-        dataPath: sessionPath
-    }),
-    puppeteer: {
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-    }
-});
+const logger = pino({ level: 'silent' });
 
+let sock = null;
 let isConnected = false;
 let currentQR = null;
 let phoneNumber = null;
 const messageLogs = [];
 const MAX_LOGS = 100;
 
-client.on('qr', async (qr) => {
-    isConnected = false;
-    phoneNumber = null;
-    try {
-        currentQR = await qrcode.toDataURL(qr);
-    } catch (e) {
-        currentQR = null;
-    }
-});
+async function connectToWhatsApp() {
+    const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
+    const { version } = await fetchLatestBaileysVersion();
 
-client.on('ready', () => {
-    isConnected = true;
-    phoneNumber = client.info?.wid?.user ? `+${client.info.wid.user}` : null;
-    currentQR = null;
-    console.log(`WhatsApp connected: ${phoneNumber}`);
-});
+    sock = makeWASocket({
+        version,
+        logger,
+        auth: state,
+        printQRInTerminal: true,
+        browser: ['Tahseel', 'Chrome', '1.0.0'],
+    });
 
-client.on('disconnected', (reason) => {
-    isConnected = false;
-    phoneNumber = null;
-    currentQR = null;
-    console.log(`WhatsApp disconnected: ${reason}`);
-});
+    sock.ev.on('creds.update', saveCreds);
 
-client.on('authenticated', () => {
-    console.log('WhatsApp authenticated');
-});
+    sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect, qr } = update;
 
-client.on('auth_failure', (msg) => {
-    console.error('WhatsApp auth failure:', msg);
-    isConnected = false;
-});
+        if (qr) {
+            isConnected = false;
+            phoneNumber = null;
+            try {
+                currentQR = await qrcode.toDataURL(qr);
+            } catch (e) {
+                currentQR = null;
+            }
+            console.log('QR code generated');
+        }
 
-client.initialize();
+        if (connection === 'close') {
+            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+            isConnected = false;
+            phoneNumber = null;
+            currentQR = null;
+            console.log(`Connection closed: ${lastDisconnect?.error?.output?.statusCode}`);
+            if (shouldReconnect) {
+                setTimeout(connectToWhatsApp, 3000);
+            }
+        } else if (connection === 'open') {
+            isConnected = true;
+            phoneNumber = sock.user?.id ? `+${sock.user.id.split(':')[0]}` : null;
+            currentQR = null;
+            console.log(`WhatsApp connected: ${phoneNumber}`);
+        }
+    });
+
+    sock.ev.on('messages.upsert', (m) => {
+        if (m.type === 'notify' && m.messages[0]) {
+            console.log('Received message from:', m.messages[0].key.remoteJid);
+        }
+    });
+}
+
+connectToWhatsApp();
 
 app.get('/status', (req, res) => {
     res.json({
@@ -83,15 +96,15 @@ app.post('/send', async (req, res) => {
         return res.status(400).json({ success: false, error: 'Phone and message required' });
     }
 
-    if (!isConnected) {
+    if (!isConnected || !sock) {
         return res.status(503).json({ success: false, error: 'WhatsApp not connected' });
     }
 
     try {
         const cleanPhone = phone.replace(/[^0-9]/g, '');
-        const chatId = `${cleanPhone}@c.us`;
+        const jid = `${cleanPhone}@s.whatsapp.net`;
 
-        await client.sendMessage(chatId, message);
+        await sock.sendMessage(jid, { text: message });
 
         const log = {
             phone: phone,
@@ -124,5 +137,5 @@ app.get('/logs', (req, res) => {
 });
 
 app.listen(PORT, '127.0.0.1', () => {
-    console.log(`WhatsApp service running on port ${PORT}`);
+    console.log(`WhatsApp service (Baileys) running on port ${PORT}`);
 });
