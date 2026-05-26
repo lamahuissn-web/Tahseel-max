@@ -314,6 +314,21 @@
         'whatsapp_invalid_phone' => 'رقم هاتف غير صالح',
         'whatsapp_reminder_sent' => 'تم إرسال التذكير بنجاح',
         'whatsapp_send_failed' => 'فشل إرسال الرسالة',
-        'whatsapp_send_reminder' => 'إرسال تذكير',
         'client_not_found' => 'العميل غير موجود',
+        'whatsapp_send_reminder' => 'إرسال تذكير واتساب',
+
+        // Automation Settings
+        'whatsapp_auto_settings' => 'إعدادات الإرسال التلقائي',
+        'whatsapp_auto_enabled_label' => 'تفعيل الإرسال التلقائي',
+        'whatsapp_auto_time' => 'وقت الإرسال',
+        'whatsapp_auto_days' => 'أيام الإرسال',
+        'whatsapp_auto_scope' => 'نطاق الإرسال',
+        'whatsapp_auto_client_type' => 'نوع العميل',
+        'whatsapp_auto_min_amount' => 'الحد الأدنى للمبلغ',
+        'whatsapp_auto_status' => 'حالة الفاتورة',
+        'whatsapp_auto_rate_limit' => 'التحكم في السرعة',
+        'whatsapp_auto_delay' => 'التأخير بين الرسائل',
+        'whatsapp_auto_skip_hours' => 'تخطي إذا تم الإرسال خلال',
+        'second' => 'ثانية',
+        'hour' => 'ساعة',
      );

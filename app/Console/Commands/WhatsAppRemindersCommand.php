@@ -37,6 +37,12 @@ class WhatsAppRemindersCommand extends Command
             return Command::FAILURE;
         }
 
+        $autoEnabled = DB::table('app_config')->where('key', 'whatsapp_auto_enabled')->value('value');
+        if ($autoEnabled != '1') {
+            $this->error('WhatsApp auto-send is disabled.');
+            return Command::FAILURE;
+        }
+
         $status = $this->whatsapp->status();
         if (!$status['connected']) {
             $this->error('WhatsApp is not connected.');
@@ -46,6 +52,13 @@ class WhatsAppRemindersCommand extends Command
         $template = DB::table('app_config')->where('key', 'whatsapp_message_template')->value('value')
             ?? $this->defaultTemplate();
 
+        $clientType = DB::table('app_config')->where('key', 'whatsapp_auto_client_type')->value('value') ?? 'all';
+        $minAmount = (float) (DB::table('app_config')->where('key', 'whatsapp_auto_min_amount')->value('value') ?? 0);
+        $autoStatus = DB::table('app_config')->where('key', 'whatsapp_auto_status')->value('value') ?? 'unpaid,partial';
+        $delay = (int) (DB::table('app_config')->where('key', 'whatsapp_auto_delay')->value('value') ?? 10);
+        $skipHours = (int) (DB::table('app_config')->where('key', 'whatsapp_auto_skip_hours')->value('value') ?? 24);
+
+        $statuses = array_map('trim', explode(',', $autoStatus));
         $today = Carbon::today();
         $targetDates = [];
 
@@ -69,38 +82,47 @@ class WhatsAppRemindersCommand extends Command
 
         $targetDates = array_unique($targetDates);
 
-        $invoices = Invoice::with(['client'])
+        $query = Invoice::with(['client'])
             ->whereIn('due_date', $targetDates)
-            ->whereIn('status', ['unpaid', 'partial'])
-            ->whereHas('client', function ($q) {
+            ->whereIn('status', $statuses)
+            ->whereHas('client', function ($q) use ($clientType) {
                 $q->whereNotNull('phone')->where('phone', '!=', '');
+                if ($clientType !== 'all') {
+                    $q->where('client_type', $clientType);
+                }
             })
             ->orderBy('due_date')
             ->get()
             ->groupBy('client_id');
 
-        if ($invoices->isEmpty()) {
+        if ($query->isEmpty()) {
             $this->info('No unpaid invoices found for the configured reminder dates.');
             return Command::SUCCESS;
         }
 
         $previewData = [];
 
-        foreach ($invoices as $clientId => $clientInvoices) {
+        foreach ($query as $clientId => $clientInvoices) {
             $client = $clientInvoices->first()->client;
             if (!$client || !$client->phone) continue;
 
-            $alreadyNotifiedToday = Invoice::where('client_id', $clientId)
-                ->whereNotNull('last_notified_at')
-                ->whereDate('last_notified_at', $today)
-                ->exists();
-
-            if ($alreadyNotifiedToday) {
-                $this->info("Skipped {$client->name}: already notified today");
+            $totalAmount = $clientInvoices->sum('remaining_amount');
+            if ($minAmount > 0 && $totalAmount < $minAmount) {
+                $this->info("Skipped {$client->name}: total \${$totalAmount} below minimum \${$minAmount}");
                 continue;
             }
 
-            $totalAmount = $clientInvoices->sum('remaining_amount');
+            $skipFrom = $today->copy()->subHours($skipHours);
+            $alreadyNotified = Invoice::where('client_id', $clientId)
+                ->whereNotNull('last_notified_at')
+                ->where('last_notified_at', '>=', $skipFrom)
+                ->exists();
+
+            if ($alreadyNotified) {
+                $this->info("Skipped {$client->name}: already notified within {$skipHours} hours");
+                continue;
+            }
+
             $invoiceDetailsList = $this->buildInvoiceDetailsList($clientInvoices);
             $message = $this->buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
             $phone = preg_replace('/[^0-9]/', '', $client->phone);
@@ -124,7 +146,7 @@ class WhatsAppRemindersCommand extends Command
         }
 
         if (empty($previewData)) {
-            $this->info('No clients to notify (all already notified today).');
+            $this->info('No clients to notify (all filtered out).');
             return Command::SUCCESS;
         }
 
@@ -170,8 +192,8 @@ class WhatsAppRemindersCommand extends Command
             }
 
             if ($index < $total - 1) {
-                $this->info($this->getTrans('waiting') . '...');
-                sleep(10);
+                $this->info($this->getTrans('waiting') . ' (' . $delay . ' ' . $this->getTrans('seconds') . ')...');
+                sleep($delay);
             }
         }
 
@@ -256,7 +278,8 @@ class WhatsAppRemindersCommand extends Command
             'sending_to' => 'جاري إرسال الرسالة إلى',
             'sent_success' => 'تم الإرسال بنجاح',
             'failed' => 'فشل الإرسال',
-            'waiting' => 'انتظار 10 ثوانٍ قبل الرسالة التالية',
+            'waiting' => 'انتظار',
+            'seconds' => 'ثانية',
             'done' => 'تم الانتهاء',
             'summary' => 'تم الإرسال: :sent | فشل: :failed',
         ];

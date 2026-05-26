@@ -156,6 +156,103 @@
                                 <label class="form-label fw-semibold">{{ trans('clients.whatsapp_remind_after') }}</label>
                                 <input type="text" class="form-control" name="whatsapp_remind_after" value="{{ $settings['whatsapp_remind_after'] }}" placeholder="1,3,7">
                             </div>
+
+                            {{-- Automation Settings --}}
+                            <div class="col-12 mt-4 pt-4 border-top">
+                                <h6 class="fw-bold mb-3">
+                                    <i class="bi bi-robot text-primary me-2"></i> {{ trans('clients.whatsapp_auto_settings') }}
+                                </h6>
+
+                                <div class="form-check form-switch mb-3">
+                                    <input class="form-check-input" type="checkbox" name="whatsapp_auto_enabled" id="whatsapp_auto_enabled"
+                                        {{ $settings['whatsapp_auto_enabled'] == '1' ? 'checked' : '' }}>
+                                    <label class="form-check-label fw-semibold" for="whatsapp_auto_enabled">
+                                        {{ trans('clients.whatsapp_auto_enabled_label') }}
+                                    </label>
+                                </div>
+
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-semibold">{{ trans('clients.whatsapp_auto_time') }}</label>
+                                        <input type="time" class="form-control" name="whatsapp_auto_time" value="{{ $settings['whatsapp_auto_time'] }}">
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label fw-semibold">{{ trans('clients.whatsapp_auto_days') }}</label>
+                                        <div class="d-flex flex-wrap gap-2" style="direction: ltr;">
+                                            @php
+                                                $autoDays = explode(',', $settings['whatsapp_auto_days'] ?? '');
+                                            @endphp
+                                            @foreach(['السبت' => '1', 'الأحد' => '2', 'الإثنين' => '3', 'الثلاثاء' => '4', 'الأربعاء' => '5', 'الخميس' => '6', 'الجمعة' => '7'] as $dayName => $dayVal)
+                                            <div class="form-check form-check-inline">
+                                                <input class="form-check-input" type="checkbox" name="whatsapp_auto_days[]" value="{{ $dayVal }}" id="day_{{ $dayVal }}"
+                                                    {{ in_array($dayVal, $autoDays) ? 'checked' : '' }}>
+                                                <label class="form-check-label" for="day_{{ $dayVal }}" style="font-size: 13px;">{{ $dayName }}</label>
+                                            </div>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <h6 class="fw-bold mt-4 mb-2" style="font-size: 14px;">
+                                    <i class="bi bi-funnel text-secondary me-2"></i> {{ trans('clients.whatsapp_auto_scope') }}
+                                </h6>
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-semibold">{{ trans('clients.whatsapp_auto_client_type') }}</label>
+                                        <select class="form-select" name="whatsapp_auto_client_type">
+                                            <option value="all" {{ $settings['whatsapp_auto_client_type'] == 'all' ? 'selected' : '' }}>{{ trans('clients.all_types') }}</option>
+                                            <option value="internet" {{ $settings['whatsapp_auto_client_type'] == 'internet' ? 'selected' : '' }}>{{ trans('clients.internet') }}</option>
+                                            <option value="satellite" {{ $settings['whatsapp_auto_client_type'] == 'satellite' ? 'selected' : '' }}>{{ trans('clients.satellite') }}</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-semibold">{{ trans('clients.whatsapp_auto_min_amount') }}</label>
+                                        <div class="input-group">
+                                            <input type="number" step="0.01" min="0" class="form-control" name="whatsapp_auto_min_amount" value="{{ $settings['whatsapp_auto_min_amount'] }}">
+                                            <span class="input-group-text">{{ get_app_config_data('currency') }}</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-semibold">{{ trans('clients.whatsapp_auto_status') }}</label>
+                                        <div class="d-flex gap-3">
+                                            @php
+                                                $autoStatus = explode(',', $settings['whatsapp_auto_status'] ?? '');
+                                            @endphp
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="whatsapp_auto_status[]" value="unpaid" id="status_unpaid"
+                                                    {{ in_array('unpaid', $autoStatus) ? 'checked' : '' }}>
+                                                <label class="form-check-label" for="status_unpaid">{{ trans('invoices.unpaid') }}</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="whatsapp_auto_status[]" value="partial" id="status_partial"
+                                                    {{ in_array('partial', $autoStatus) ? 'checked' : '' }}>
+                                                <label class="form-check-label" for="status_partial">{{ trans('invoices.partial') }}</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <h6 class="fw-bold mt-4 mb-2" style="font-size: 14px;">
+                                    <i class="bi bi-speedometer2 text-danger me-2"></i> {{ trans('clients.whatsapp_auto_rate_limit') }}
+                                </h6>
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-semibold">{{ trans('clients.whatsapp_auto_delay') }}</label>
+                                        <div class="input-group">
+                                            <input type="number" min="1" class="form-control" name="whatsapp_auto_delay" value="{{ $settings['whatsapp_auto_delay'] }}">
+                                            <span class="input-group-text">{{ trans('clients.second') }}</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-semibold">{{ trans('clients.whatsapp_auto_skip_hours') }}</label>
+                                        <div class="input-group">
+                                            <input type="number" min="1" class="form-control" name="whatsapp_auto_skip_hours" value="{{ $settings['whatsapp_auto_skip_hours'] }}">
+                                            <span class="input-group-text">{{ trans('clients.hour') }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="col-12">
                                 <button type="submit" class="btn btn-primary btn-sm">
                                     <i class="bi bi-check-circle me-1"></i> {{ trans('clients.save') }}

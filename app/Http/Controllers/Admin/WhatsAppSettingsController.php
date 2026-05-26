@@ -57,6 +57,14 @@ class WhatsAppSettingsController extends Controller
             'whatsapp_remind_after' => DB::table('app_config')->where('key', 'whatsapp_remind_after')->value('value') ?? '1,3,7',
             'whatsapp_message_template' => DB::table('app_config')->where('key', 'whatsapp_message_template')->value('value')
                 ?? "👋 مرحباً {name}،\n\n📋 نود تذكيرك بوجود مبالغ مستحقة غير مدفوعة لحسابك بإجمالي {total_amount}$.\n\n📄 تفاصيل الفواتير المستحقة:\n{invoice_details_list}\n\n💳 يرجى التكرم بتسوية الرصيد المستحق في أقرب وقت ممكن.\nإذا كنت قد سددت هذا المبلغ مؤخراً، يرجى تجاهل هذه الرسالة.\n\n🙏 شكراً لتفهمك.",
+            'whatsapp_auto_enabled' => DB::table('app_config')->where('key', 'whatsapp_auto_enabled')->value('value') ?? '0',
+            'whatsapp_auto_time' => DB::table('app_config')->where('key', 'whatsapp_auto_time')->value('value') ?? '09:00',
+            'whatsapp_auto_days' => DB::table('app_config')->where('key', 'whatsapp_auto_days')->value('value') ?? '1,2,3,4,5,6,7',
+            'whatsapp_auto_client_type' => DB::table('app_config')->where('key', 'whatsapp_auto_client_type')->value('value') ?? 'all',
+            'whatsapp_auto_min_amount' => DB::table('app_config')->where('key', 'whatsapp_auto_min_amount')->value('value') ?? '0',
+            'whatsapp_auto_status' => DB::table('app_config')->where('key', 'whatsapp_auto_status')->value('value') ?? 'unpaid,partial',
+            'whatsapp_auto_delay' => DB::table('app_config')->where('key', 'whatsapp_auto_delay')->value('value') ?? '10',
+            'whatsapp_auto_skip_hours' => DB::table('app_config')->where('key', 'whatsapp_auto_skip_hours')->value('value') ?? '24',
         ];
 
         return view('dashbord.settings.whatsapp', compact('status', 'qr', 'logs', 'settings'));
@@ -70,6 +78,14 @@ class WhatsAppSettingsController extends Controller
             'whatsapp_remind_on_due' => $request->whatsapp_remind_on_due ? '1' : '0',
             'whatsapp_remind_after' => $request->whatsapp_remind_after,
             'whatsapp_message_template' => $request->whatsapp_message_template,
+            'whatsapp_auto_enabled' => $request->whatsapp_auto_enabled ? '1' : '0',
+            'whatsapp_auto_time' => $request->whatsapp_auto_time ?? '09:00',
+            'whatsapp_auto_days' => $request->whatsapp_auto_days ? implode(',', $request->whatsapp_auto_days) : '',
+            'whatsapp_auto_client_type' => $request->whatsapp_auto_client_type ?? 'all',
+            'whatsapp_auto_min_amount' => $request->whatsapp_auto_min_amount ?? '0',
+            'whatsapp_auto_status' => $request->whatsapp_auto_status ? implode(',', $request->whatsapp_auto_status) : '',
+            'whatsapp_auto_delay' => $request->whatsapp_auto_delay ?? '10',
+            'whatsapp_auto_skip_hours' => $request->whatsapp_auto_skip_hours ?? '24',
         ];
 
         foreach ($fields as $key => $value) {
