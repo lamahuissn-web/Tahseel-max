@@ -19,6 +19,15 @@
 .wa-test-result { margin-top: 10px; padding: 10px; border-radius: 8px; display: none; }
 .wa-test-result.success { background: #d1e7dd; color: #0f5132; }
 .wa-test-result.error { background: #f8d7da; color: #842029; }
+.wa-preview-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.wa-preview-table th { background: #f8f9fa; padding: 10px 12px; text-align: left; border-bottom: 2px solid #dee2e6; font-weight: 600; }
+.wa-preview-table td { padding: 10px 12px; border-bottom: 1px solid #e8e8e8; vertical-align: top; }
+.wa-preview-table tr:hover { background: #f8f9fa; }
+.wa-preview-table .invoice-line { display: block; margin-bottom: 4px; font-size: 12px; color: #555; }
+.wa-preview-summary { margin-top: 12px; padding: 10px; background: #e7f5ff; border-radius: 8px; font-weight: 600; text-align: center; }
+.wa-result-item { padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; font-size: 13px; }
+.wa-result-item.sent { background: #d1e7dd; color: #0f5132; }
+.wa-result-item.failed { background: #f8d7da; color: #842029; }
 </style>
 @endsection
 
@@ -116,6 +125,38 @@
                             </div>
                         </div>
                     </form>
+                </div>
+            </div>
+        </div>
+
+        {{-- Reminders Preview --}}
+        <div class="col-12">
+            <div class="wa-card shadow-sm">
+                <div class="wa-card-header bg-light d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-eye text-info me-2"></i> {{ trans('clients.whatsapp_reminders_preview') }}</span>
+                    <div>
+                        <button class="btn btn-outline-info btn-sm me-2" onclick="loadRemindersPreview()">
+                            <i class="bi bi-arrow-clockwise me-1"></i> {{ trans('clients.whatsapp_refresh_preview') }}
+                        </button>
+                        <button class="btn btn-success btn-sm" id="btn_send_reminders" onclick="sendReminders()" disabled>
+                            <i class="bi bi-send me-1"></i> {{ trans('clients.whatsapp_send_reminders') }}
+                        </button>
+                    </div>
+                </div>
+                <div class="wa-card-body">
+                    <div id="reminders_preview_container">
+                        <div class="text-center text-muted py-4">
+                            <i class="bi bi-info-circle fs-1"></i>
+                            <p class="mt-2">{{ trans('clients.whatsapp_click_refresh') }}</p>
+                        </div>
+                    </div>
+                    <div id="reminders_progress" class="mt-3" style="display:none;">
+                        <div class="progress mb-2" style="height: 25px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" id="reminders_progress_bar" role="progressbar" style="width: 0%;">0%</div>
+                        </div>
+                        <div id="reminders_progress_text" class="text-center text-muted" style="font-size: 13px;"></div>
+                    </div>
+                    <div id="reminders_result" class="mt-3" style="display:none;"></div>
                 </div>
             </div>
         </div>
@@ -296,6 +337,116 @@ function restartWhatsApp() {
             } else {
                 toastr.error(res.message);
             }
+        }
+    });
+}
+
+var remindersData = [];
+
+function loadRemindersPreview() {
+    var $container = $('#reminders_preview_container');
+    $container.html('<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted">{{ trans("clients.whatsapp_loading") }}</p></div>');
+    $('#btn_send_reminders').prop('disabled', true);
+    $('#reminders_result').hide();
+    $('#reminders_progress').hide();
+
+    $.ajax({
+        url: '{{ route('admin.settings.whatsapp.reminders_preview') }}',
+        type: 'GET',
+        success: function(res) {
+            if (res.error) {
+                $container.html('<div class="alert alert-danger">' + res.error + '</div>');
+                return;
+            }
+
+            if (res.clients.length === 0) {
+                $container.html('<div class="alert alert-info text-center"><i class="bi bi-check-circle me-2"></i>{{ trans("clients.whatsapp_no_reminders") }}</div>');
+                return;
+            }
+
+            remindersData = res.clients;
+            var isArabic = '{{ app()->getLocale() }}' === 'ar';
+            var headers = isArabic
+                ? ['العميل', 'الهاتف', 'الإجمالي', 'الفواتير']
+                : ['Client', 'Phone', 'Total', 'Invoices'];
+
+            var html = '<table class="wa-preview-table"><thead><tr>';
+            headers.forEach(function(h) { html += '<th>' + h + '</th>'; });
+            html += '</tr></thead><tbody>';
+
+            res.clients.forEach(function(c) {
+                html += '<tr>';
+                html += '<td>' + c.client_name + '</td>';
+                html += '<td dir="ltr">' + c.phone + '</td>';
+                html += '<td>$' + c.total_amount + '</td>';
+                html += '<td>';
+                c.invoice_lines.forEach(function(line) {
+                    html += '<span class="invoice-line">' + line + '</span>';
+                });
+                html += '</td>';
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            html += '<div class="wa-preview-summary">' +
+                (isArabic ? 'العملاء: ' + res.total + ' | الإجمالي: $' + res.grandTotal : 'Clients: ' + res.total + ' | Total: $' + res.grandTotal) +
+                '</div>';
+
+            $container.html(html);
+            $('#btn_send_reminders').prop('disabled', false);
+        },
+        error: function() {
+            $container.html('<div class="alert alert-danger">{{ trans("clients.whatsapp_preview_error") }}</div>');
+        }
+    });
+}
+
+function sendReminders() {
+    if (!confirm('{{ trans("clients.whatsapp_confirm_send") }}')) return;
+
+    $('#btn_send_reminders').prop('disabled', true);
+    $('#reminders_progress').show();
+    $('#reminders_result').hide().empty();
+
+    $.ajax({
+        url: '{{ route('admin.settings.whatsapp.send_reminders') }}',
+        type: 'POST',
+        data: { _token: '{{ csrf_token() }}' },
+        xhr: function() {
+            var xhr = new window.XMLHttpRequest();
+            return xhr;
+        },
+        success: function(res) {
+            if (res.error) {
+                $('#reminders_result').html('<div class="alert alert-danger">' + res.error + '</div>').show();
+                $('#btn_send_reminders').prop('disabled', false);
+                return;
+            }
+
+            $('#reminders_progress_bar').css('width', '100%').text('100%');
+            $('#reminders_progress_text').text('');
+
+            var isArabic = '{{ app()->getLocale() }}' === 'ar';
+            var summaryHtml = '<div class="alert alert-success text-center fw-bold">';
+            summaryHtml += isArabic ? 'تم الإرسال: ' + res.sent + ' | فشل: ' + res.failed : 'Sent: ' + res.sent + ' | Failed: ' + res.failed;
+            summaryHtml += '</div>';
+
+            var detailsHtml = '';
+            res.results.forEach(function(r) {
+                var cls = r.status === 'sent' ? 'sent' : 'failed';
+                var icon = r.status === 'sent' ? '✓' : '✗';
+                detailsHtml += '<div class="wa-result-item ' + cls + '">' + icon + ' ' + r.client + ' (' + r.phone + ')';
+                if (r.error) detailsHtml += ' - ' + r.error;
+                detailsHtml += '</div>';
+            });
+
+            $('#reminders_result').html(summaryHtml + detailsHtml).show();
+            $('#btn_send_reminders').prop('disabled', false);
+            toastr.success(isArabic ? 'تم الانتهاء' : 'Done');
+        },
+        error: function() {
+            $('#reminders_result').html('<div class="alert alert-danger">{{ trans("clients.whatsapp_send_error") }}</div>').show();
+            $('#btn_send_reminders').prop('disabled', false);
         }
     });
 }

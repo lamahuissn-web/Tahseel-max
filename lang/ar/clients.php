@@ -289,5 +289,14 @@
        'whatsapp_log_status' => 'الحالة',
        'whatsapp_sent' => 'تم الإرسال',
        'whatsapp_failed' => 'فشل',
-       'whatsapp_no_logs' => 'لا توجد رسائل مرسلة بعد',
-    );
+        'whatsapp_no_logs' => 'لا توجد رسائل مرسلة بعد',
+        'whatsapp_reminders_preview' => 'معاينة التذكيرات',
+        'whatsapp_refresh_preview' => 'تحديث المعاينة',
+        'whatsapp_send_reminders' => 'إرسال التذكيرات',
+        'whatsapp_click_refresh' => 'اضغط على تحديث المعاينة لعرض العملاء المستهدفين',
+        'whatsapp_loading' => 'جاري التحميل...',
+        'whatsapp_no_reminders' => 'لا يوجد عملاء يستحقون إرسال تذكير لهم حالياً',
+        'whatsapp_preview_error' => 'حدث خطأ أثناء تحميل المعاينة',
+        'whatsapp_confirm_send' => 'هل أنت متأكد من إرسال رسائل واتساب لجميع العملاء المعروضين؟',
+        'whatsapp_send_error' => 'حدث خطأ أثناء الإرسال',
+     );
