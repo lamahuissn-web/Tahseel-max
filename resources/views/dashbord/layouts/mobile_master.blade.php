@@ -126,26 +126,26 @@
                 <div class="mobile-nav-icon-wrapper">
                     <i class="bi bi-house"></i>
                 </div>
-                <span class="mobile-nav-label">الرئيسية</span>
+                <span class="mobile-nav-label">{{ trans('mobile.home') ?? 'الرئيسية' }}</span>
             </a>
             <a href="{{ route('admin.mobile_clients') }}" class="mobile-nav-item {{ request()->routeIs('admin.mobile_clients') || request()->routeIs('admin.mobile_client_details') ? 'active' : '' }}">
                 <div class="mobile-nav-icon-wrapper">
                     <i class="bi bi-people"></i>
                 </div>
-                <span class="mobile-nav-label">العملاء</span>
+                <span class="mobile-nav-label">{{ trans('mobile.clients') ?? 'العملاء' }}</span>
             </a>
             <a href="{{ route('admin.mobile_invoices') }}" class="mobile-nav-item {{ request()->routeIs('admin.mobile_invoices') ? 'active' : '' }}">
                 <div class="mobile-nav-icon-wrapper">
                     <i class="bi bi-receipt"></i>
                 </div>
-                <span class="mobile-nav-label">الفواتير</span>
+                <span class="mobile-nav-label">{{ trans('mobile.invoices') ?? 'الفواتير' }}</span>
             </a>
             @if(auth()->guard('admin')->user()->hasRole('Super-Admin'))
             <a href="{{ route('admin.dashboard') }}" class="mobile-nav-item">
                 <div class="mobile-nav-icon-wrapper">
                     <i class="bi bi-grid"></i>
                 </div>
-                <span class="mobile-nav-label">لوحة التحكم</span>
+                <span class="mobile-nav-label">{{ trans('mobile.admin_panel') ?? 'لوحة التحكم' }}</span>
             </a>
             @endif
         </div>

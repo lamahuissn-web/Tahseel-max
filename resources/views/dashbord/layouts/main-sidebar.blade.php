@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Route; ?>
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        margin-right: 10px;
+        margin-inline-end: 10px;
         flex-shrink: 0;
     }
 
@@ -26,7 +26,7 @@ use Illuminate\Support\Facades\Route; ?>
 
     .sidebar-menu-link.active {
         background-color: rgba(13, 110, 253, 0.1);
-        border-left: 3px solid #0d6efd;
+        border-inline-start: 3px solid #0d6efd;
     }
 
     .sidebar-section-divider {
@@ -52,8 +52,8 @@ use Illuminate\Support\Facades\Route; ?>
     }
 
     .sidebar-notification-badge {
-        margin-left: auto;
-        margin-right: 5px;
+        margin-inline-start: auto;
+        margin-inline-end: 5px;
     }
 
     @keyframes blink {
@@ -73,26 +73,26 @@ use Illuminate\Support\Facades\Route; ?>
     }
 
     .menu-sub-item {
-        padding-left: 2.5rem;
+        padding-inline-start: 2.5rem;
     }
 
     .menu-sub-link {
         display: flex;
         align-items: center;
         padding: 0.6rem 1rem;
-        transition: background-color 0.3s ease;
+        transition: background-color 0.3s ease, padding-inline-start 0.3s ease;
         white-space: nowrap;
         min-width: 0;
     }
 
     .menu-sub-link:hover {
         background-color: rgba(0, 0, 0, 0.03);
-        padding-left: 1.25rem;
+        padding-inline-start: 1.25rem;
     }
 
     .menu-sub-link.active {
         background-color: rgba(13, 110, 253, 0.08);
-        border-left: 2px solid #0d6efd;
+        border-inline-start: 2px solid #0d6efd;
     }
 
     .menu-sub-link .menu-title {

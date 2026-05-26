@@ -50,7 +50,7 @@
             </div>
             <!--end::Menu wrapper-->
             <!--begin::Navbar-->
-            <div class="app-navbar flex-shrink-0">
+            <div class="app-navbar flex-shrink-0 header-actions">
 
                 <!--begin::Mobile View Button-->
                 <div class="app-navbar-item ms-1 ms-lg-3">
@@ -127,7 +127,7 @@
                                 @elseif($localeCode == 'ar')
                                 <?php $image_lang = asset('assets/media/flags/saudi-arabia.svg'); ?>
                                 @endif
-                                <span class="symbol symbol-20px me-4">
+                                <span class="symbol symbol-20px me-4 ms-md-0">
                                     <img class="rounded-1" src="{{ $image_lang }}" alt="" />
                                 </span>
                                 {{ $properties['native'] }}

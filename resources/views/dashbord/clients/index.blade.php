@@ -847,10 +847,10 @@
                     html = '<div class="text-center text-muted py-4"><i class="bi bi-bar-chart-line fs-1"></i><p class="mb-0 mt-2">' + t2('noTraffic') + '</p></div>';
                 }
 
-                container.html(html);
+                container.html(html).hide().fadeIn(200);
             },
             error: function() {
-                container.html('<div class="text-center text-danger py-3">' + t2('actionFailed') + '</div>');
+                container.html('<div class="text-center text-danger py-3">' + t2('actionFailed') + '</div>').hide().fadeIn(200);
             }
         });
     }
@@ -958,12 +958,24 @@
                     '</div>' +
                     '</div></div></div>';
 
-                $('#sas4Container_' + clientId).remove();
+                var oldContainer = $('#sas4Container_' + clientId);
                 var target = $('#sas4InfoCard_' + clientId);
-                if (target.length) {
-                    target.html(html);
+
+                if (oldContainer.length) {
+                    oldContainer.fadeOut(150, function() {
+                        $(this).remove();
+                        if (target.length) {
+                            target.html(html).hide().fadeIn(200);
+                        } else {
+                            $('#clientDetailsContent').append(html).find('#sas4Container_' + clientId).hide().fadeIn(200);
+                        }
+                    });
                 } else {
-                    $('#clientDetailsContent').append(html);
+                    if (target.length) {
+                        target.html(html).hide().fadeIn(200);
+                    } else {
+                        $('#clientDetailsContent').append(html).find('#sas4Container_' + clientId).hide().fadeIn(200);
+                    }
                 }
 
                 var expDate = user.expiration || '';
@@ -1015,8 +1027,8 @@
         var loader = $('#sas4TrafficLoader');
         var content = $('#sas4TrafficContent');
 
-        loader.show();
-        content.hide();
+        loader.fadeIn(100);
+        content.fadeOut(100);
 
         $.ajax({
             url: '{{ route('admin.clients.sas4_traffic', ['id' => '__ID__']) }}'.replace('__ID__', clientId),
@@ -1026,7 +1038,7 @@
                 loader.hide();
 
                 if (res.error) {
-                    content.html('<div class="alert alert-warning text-center"><i class="bi bi-exclamation-triangle"></i> ' + res.error + '</div>').show();
+                    content.html('<div class="alert alert-warning text-center"><i class="bi bi-exclamation-triangle"></i> ' + res.error + '</div>').hide().fadeIn(200);
                     return;
                 }
 
@@ -1118,13 +1130,13 @@
                 html += '</div></div>';
                 html += '</div>';
 
-                content.html(html).show();
+                content.html(html).hide().fadeIn(200);
                 populateTrafficSelectors();
                 loadDailyTraffic(clientId);
             },
             error: function(xhr) {
                 loader.hide();
-                content.html('<div class="alert alert-danger text-center"><i class="bi bi-exclamation-triangle"></i> ' + t2('actionFailed') + '</div>').show();
+                content.html('<div class="alert alert-danger text-center"><i class="bi bi-exclamation-triangle"></i> ' + t2('actionFailed') + '</div>').hide().fadeIn(200);
             }
         });
     }
