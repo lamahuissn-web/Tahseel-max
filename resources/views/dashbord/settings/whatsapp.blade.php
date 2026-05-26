@@ -496,8 +496,8 @@ function sendReminders() {
     });
 }
 
-$(document).ready(function() {
-    console.log('Document ready, calling previewTemplate and initMonthGrid');
+window.addEventListener('load', function() {
+    console.log('Window loaded, calling previewTemplate and initMonthGrid');
     previewTemplate();
     initMonthGrid();
 });
