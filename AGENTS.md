@@ -245,6 +245,63 @@ SAS4_PASSWORD=admin
 SAS4_AES_KEY=abcdefghijuklmno0123456789012345
 ```
 
+## WhatsApp Integration (feature branch)
+
+### Architecture
+- **Library**: `@whiskeysockets/baileys` — no Chrome/browser needed
+- **Service**: Node.js Express server on `localhost:3000` (managed by Supervisor)
+- **Session**: Stored in `whatsapp-service/session/` — persists across restarts
+- **Phone**: Connected to `+96170781562`
+
+### REST API Endpoints (localhost:3000)
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/status` | GET | `{ connected: true, phone: "+961..." }` |
+| `/qr` | GET | `{ qr: "data:image/png;base64,...", connected: false }` |
+| `/send` | POST | `{ phone: "+20...", message: "..." }` → sends message |
+| `/logs` | GET | Recent sent messages (max 100) |
+
+### Key Files
+| File | Purpose |
+|------|---------|
+| `whatsapp-service/server.js` | Baileys WhatsApp service |
+| `whatsapp-service/package.json` | Node.js dependencies |
+| `app/Services/WhatsAppService.php` | Laravel Guzzle HTTP client |
+| `app/Console/Commands/WhatsAppRemindersCommand.php` | Scheduled reminder command |
+| `app/Http/Controllers/Admin/WhatsAppSettingsController.php` | Settings page controller |
+| `resources/views/dashbord/settings/whatsapp.blade.php` | Settings UI |
+| `/etc/supervisor/conf.d/whatsapp-service.conf` | Supervisor process config |
+
+### Config Keys (stored in `app_config` table)
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `whatsapp_enabled` | `0` | Master toggle |
+| `whatsapp_remind_before` | `3` | Days before due date |
+| `whatsapp_remind_on_due` | `1` | Send on due date |
+| `whatsapp_remind_after` | `1,3,7` | Days after overdue (comma-separated) |
+| `whatsapp_message_template` | (Arabic) | Customizable message with `{name}`, `{amount}`, `{due_date}`, `{invoice_number}` |
+
+### Scheduled Command
+- `whatsapp:reminders` — runs daily at 09:00
+- Finds unpaid/partial invoices matching reminder timing
+- Sends WhatsApp messages to clients with phone numbers
+- Logs results to `whatsapp_message_logs` table
+- Updates invoice `last_notified_at`
+
+### Setup / Restart
+```bash
+cd whatsapp-service && npm install
+supervisorctl reread && supervisorctl update
+supervisorctl restart whatsapp-service
+```
+- If disconnected: go to Settings → WhatsApp, scan new QR code
+- QR code refreshes every ~30 seconds on server side
+
+### Admin Settings Page
+- Route: `/{locale}/admin/settings/whatsapp`
+- Sections: Connection Status + QR, Reminder Settings, Message Template, Test Send, Message Logs
+- Sidebar link: WhatsApp icon (green) under Settings section
+
 ## Testing
 - PHPUnit 10: `./vendor/bin/phpunit`
 - Test suites: `tests/Unit`, `tests/Feature`
