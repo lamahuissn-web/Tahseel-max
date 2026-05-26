@@ -29,16 +29,18 @@
 .wa-result-item.sent { background: #d1e7dd; color: #0f5132; }
 .wa-result-item.failed { background: #f8d7da; color: #842029; }
 .wa-month-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.wa-month-btn { padding: 12px 8px; border: 2px solid #e8e8e8; border-radius: 8px; background: #fff; cursor: pointer; text-align: center; transition: all 0.2s; }
-.wa-month-btn:hover { border-color: #0d6efd; background: #f0f7ff; }
+.wa-month-btn { padding: 14px 10px; border: 2px solid #e8e8e8; border-radius: 10px; background: #fff; cursor: pointer; text-align: center; transition: all 0.2s; user-select: none; }
+.wa-month-btn:hover { border-color: #0d6efd; background: #f0f7ff; transform: translateY(-1px); box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
 .wa-month-btn.active { border-color: #0d6efd; background: #e7f1ff; font-weight: 600; }
 .wa-month-btn.has-invoices { border-color: #ffc107; background: #fff8e1; }
 .wa-month-btn.has-invoices:hover { border-color: #ff9800; background: #fff3cd; }
-.wa-month-btn .month-name { font-weight: 600; font-size: 14px; }
-.wa-month-btn .month-count { font-size: 11px; color: #666; margin-top: 4px; }
-.wa-month-btn.has-invoices .month-count { color: #e65100; }
-.wa-year-selector { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 12px; }
-.wa-year-selector select { padding: 6px 12px; border-radius: 6px; border: 1px solid #dee2e6; font-size: 14px; font-weight: 600; }
+.wa-month-btn .month-name { font-weight: 600; font-size: 14px; direction: rtl; }
+.wa-month-btn .month-count { font-size: 11px; color: #666; margin-top: 4px; direction: rtl; }
+.wa-month-btn.has-invoices .month-count { color: #e65100; font-weight: 500; }
+.wa-year-selector { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 14px; padding: 8px; background: #f8f9fa; border-radius: 8px; }
+.wa-year-selector select { padding: 6px 14px; border-radius: 6px; border: 1px solid #dee2e6; font-size: 14px; font-weight: 600; cursor: pointer; }
+.wa-year-selector i { color: #6c757d; cursor: pointer; font-size: 16px; }
+.wa-year-selector i:hover { color: #0d6efd; }
 </style>
 @endsection
 
@@ -182,7 +184,7 @@
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">{{ trans('clients.whatsapp_select_month') }}</label>
-                            <div class="wa-month-grid" id="wa_month_grid"></div>
+                            <div id="wa_month_grid"></div>
                         </div>
                         <div class="col-md-6">
                             <div id="wa_month_preview_container">
@@ -495,6 +497,7 @@ function sendReminders() {
 }
 
 $(document).ready(function() {
+    console.log('Document ready, calling previewTemplate and initMonthGrid');
     previewTemplate();
     initMonthGrid();
 });
@@ -504,19 +507,30 @@ var selectedYear = null;
 var monthlyData = [];
 
 function initMonthGrid() {
+    console.log('initMonthGrid called');
     var currentYear = new Date().getFullYear();
     var html = '<div class="wa-year-selector">';
-    html += '<i class="bi bi-chevron-left"></i>';
+    html += '<i class="bi bi-chevron-left" onclick="navigateYear(-1)"></i>';
     html += '<select id="wa_year_select" onchange="changeYear(this.value)">';
     for (var y = currentYear - 2; y <= currentYear + 1; y++) {
         html += '<option value="' + y + '"' + (y === currentYear ? ' selected' : '') + '>' + y + '</option>';
     }
     html += '</select>';
-    html += '<i class="bi bi-chevron-right"></i>';
+    html += '<i class="bi bi-chevron-right" onclick="navigateYear(1)"></i>';
     html += '</div>';
     html += '<div class="wa-month-grid" id="wa_months_container"></div>';
     $('#wa_month_grid').html(html);
+    console.log('Month grid HTML injected');
     renderMonths(currentYear);
+}
+
+function navigateYear(direction) {
+    var $select = $('#wa_year_select');
+    var currentIndex = $select.prop('selectedIndex');
+    var newIndex = currentIndex + direction;
+    if (newIndex >= 0 && newIndex < $select.find('option').length) {
+        $select.prop('selectedIndex', newIndex).trigger('change');
+    }
 }
 
 function changeYear(year) {
@@ -524,6 +538,7 @@ function changeYear(year) {
 }
 
 function renderMonths(year) {
+    console.log('renderMonths called for year:', year);
     var isArabic = '{{ app()->getLocale() }}' === 'ar';
     var monthNames = isArabic
         ? ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر']
