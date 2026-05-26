@@ -233,6 +233,10 @@ class WhatsAppSettingsController extends Controller
                     $label = !empty($inv->notes) ? preg_replace('/\s+/', ' ', trim($inv->notes)) : 'خدمة';
                     return "{$label} {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
                 }
+                if (!empty($inv->notes)) {
+                    $noteLabel = preg_replace('/\s+/', ' ', trim($inv->notes));
+                    return "{$noteLabel} {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
+                }
                 return "{$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
             })->toArray();
 
@@ -406,7 +410,12 @@ class WhatsAppSettingsController extends Controller
                     : 'خدمة';
                 $lines[] = "🔧 فاتورة {$label} {$dateFormatted} (رقم {$invoice->invoice_number}) بمبلغ {$amount}$";
             } else {
-                $lines[] = "📅 فاتورة {$dateFormatted} (رقم {$invoice->invoice_number}) بمبلغ {$amount}$";
+                if (!empty($invoice->notes)) {
+                    $noteLabel = preg_replace('/\s+/', ' ', trim($invoice->notes));
+                    $lines[] = "📅 فاتورة {$noteLabel} {$dateFormatted} (رقم {$invoice->invoice_number}) بمبلغ {$amount}$";
+                } else {
+                    $lines[] = "📅 فاتورة {$dateFormatted} (رقم {$invoice->invoice_number}) بمبلغ {$amount}$";
+                }
             }
         }
         return implode("\n", $lines);
@@ -490,6 +499,10 @@ class WhatsAppSettingsController extends Controller
                 if ($inv->invoice_type === 'service') {
                     $label = !empty($inv->notes) ? preg_replace('/\s+/', ' ', trim($inv->notes)) : 'خدمة';
                     return "{$label} {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
+                }
+                if (!empty($inv->notes)) {
+                    $noteLabel = preg_replace('/\s+/', ' ', trim($inv->notes));
+                    return "{$noteLabel} {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
                 }
                 return "{$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
             })->toArray();
@@ -609,6 +622,10 @@ class WhatsAppSettingsController extends Controller
                 if ($inv->invoice_type === 'service') {
                     $label = !empty($inv->notes) ? preg_replace('/\s+/', ' ', trim($inv->notes)) : 'خدمة';
                     return "{$label} {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
+                }
+                if (!empty($inv->notes)) {
+                    $noteLabel = preg_replace('/\s+/', ' ', trim($inv->notes));
+                    return "{$noteLabel} {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
                 }
                 return "{$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
             })->toArray();
