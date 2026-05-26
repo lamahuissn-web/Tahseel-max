@@ -241,6 +241,12 @@
      'sas4_gb' => 'جيجابايت',
      'sas4_mb' => 'ميجابايت',
      'sas4_kb' => 'كيلوبايت',
-     'sas4_hours' => 'ساعات',
-     'sas4_minutes' => 'دقائق',
-  );
+      'sas4_hours' => 'ساعات',
+      'sas4_minutes' => 'دقائق',
+      'sas4_quick_panel' => 'لوحة SAS 4 السريعة',
+      'sas4_view_full_details' => 'عرض التفاصيل الكاملة',
+      'sas4_day_label' => 'اليوم',
+      'sas4_total_monthly' => 'إجمالي الشهر',
+      'sas4_real_traffic' => 'المرور الفعلي',
+      'sas4_no_traffic' => 'لا يوجد مرور في هذا الشهر',
+   );

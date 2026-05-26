@@ -295,6 +295,39 @@
     padding-inline-start: 1.5rem;
 }
 
+/* SAS 4 Quick Panel */
+.sas4-status-trigger {
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+.sas4-status-trigger:hover {
+    background-color: rgba(13, 110, 253, 0.08);
+}
+.sas4-status-cell {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+}
+.sas4-status-cell:hover {
+    background-color: rgba(13, 110, 253, 0.1);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Quick panel modal improvements */
+#sas4QuickPanelModal .modal-body {
+    max-height: 70vh;
+    overflow-y: auto;
+}
+#sas4QuickPanelModal .modal-footer {
+    justify-content: space-between;
+}
+
+/* Responsive hiding for quick panel */
+.d-md-block .d-none {
+    display: none !important;
+}
+
 
 
 

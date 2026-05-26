@@ -306,6 +306,53 @@
     </div>
 </div>
 
+<!-- SAS 4 Quick Panel Modal -->
+<div class="modal fade" id="sas4QuickPanelModal" tabindex="-1" aria-labelledby="sas4QuickPanelModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen-sm-down modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="sas4QuickPanelModalLabel">
+                    <i class="bi bi-wifi"></i> {{ trans('clients.sas4_quick_panel') ?? 'SAS 4 Quick Panel' }}
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="sas4QuickPanelContent">
+                <div class="text-center py-5" id="sas4QuickPanelLoader">
+                    <div class="skeleton-loader">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="skeleton skeleton-title mb-3"></div>
+                                <div class="skeleton skeleton-text mb-2" style="width: 80%;"></div>
+                                <div class="skeleton skeleton-text mb-2" style="width: 70%;"></div>
+                                <div class="skeleton skeleton-text mb-2" style="width: 90%;"></div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="skeleton skeleton-title mb-3"></div>
+                                <div class="skeleton skeleton-text mb-2" style="width: 75%;"></div>
+                                <div class="skeleton skeleton-text mb-2" style="width: 85%;"></div>
+                                <div class="skeleton skeleton-text" style="width: 65%;"></div>
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <div class="skeleton skeleton-title mx-auto mb-3"></div>
+                            <div class="skeleton skeleton-text mx-auto mb-2" style="width: 90%;"></div>
+                            <div class="skeleton skeleton-text mx-auto" style="width: 80%;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> {{ trans('clients.close') }}
+                </button>
+                <a href="#" id="sas4ViewFullDetailsBtn" class="btn btn-outline-primary" target="_blank" style="display: none;">
+                    <i class="bi bi-box-arrow-up-right"></i> {{ trans('clients.sas4_view_full_details') ?? 'View Full Details' }}
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
 @stop
 @section('js')
 
@@ -373,6 +420,7 @@
         'dayLabel' => trans('clients.sas4_day'),
         'noTraffic' => trans('clients.sas4_no_traffic'),
         'trafficReport' => trans('clients.sas4_traffic_report'),
+        'viewFullDetails' => trans('clients.sas4_view_full_details'),
     ]) !!};
 
     var sas4StatusLabels = {!! json_encode([
@@ -518,9 +566,15 @@
                 },
                 {
                     data: 'sas4_status',
-                    className: 'text-center all',
+                    className: 'text-center all sas4-status-trigger',
                     orderable: false,
-                    responsivePriority: 1
+                    responsivePriority: 1,
+                    render: function(data, type, row) {
+                        if (type === 'display' && row.sas_username) {
+                            return '<span class="cursor-pointer sas4-status-cell" onclick="showSas4QuickPanel(' + row.id + ')" title="View SAS 4 Details">' + data + '</span>';
+                        }
+                        return data;
+                    }
                 },
                 {
                     data: 'action',
@@ -1144,6 +1198,289 @@
             error: function(xhr) {
                 loader.hide();
                 content.html('<div class="alert alert-danger text-center"><i class="bi bi-exclamation-triangle"></i> ' + t2('actionFailed') + '</div>').hide().fadeIn(200);
+            }
+        });
+    }
+
+    var sas4QuickPanelData = null;
+
+    function showSas4QuickPanel(clientId) {
+        $('#sas4QuickPanelModal').modal('show');
+        $('#sas4ViewFullDetailsBtn').hide();
+        $('#sas4QuickPanelLoader').show();
+        $('#sas4QuickPanelContent').html($('#sas4QuickPanelLoader'));
+
+        $.ajax({
+            url: '{{ route('admin.clients.sas4_traffic', ['id' => '__ID__']) }}'.replace('__ID__', clientId),
+            type: 'GET',
+            dataType: 'json',
+            success: function(res) {
+                $('#sas4QuickPanelLoader').hide();
+
+                if (res.error) {
+                    $('#sas4QuickPanelContent').html('<div class="alert alert-warning text-center"><i class="bi bi-exclamation-triangle"></i> ' + res.error + '</div>');
+                    return;
+                }
+
+                sas4QuickPanelData = res;
+                var user = res.user || {};
+                var overview = res.overview || {};
+                var profileDetails = res.profile_details || {};
+                var dailyTraffic = res.daily_traffic || [];
+                var onlineStatus = res.online_status || 0;
+
+                var onlineBadge = onlineStatus == 1
+                    ? '<span class="badge bg-success fs-6"><i class="bi bi-wifi"></i> ' + t2('connected') + '</span>'
+                    : '<span class="badge bg-secondary fs-6"><i class="bi bi-wifi-off"></i> ' + t2('notConnected') + '</span>';
+
+                var statusBadge = '';
+                if (user.enabled == 1 && user.online == 1) {
+                    statusBadge = '<span class="badge bg-success">' + sas4StatusLabels.online + '</span>';
+                } else if (user.enabled == 0) {
+                    statusBadge = '<span class="badge bg-danger">' + sas4StatusLabels.disabled + '</span>';
+                } else if (user.expired == 1) {
+                    statusBadge = '<span class="badge bg-warning text-dark">' + sas4StatusLabels.expired + '</span>';
+                } else {
+                    statusBadge = '<span class="badge bg-secondary">' + sas4StatusLabels.offline + '</span>';
+                }
+
+                var profileName = user.profile_name || user.profile || profileDetails.name || 'N/A';
+                var speedDown = user.speed_down || overview.speed_down || 'N/A';
+                var speedUp = user.speed_up || overview.speed_up || 'N/A';
+                var speed = speedDown + ' / ' + speedUp + ' Mbps';
+
+                var t = sas4Labels;
+
+                var html = '<div class="sas4-tab-content">';
+
+                html += '<div class="row g-3">';
+
+                html += '<div class="col-md-6">';
+                html += '<div class="card h-100 sas4-card sas4-card-info">';
+                html += '<div class="card-header card-header-primary"><i class="bi bi-info-circle-fill"></i> ' + t2('sessionInfo') + '</div>';
+                html += '<div class="card-body p-3">';
+                html += '<div class="row g-2">';
+                html += '<div class="col-6"><strong>' + t2('status') + ':</strong><br>' + onlineBadge + '</div>';
+                html += '<div class="col-6"><strong>' + t2('username') + ':</strong><br>' + (user.username || 'N/A') + '</div>';
+                html += '<div class="col-6"><strong>' + t2('currentIp') + ':</strong><br>' + (user.last_ip_address || user.last_ip || 'N/A') + '</div>';
+                html += '<div class="col-6"><strong>' + t2('lastSeen') + ':</strong><br>' + (user.last_login || user.last_online || 'N/A') + '</div>';
+                html += '<div class="col-6"><strong>' + t2('plan') + ':</strong><br>' + profileName + '</div>';
+                html += '<div class="col-6"><strong>' + t2('speed') + ':</strong><br>' + speed + '</div>';
+                html += '<div class="col-6"><strong>' + t2('expiration') + ':</strong><br>' + (user.expiration || 'N/A') + '</div>';
+                html += '<div class="col-6"><strong>' + t2('balance') + ':</strong><br>' + (user.balance || '0.00') + '</div>';
+                html += '</div></div></div></div>';
+
+                html += '<div class="col-md-6">';
+                html += '<div class="card h-100 sas4-card sas4-card-quota">';
+                html += '<div class="card-header card-header-success"><i class="bi bi-speedometer2"></i> ' + t2('trafficQuota') + '</div>';
+                html += '<div class="card-body p-3">';
+
+                var rx = overview.remaining_rx;
+                var tx = overview.remaining_tx;
+                var rxtx = overview.remaining_rxtx;
+                var rUptime = overview.remaining_uptime;
+                var hasQuota = (rx !== null && rx !== '' && rx !== undefined) || (tx !== null && tx !== '' && tx !== undefined) || (rxtx !== null && rxtx !== '' && rxtx !== undefined) || (rUptime !== null && rUptime !== '' && rUptime !== undefined);
+
+                if (hasQuota) {
+                    html += '<table class="table table-sm table-bordered mb-0 data-table">';
+                    html += '<tbody>';
+                    html += '<tr><td class="fw-bold text-success-contrast" style="width:40%;">' + t2('remainingDownload') + '</td><td>' + (rx ? formatBytes(rx) : t2('unlimited')) + '</td></tr>';
+                    html += '<tr><td class="fw-bold text-primary">' + t2('remainingUpload') + '</td><td>' + (tx ? formatBytes(tx) : t2('unlimited')) + '</td></tr>';
+                    html += '<tr><td class="fw-bold text-info-contrast">' + t2('remainingTotal') + '</td><td>' + (rxtx ? formatBytes(rxtx) : t2('unlimited')) + '</td></tr>';
+                    html += '<tr><td class="fw-bold text-warning">' + t2('remainingUptime') + '</td><td>' + (rUptime || t2('unlimited')) + '</td></tr>';
+                    html += '</tbody></table>';
+                } else {
+                    html += '<div class="text-center text-muted py-2">';
+                    html += '<i class="bi bi-infinity fs-1"></i>';
+                    html += '<p class="mb-0 mt-1">' + t2('unlimited') + '</p>';
+                    html += '</div>';
+                }
+                html += '</div></div></div>';
+
+                html += '</div>';
+
+                if (dailyTraffic && dailyTraffic.length > 0) {
+                    html += '<div class="mt-3">';
+                    html += '<div class="card sas4-card sas4-card-traffic">';
+                    html += '<div class="card-header card-header-light"><i class="bi bi-bar-chart-line"></i> ' + t2('dailyUsage') + '</div>';
+                    html += '<div class="card-body p-2">';
+                    html += '<div class="table-responsive" dir="ltr">';
+                    html += '<table class="table table-sm table-bordered table-striped mb-0 data-table">';
+                    html += '<thead class="table-light"><tr>';
+                    html += '<th>' + t2('day') + '</th>';
+                    html += '<th>' + t2('downloadShort') + '</th>';
+                    html += '<th>' + t2('uploadShort') + '</th>';
+                    html += '<th>' + t2('totalShort') + '</th>';
+                    html += '<th>' + t2('sessionTime') + '</th>';
+                    html += '</tr></thead><tbody>';
+                    var last7 = dailyTraffic.slice(-7);
+                    last7.forEach(function(day) {
+                        html += '<tr>';
+                        html += '<td class="fw-bold">' + (day.day || day.date || 'N/A') + '</td>';
+                        html += '<td>' + (day.download || day.bytes_in || formatBytes(day.rx) || '-') + '</td>';
+                        html += '<td>' + (day.upload || day.bytes_out || formatBytes(day.tx) || '-') + '</td>';
+                        html += '<td>' + (day.total || day.bytes_total || formatBytes(day.total_bytes) || '-') + '</td>';
+                        html += '<td>' + (day.uptime || day.session_time || day.acctsessiontime || '-') + '</td>';
+                        html += '</tr>';
+                    });
+                    html += '</tbody></table></div></div></div></div>';
+                }
+
+                html += '<div class="mt-3 d-none d-md-block">';
+                html += '<div class="card sas4-card sas4-card-traffic">';
+                html += '<div class="card-header card-header-secondary">';
+                html += '<span><i class="bi bi-bar-chart-line"></i> ' + t2('trafficReport') + '</span>';
+                html += '<div class="d-flex align-items-center gap-2">';
+                html += '<select id="sas4QuickMonth" class="form-select form-select-sm" style="width:auto;" onchange="loadQuickPanelDailyTraffic(' + clientId + ')"></select>';
+                html += '<select id="sas4QuickYear" class="form-select form-select-sm" style="width:auto;" onchange="loadQuickPanelDailyTraffic(' + clientId + ')"></select>';
+                html += '<button class="btn btn-sm btn-light" onclick="loadQuickPanelDailyTraffic(' + clientId + ')" style="padding:2px 8px;">';
+                html += '<i class="bi bi-arrow-clockwise"></i> ' + t2('refresh');
+                html += '</button>';
+                html += '</div></div>';
+                html += '<div class="card-body p-3">';
+                html += '<div id="quickPanelTrafficContainer"><div class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm"></div></div></div>';
+                html += '</div></div></div>';
+
+                html += '<div class="mt-3">';
+                html += '<div class="card sas4-card sas4-card-control">';
+                html += '<div class="card-header card-header-secondary"><i class="bi bi-gear-fill"></i> ' + t.control + '</div>';
+                html += '<div class="card-body p-3">';
+                html += '<div class="d-flex flex-wrap gap-2">';
+                html += '<button class="btn btn-sm btn-success" onclick="sas4ControlAction(' + clientId + ', \'enable\')"><i class="bi bi-check-circle"></i> ' + t.enable + '</button>';
+                html += '<button class="btn btn-sm btn-danger" onclick="sas4ControlAction(' + clientId + ', \'disable\')"><i class="bi bi-x-circle"></i> ' + t.disable + '</button>';
+                html += '<button class="btn btn-sm btn-warning" onclick="sas4ControlAction(' + clientId + ', \'disconnect\')"><i class="bi bi-plug-fill"></i> ' + t.disconnect + '</button>';
+                html += '</div>';
+                html += '<div class="d-flex flex-wrap gap-2 mt-3 align-items-end">';
+                html += '<div class="flex-grow-1">';
+                html += '<label class="form-label mb-1 small">' + t.selectPlan + '</label>';
+                html += '<select class="form-select form-select-sm" id="sas4QuickProfileSelect_' + clientId + '"><option value="">-- ' + t.profile + ' --</option></select>';
+                html += '</div>';
+                html += '<div>';
+                html += '<label class="form-label mb-1 small">@lang('clients.sas4_expiration')</label>';
+                html += '<input type="date" class="form-control form-control-sm" id="sas4QuickExpirationInput_' + clientId + '" style="width:150px;">';
+                html += '</div>';
+                html += '<button class="btn btn-sm btn-primary" onclick="sas4ControlAction(' + clientId + ', \'change_profile\')"><i class="bi bi-arrow-repeat"></i> ' + t.changePlan + '</button>';
+                html += '</div></div></div></div>';
+
+                html += '<div class="text-center mt-3">';
+                html += '<a href="#" onclick="showClientDetails(' + clientId + '); $(\'#sas4QuickPanelModal\').modal(\'hide\'); return false;" class="btn btn-outline-primary btn-sm">';
+                html += '<i class="bi bi-box-arrow-up-right"></i> ' + (t2('viewFullDetails') || 'View Full Details') + '</a>';
+                html += '</div>';
+
+                html += '</div>';
+
+                $('#sas4QuickPanelContent').html(html).hide().fadeIn(200);
+
+                var expDate = user.expiration || '';
+                if (expDate) {
+                    var dateStr = expDate.substring(0, 10);
+                    $('#sas4QuickExpirationInput_' + clientId).val(dateStr);
+                }
+
+                loadSas4ProfilesForQuickPanel(clientId);
+                populateQuickPanelTrafficSelectors();
+                loadQuickPanelDailyTraffic(clientId);
+
+                $('#sas4ViewFullDetailsBtn').attr('href', '#').attr('onclick', 'showClientDetails(' + clientId + '); $(\'#sas4QuickPanelModal\').modal(\'hide\'); return false;').show();
+            },
+            error: function(xhr) {
+                $('#sas4QuickPanelLoader').hide();
+                $('#sas4QuickPanelContent').html('<div class="alert alert-danger text-center"><i class="bi bi-exclamation-triangle"></i> ' + t2('actionFailed') + '</div>').hide().fadeIn(200);
+            }
+        });
+    }
+
+    function loadSas4ProfilesForQuickPanel(clientId) {
+        $.ajax({
+            url: '{{ route('admin.sas4.profiles') }}',
+            type: 'GET',
+            dataType: 'json',
+            success: function(res) {
+                var profiles = res.data || [];
+                var select = $('#sas4QuickProfileSelect_' + clientId);
+                if (!select.length) return;
+                profiles.forEach(function(p) {
+                    select.append('<option value="' + p.id + '">' + (p.name || p.profilename || p.profile_name || p.id) + '</option>');
+                });
+            },
+            error: function() {}
+        });
+    }
+
+    function populateQuickPanelTrafficSelectors() {
+        var monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        var currentMonth = new Date().getMonth() + 1;
+        var currentYear = new Date().getFullYear();
+        var monthSelect = $('#sas4QuickMonth');
+        var yearSelect = $('#sas4QuickYear');
+        if (!monthSelect.length || !yearSelect.length) return;
+        monthSelect.empty();
+        yearSelect.empty();
+        for (var m = 1; m <= 12; m++) {
+            monthSelect.append('<option value="' + m + '"' + (m === currentMonth ? ' selected' : '') + '>' + monthNames[m - 1] + '</option>');
+        }
+        for (var y = currentYear; y >= currentYear - 2; y--) {
+            yearSelect.append('<option value="' + y + '"' + (y === currentYear ? ' selected' : '') + '>' + y + '</option>');
+        }
+    }
+
+    function loadQuickPanelDailyTraffic(clientId) {
+        var container = $('#quickPanelTrafficContainer');
+        if (!container.length) return;
+        var month = $('#sas4QuickMonth').val();
+        var year = $('#sas4QuickYear').val();
+        container.html('<div class="skeleton-loader py-2"><div class="skeleton skeleton-text mb-2" style="width: 100%;"></div><div class="skeleton skeleton-text mb-2" style="width: 90%;"></div><div class="skeleton skeleton-text mb-2" style="width: 85%;"></div><div class="skeleton skeleton-text mb-2" style="width: 95%;"></div><div class="skeleton skeleton-text" style="width: 80%;"></div></div>');
+        $.ajax({
+            url: '{{ route('admin.clients.sas4_daily_traffic', ['id' => '__ID__']) }}'.replace('__ID__', clientId) + '?month=' + month + '&year=' + year,
+            type: 'GET',
+            dataType: 'json',
+            success: function(res) {
+                if (res.error) {
+                    container.html('<div class="text-center text-muted py-3">' + res.error + '</div>');
+                    return;
+                }
+                var days = res.days || [];
+                var summary = res.summary || {};
+                var monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                var monthName = monthNames[parseInt(month) - 1] || month;
+                var html = '<div class="table-responsive" dir="ltr" style="max-height:400px;overflow-y:auto;">';
+                html += '<table class="table table-sm table-bordered table-striped mb-0 data-table">';
+                html += '<thead class="table-light"><tr>';
+                html += '<th style="width:80px;">' + t2('dayLabel') + '</th>';
+                html += '<th>' + t2('downloadShort') + '</th>';
+                html += '<th>' + t2('uploadShort') + '</th>';
+                html += '<th>' + t2('totalShort') + '</th>';
+                html += '<th>' + t2('realTraffic') + '</th>';
+                html += '</tr></thead><tbody>';
+                var daysWithTraffic = 0;
+                days.forEach(function(day) {
+                    var rowClass = day.has_traffic ? '' : 'text-muted';
+                    var dateStr = year + '-' + monthName + '-' + day.day;
+                    html += '<tr class="' + rowClass + '">';
+                    html += '<td class="fw-bold">' + dateStr + '</td>';
+                    html += '<td>' + (day.has_traffic ? formatBytes(day.download) : '-') + '</td>';
+                    html += '<td>' + (day.has_traffic ? formatBytes(day.upload) : '-') + '</td>';
+                    html += '<td>' + (day.has_traffic ? formatBytes(day.total) : '-') + '</td>';
+                    html += '<td>' + (day.has_traffic ? formatBytes(day.total_real) : '-') + '</td>';
+                    html += '</tr>';
+                    if (day.has_traffic) daysWithTraffic++;
+                });
+                html += '</tbody>';
+                html += '<tfoot class="table-dark"><tr>';
+                html += '<td class="fw-bold">' + t2('totalMonthly') + '</td>';
+                html += '<td class="fw-bold">' + formatBytes(summary.total_download) + '</td>';
+                html += '<td class="fw-bold">' + formatBytes(summary.total_upload) + '</td>';
+                html += '<td class="fw-bold">' + formatBytes(summary.total_traffic) + '</td>';
+                html += '<td class="fw-bold">' + formatBytes(summary.total_real) + '</td>';
+                html += '</tr></tfoot>';
+                html += '</table></div>';
+                if (daysWithTraffic === 0) {
+                    html = '<div class="text-center text-muted py-4"><i class="bi bi-bar-chart-line fs-1"></i><p class="mb-0 mt-2">' + t2('noTraffic') + '</p></div>';
+                }
+                container.html(html).hide().fadeIn(200);
+            },
+            error: function() {
+                container.html('<div class="text-center text-danger py-3">' + t2('actionFailed') + '</div>').hide().fadeIn(200);
             }
         });
     }
