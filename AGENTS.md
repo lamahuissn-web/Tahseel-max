@@ -125,6 +125,26 @@ Server `.env` is not committed. Contains SAS 4 credentials, JWT secret, FCM key,
 
 ## UI Conventions
 
+### Quick Panel Design Pattern
+- Quick panel modals use `inv-list-item` style: rounded `12px` cards with `1px #e8e8e8` border, soft shadow, label + value layout
+- Header uses `inv-header-summary` style: name + badge with `2px solid #ffc107` bottom border
+- Action buttons use rounded card style with colored borders (`qp-btn-danger`, `qp-btn-success`, etc.)
+- Reference: `resources/views/dashbord/clients/remaining_invoices_modal_content.blade.php`
+
+### Modal Stacking
+- When opening a modal from within another modal, **always close the parent first**:
+  ```js
+  $('#parentModal').modal('hide'); showChildModal(clientId);
+  ```
+- Example: Quick panel → remaining invoices modal (line ~1812 in `index.blade.php`)
+
+### Client Quick Panel Modal
+- Triggered by clicking client name on mobile (`showClientQuickPanel(clientId)`)
+- Replaces DataTables inline child row (disabled with `responsive.details: false`)
+- Uses `modal-fullscreen-sm-down` for responsive sizing
+- Route: `GET /clients/{id}/quick-panel` → `ClientController::quickPanel()`
+- Partial: `resources/views/dashbord/clients/quick_panel.blade.php`
+
 ### RTL Support
 - Use logical CSS properties: `border-inline-start` (not `border-left`), `padding-inline-start`, `margin-inline-end`
 - Use Bootstrap RTL utilities: `text-start`, `text-end`, `float-start`, `float-end`
@@ -132,7 +152,7 @@ Server `.env` is not committed. Contains SAS 4 credentials, JWT secret, FCM key,
 
 ### Responsive Modals
 - Use `modal-fullscreen-sm-down` class: full-screen on mobile (<576px), centered on desktop
-- Quick panel modals stay on same page (no new browser tabs) — match remaining balance modal pattern
+- Quick panel modals stay on same page (no new browser tabs)
 
 ### Translation Helper (JS)
 - Use `t2('key')` for JavaScript translations (defined in Blade, pulls from `lang/ar/clients.php`)
