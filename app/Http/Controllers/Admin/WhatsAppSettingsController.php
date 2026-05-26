@@ -226,19 +226,32 @@ class WhatsAppSettingsController extends Controller
             $message = $this->buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
             $phone = preg_replace('/[^0-9]/', '', $client->phone);
 
-            $invoiceLines = $clientInvoices->map(function ($inv) {
+            $subscriptionLines = [];
+            $serviceLines = [];
+            foreach ($clientInvoices as $inv) {
                 $dateFormatted = Carbon::parse($inv->due_date)->format('Y-m');
                 $amount = number_format($inv->remaining_amount, 2);
                 if ($inv->invoice_type === 'service') {
                     $label = !empty($inv->notes) ? preg_replace('/\s+/', ' ', trim($inv->notes)) : 'خدمة';
-                    return "{$label} {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
+                    $serviceLines[] = "🔧 {$label} {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
+                } else {
+                    if (!empty($inv->notes)) {
+                        $noteLabel = preg_replace('/\s+/', ' ', trim($inv->notes));
+                        $subscriptionLines[] = "📅 {$noteLabel} {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
+                    } else {
+                        $subscriptionLines[] = "📅 {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
+                    }
                 }
-                if (!empty($inv->notes)) {
-                    $noteLabel = preg_replace('/\s+/', ' ', trim($inv->notes));
-                    return "{$noteLabel} {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
-                }
-                return "{$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
-            })->toArray();
+            }
+            $invoiceLines = [];
+            if (!empty($subscriptionLines)) {
+                $invoiceLines[] = '🌐 فواتير الاشتراك:';
+                $invoiceLines = array_merge($invoiceLines, $subscriptionLines);
+            }
+            if (!empty($serviceLines)) {
+                $invoiceLines[] = '🔧 فواتير الخدمات:';
+                $invoiceLines = array_merge($invoiceLines, $serviceLines);
+            }
 
             $grandTotal += $totalAmount;
 
@@ -399,7 +412,9 @@ class WhatsAppSettingsController extends Controller
 
     protected function buildInvoiceDetailsList($clientInvoices)
     {
-        $lines = [];
+        $subscriptionLines = [];
+        $serviceLines = [];
+        
         foreach ($clientInvoices as $invoice) {
             $amount = number_format($invoice->remaining_amount, 2);
             $dateFormatted = Carbon::parse($invoice->due_date)->format('Y-m');
@@ -408,17 +423,26 @@ class WhatsAppSettingsController extends Controller
                 $label = !empty($invoice->notes) 
                     ? preg_replace('/\s+/', ' ', trim($invoice->notes)) 
                     : 'خدمة';
-                $lines[] = "🔧 فاتورة {$label} {$dateFormatted} (رقم {$invoice->invoice_number}) بمبلغ {$amount}$";
+                $serviceLines[] = "🔧 فاتورة {$label} {$dateFormatted} (رقم {$invoice->invoice_number}) بمبلغ {$amount}$";
             } else {
                 if (!empty($invoice->notes)) {
                     $noteLabel = preg_replace('/\s+/', ' ', trim($invoice->notes));
-                    $lines[] = "📅 فاتورة {$noteLabel} {$dateFormatted} (رقم {$invoice->invoice_number}) بمبلغ {$amount}$";
+                    $subscriptionLines[] = "📅 فاتورة {$noteLabel} {$dateFormatted} (رقم {$invoice->invoice_number}) بمبلغ {$amount}$";
                 } else {
-                    $lines[] = "📅 فاتورة {$dateFormatted} (رقم {$invoice->invoice_number}) بمبلغ {$amount}$";
+                    $subscriptionLines[] = "📅 فاتورة {$dateFormatted} (رقم {$invoice->invoice_number}) بمبلغ {$amount}$";
                 }
             }
         }
-        return implode("\n", $lines);
+        
+        $sections = [];
+        if (!empty($subscriptionLines)) {
+            $sections[] = "🌐 فواتير الاشتراك:\n" . implode("\n", $subscriptionLines);
+        }
+        if (!empty($serviceLines)) {
+            $sections[] = "🔧 فواتير الخدمات:\n" . implode("\n", $serviceLines);
+        }
+        
+        return implode("\n\n", $sections);
     }
 
     protected function buildMessage($template, $clientName, $totalAmount, $invoiceDetailsList)
@@ -493,19 +517,32 @@ class WhatsAppSettingsController extends Controller
             $message = $this->buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
             $phone = preg_replace('/[^0-9]/', '', $client->phone);
 
-            $invoiceLines = $clientInvoices->map(function ($inv) {
+            $subscriptionLines = [];
+            $serviceLines = [];
+            foreach ($clientInvoices as $inv) {
                 $dateFormatted = Carbon::parse($inv->due_date)->format('Y-m');
                 $amount = number_format($inv->remaining_amount, 2);
                 if ($inv->invoice_type === 'service') {
                     $label = !empty($inv->notes) ? preg_replace('/\s+/', ' ', trim($inv->notes)) : 'خدمة';
-                    return "{$label} {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
+                    $serviceLines[] = "🔧 {$label} {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
+                } else {
+                    if (!empty($inv->notes)) {
+                        $noteLabel = preg_replace('/\s+/', ' ', trim($inv->notes));
+                        $subscriptionLines[] = "📅 {$noteLabel} {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
+                    } else {
+                        $subscriptionLines[] = "📅 {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
+                    }
                 }
-                if (!empty($inv->notes)) {
-                    $noteLabel = preg_replace('/\s+/', ' ', trim($inv->notes));
-                    return "{$noteLabel} {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
-                }
-                return "{$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
-            })->toArray();
+            }
+            $invoiceLines = [];
+            if (!empty($subscriptionLines)) {
+                $invoiceLines[] = '🌐 فواتير الاشتراك:';
+                $invoiceLines = array_merge($invoiceLines, $subscriptionLines);
+            }
+            if (!empty($serviceLines)) {
+                $invoiceLines[] = '🔧 فواتير الخدمات:';
+                $invoiceLines = array_merge($invoiceLines, $serviceLines);
+            }
 
             $grandTotal += $totalAmount;
 
@@ -616,19 +653,32 @@ class WhatsAppSettingsController extends Controller
             $message = $this->buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
             $phone = preg_replace('/[^0-9]/', '', $client->phone);
 
-            $invoiceLines = $clientInvoices->map(function ($inv) {
+            $subscriptionLines = [];
+            $serviceLines = [];
+            foreach ($clientInvoices as $inv) {
                 $dateFormatted = Carbon::parse($inv->due_date)->format('Y-m');
                 $amount = number_format($inv->remaining_amount, 2);
                 if ($inv->invoice_type === 'service') {
                     $label = !empty($inv->notes) ? preg_replace('/\s+/', ' ', trim($inv->notes)) : 'خدمة';
-                    return "{$label} {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
+                    $serviceLines[] = "🔧 {$label} {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
+                } else {
+                    if (!empty($inv->notes)) {
+                        $noteLabel = preg_replace('/\s+/', ' ', trim($inv->notes));
+                        $subscriptionLines[] = "📅 {$noteLabel} {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
+                    } else {
+                        $subscriptionLines[] = "📅 {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
+                    }
                 }
-                if (!empty($inv->notes)) {
-                    $noteLabel = preg_replace('/\s+/', ' ', trim($inv->notes));
-                    return "{$noteLabel} {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
-                }
-                return "{$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
-            })->toArray();
+            }
+            $invoiceLines = [];
+            if (!empty($subscriptionLines)) {
+                $invoiceLines[] = '🌐 فواتير الاشتراك:';
+                $invoiceLines = array_merge($invoiceLines, $subscriptionLines);
+            }
+            if (!empty($serviceLines)) {
+                $invoiceLines[] = '🔧 فواتير الخدمات:';
+                $invoiceLines = array_merge($invoiceLines, $serviceLines);
+            }
 
             $grandTotal += $totalAmount;
 
