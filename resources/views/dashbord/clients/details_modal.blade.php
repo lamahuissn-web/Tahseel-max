@@ -207,16 +207,64 @@
             </div>
         </div>
 
-        <div id="sas4InfoCard_{{ $client->id }}" data-client-id="{{ $client->id }}"></div>
+        <div id="sas4InfoCard_{{ $client->id }}" data-client-id="{{ $client->id }}">
+            <div class="skeleton-loader mt-3">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="skeleton skeleton-title mb-3"></div>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <div class="skeleton skeleton-text mb-2"></div>
+                            </div>
+                            <div class="col-6">
+                                <div class="skeleton skeleton-text mb-2"></div>
+                            </div>
+                            <div class="col-6">
+                                <div class="skeleton skeleton-text mb-2"></div>
+                            </div>
+                            <div class="col-6">
+                                <div class="skeleton skeleton-text mb-2"></div>
+                            </div>
+                            <div class="col-6">
+                                <div class="skeleton skeleton-text mb-2"></div>
+                            </div>
+                            <div class="col-6">
+                                <div class="skeleton skeleton-text mb-2"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     @if($client->sas_username)
     <div class="tab-pane fade" id="tabTraffic" role="tabpanel">
         <div id="sas4TrafficLoader" class="text-center py-5">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading...</span>
+            <div class="skeleton-loader">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="skeleton skeleton-title mb-3"></div>
+                        <div class="skeleton skeleton-text mb-2" style="width: 80%;"></div>
+                        <div class="skeleton skeleton-text mb-2" style="width: 70%;"></div>
+                        <div class="skeleton skeleton-text mb-2" style="width: 90%;"></div>
+                        <div class="skeleton skeleton-text" style="width: 60%;"></div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="skeleton skeleton-title mb-3"></div>
+                        <div class="skeleton skeleton-text mb-2" style="width: 75%;"></div>
+                        <div class="skeleton skeleton-text mb-2" style="width: 85%;"></div>
+                        <div class="skeleton skeleton-text mb-2" style="width: 65%;"></div>
+                        <div class="skeleton skeleton-text" style="width: 55%;"></div>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <div class="skeleton skeleton-title mx-auto mb-3"></div>
+                    <div class="skeleton skeleton-text mx-auto mb-2" style="width: 90%;"></div>
+                    <div class="skeleton skeleton-text mx-auto mb-2" style="width: 80%;"></div>
+                    <div class="skeleton skeleton-text mx-auto" style="width: 70%;"></div>
+                </div>
             </div>
-            <p class="mt-2">{{ trans('clients.loading_details') }}</p>
         </div>
         <div id="sas4TrafficContent" style="display:none;"></div>
     </div>

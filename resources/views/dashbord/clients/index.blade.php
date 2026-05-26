@@ -208,10 +208,14 @@
             </div>
             <div class="modal-body" id="clientDetailsContent">
                 <div class="text-center py-5" id="modalLoader">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
+                    <div class="skeleton-loader">
+                        <div class="skeleton skeleton-avatar mx-auto mb-3"></div>
+                        <div class="skeleton skeleton-title mx-auto mb-3"></div>
+                        <div class="skeleton skeleton-text mx-auto mb-2" style="width: 80%;"></div>
+                        <div class="skeleton skeleton-text mx-auto mb-2" style="width: 60%;"></div>
+                        <div class="skeleton skeleton-text mx-auto mb-2" style="width: 70%;"></div>
+                        <div class="skeleton skeleton-text mx-auto" style="width: 50%;"></div>
                     </div>
-                    <p class="mt-2">{{ trans('clients.loading_details') }}</p>
                 </div>
             </div>
             <div class="modal-footer">
@@ -244,10 +248,13 @@
             </div>
             <div class="modal-body" id="remainingInvoicesContent">
                 <div class="text-center py-5" id="remainingModalLoader">
-                    <div class="spinner-border text-warning" role="status">
-                        <span class="visually-hidden">Loading...</span>
+                    <div class="skeleton-loader">
+                        <div class="skeleton skeleton-title mx-auto mb-3"></div>
+                        <div class="skeleton skeleton-text mx-auto mb-2" style="width: 90%;"></div>
+                        <div class="skeleton skeleton-text mx-auto mb-2" style="width: 85%;"></div>
+                        <div class="skeleton skeleton-text mx-auto mb-2" style="width: 80%;"></div>
+                        <div class="skeleton skeleton-text mx-auto" style="width: 75%;"></div>
                     </div>
-                    <p class="mt-2">{{ trans('clients.loading_details') }}</p>
                 </div>
             </div>
             <div class="modal-footer">
@@ -792,7 +799,7 @@
         var month = $('#sas4TrafficMonth').val();
         var year = $('#sas4TrafficYear').val();
 
-        container.html('<div class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm"></div></div>');
+        container.html('<div class="skeleton-loader py-2"><div class="skeleton skeleton-text mb-2" style="width: 100%;"></div><div class="skeleton skeleton-text mb-2" style="width: 90%;"></div><div class="skeleton skeleton-text mb-2" style="width: 85%;"></div><div class="skeleton skeleton-text mb-2" style="width: 95%;"></div><div class="skeleton skeleton-text" style="width: 80%;"></div></div>');
 
         $.ajax({
             url: '{{ route('admin.clients.sas4_daily_traffic', ['id' => '__ID__']) }}'.replace('__ID__', clientId) + '?month=' + month + '&year=' + year,
