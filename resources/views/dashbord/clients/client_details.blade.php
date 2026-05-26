@@ -48,6 +48,16 @@
 
                 </a>
 
+                @php
+                    $cleanPhone = preg_replace('/[^0-9]/', '', $all_data->phone ?? '');
+                    $hasValidPhone = strlen($cleanPhone) >= 7 && !preg_match('/^0+$/', $cleanPhone);
+                @endphp
+                @if($hasValidPhone)
+                <button class="btn btn-sm btn-success d-flex align-items-center gap-1 me-2 whatsapp-reminder-btn" onclick="sendClientWhatsAppReminder({{ $all_data->id }})">
+                    <i class="bi bi-whatsapp fs-6"></i>
+                    <span>{{ trans('clients.whatsapp_send_reminder') }}</span>
+                </button>
+                @endif
 
             </div>
             <!--end::Actions-->
@@ -150,3 +160,44 @@
     </div>
 
 </div>
+
+<script>
+    function sendClientWhatsAppReminder(clientId) {
+        var $btn = $('.whatsapp-reminder-btn');
+        var originalHtml = $btn.html();
+
+        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> جاري الإرسال...');
+
+        $.ajax({
+            url: '{{ route('admin.clients.whatsapp_reminder', ['id' => '__ID__']) }}'.replace('__ID__', clientId),
+            type: 'POST',
+            data: { _token: '{{ csrf_token() }}' },
+            success: function(res) {
+                if (res.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: res.message,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '{{ trans("forms.error") }}',
+                        text: res.error
+                    });
+                }
+            },
+            error: function() {
+                Swal.fire({
+                    icon: 'error',
+                    title: '{{ trans("forms.error") }}',
+                    text: '{{ trans("clients.whatsapp_send_failed") }}'
+                });
+            },
+            complete: function() {
+                $btn.prop('disabled', false).html(originalHtml);
+            }
+        });
+    }
+</script>
