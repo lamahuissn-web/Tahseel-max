@@ -21,7 +21,8 @@
 ## Branch Strategy
 - `main` — production, stable
 - `feature-sas4-integration` — SAS 4 integration (merged)
-- `feature-ui-ux-improvements` — UI/UX improvements (current work)
+- `feature-ui-ux-improvements` — UI/UX improvements
+- `feature-whatsapp-integration` — WhatsApp reminders (current work)
 - **Never commit directly to `main`** — work on feature branches, merge after testing
 - To switch branches on server: `git checkout <branch> && git pull && php artisan view:clear config:clear route:clear`
 
@@ -107,6 +108,9 @@ Server `.env` is not committed. Contains SAS 4 credentials, JWT secret, FCM key,
 | `config/sas4.php` | SAS 4 API config |
 | `app/Services/Sas4/Sas4ApiService.php` | SAS 4 API client |
 | `public/assets/css/custome/extra.css` | Main custom CSS (skeleton loaders, SAS4 styles, RTL utilities) |
+| `whatsapp-service/server.js` | WhatsApp Baileys Node.js service |
+| `/etc/supervisor/conf.d/whatsapp-service.conf` | WhatsApp Supervisor config |
+| `/etc/supervisor/conf.d/tahseel-telegram-bot.conf` | Telegram bot Supervisor config |
 
 ## Admin Login
 - URL: `/{locale}/admin/login`
@@ -252,6 +256,7 @@ SAS4_AES_KEY=abcdefghijuklmno0123456789012345
 - **Service**: Node.js Express server on `localhost:3000` (managed by Supervisor)
 - **Session**: Stored in `whatsapp-service/session/` — persists across restarts
 - **Phone**: Connected to `+96170781562`
+- **Auto-reconnect**: Page polls status every 15s, auto-fetches new QR when disconnected
 
 ### REST API Endpoints (localhost:3000)
 | Endpoint | Method | Purpose |
@@ -267,9 +272,9 @@ SAS4_AES_KEY=abcdefghijuklmno0123456789012345
 | `whatsapp-service/server.js` | Baileys WhatsApp service |
 | `whatsapp-service/package.json` | Node.js dependencies |
 | `app/Services/WhatsAppService.php` | Laravel Guzzle HTTP client |
-| `app/Console/Commands/WhatsAppRemindersCommand.php` | Scheduled reminder command |
-| `app/Http/Controllers/Admin/WhatsAppSettingsController.php` | Settings page controller |
-| `resources/views/dashbord/settings/whatsapp.blade.php` | Settings UI |
+| `app/Console/Commands/WhatsAppRemindersCommand.php` | CLI reminder command (--send flag) |
+| `app/Http/Controllers/Admin/WhatsAppSettingsController.php` | Settings + preview + send controller |
+| `resources/views/dashbord/settings/whatsapp.blade.php` | Settings UI (connection, template, calendar, logs) |
 | `/etc/supervisor/conf.d/whatsapp-service.conf` | Supervisor process config |
 
 ### Config Keys (stored in `app_config` table)
@@ -279,36 +284,102 @@ SAS4_AES_KEY=abcdefghijuklmno0123456789012345
 | `whatsapp_remind_before` | `3` | Days before due date |
 | `whatsapp_remind_on_due` | `1` | Send on due date |
 | `whatsapp_remind_after` | `1,3,7` | Days after overdue (comma-separated) |
-| `whatsapp_message_template` | (Arabic) | Customizable message with `{name}`, `{total_amount}`, `{invoice_details_list}` |
+| `whatsapp_message_template` | (Arabic with emojis) | Customizable message template |
 
-### Command Usage
-- **Preview only**: `php artisan whatsapp:reminders`
-- **Actually send**: `php artisan whatsapp:reminders --send`
+### Three Ways to Send
+
+**1. CLI Command** (legacy, for cron/automation):
+```bash
+php artisan whatsapp:reminders          # preview only
+php artisan whatsapp:reminders --send   # actually send
+```
 - Groups unpaid/partial invoices by client (one message per client)
-- Shows preview table before sending (locale-aware: Arabic/English)
-- 10-second delay between each message (rate limiting to avoid WhatsApp blocking)
-- Duplicate prevention: skips clients already notified today
-- Logs results to `whatsapp_message_logs` table (with `invoice_ids` JSON column)
-- Updates invoice `last_notified_at` after successful send
-- Cron schedule is commented out (manual execution only for now)
+- 10-second delay between messages (rate limiting)
+- Duplicate prevention: skips clients notified today
+- Cron is commented out (manual only for now)
 
-### Message Template Variables
-| Variable | Description |
-|----------|-------------|
-| `{name}` | Client name |
-| `{total_amount}` | Sum of all unpaid invoice remaining amounts |
-| `{invoice_details_list}` | Multi-line breakdown: `فاتورة شهر أبريل (رقم 10794) بمبلغ 25.00$` |
+**2. Monthly Calendar UI** (primary workflow):
+- Settings → WhatsApp → "تذكيرات شهرية" section
+- 12-month grid → click month → day calendar → click day → preview table → send
+- Day calendar: 7-column grid, days with invoices highlighted with badge count
+- Today highlighted with blue border, ◀ ▶ arrows to navigate months
+- "العودة للأشهر" button to return to 12-month grid
+- Option B: selecting a day includes ALL unpaid invoices for that customer (not just that day's)
 
-### Default Template
+**3. Reminders Preview** (based on reminder timing config):
+- Settings → WhatsApp → "معاينة التذكيرات" section
+- Shows clients matching before/on/after due date config
+- Same preview table format, send button
+
+### Selective Sending
+- All preview tables have checkboxes (checked by default)
+- Select All/Deselect All toggle
+- "إرسال المحدد (X)" button sends only to checked clients
+- Calls `send-selected` endpoint with client IDs
+
+### Phone Validation
+- `isValidPhone()`: excludes empty, all-zeros, too-short (<7 digits) numbers
+- `isSuspiciousPhone()`: flags `961000000`-style numbers with ⚠ badge in UI
+- Invalid phones excluded from preview and sending entirely
+
+### Message Format
+
+**Template variables:** `{name}`, `{total_amount}`, `{invoice_details_list}`
+
+**Invoice grouping:**
+- 🌐 فواتير الاشتراك: all `subscription` invoices (with or without notes)
+- 🔧 فواتير الخدمات: all `service` invoices (router, cable, adapter, etc.)
+- Headers only appear if invoices of that type exist
+- Sections separated by blank line
+
+**Date format:** `Y-m` (e.g., `2026-04`)
+
+**Service invoices:** show `notes` field (e.g., "راوتر", "كيبل", "ادبتر")
+**Subscription invoices with notes:** notes shown too (e.g., "كيبل + ادبتر")
+
+**Example message:**
 ```
-مرحباً {name}،
-نود تذكيرك بوجود مبالغ مستحقة غير مدفوعة لحسابك بإجمالي {total_amount}$.
+👋 مرحباً تضامن،
 
-تفاصيل الفواتير المستحقة:
-{invoice_details_list}
+📋 نود تذكيرك بوجود مبالغ مستحقة غير مدفوعة لحسابك بإجمالي 85.00$.
 
-يرجى التكرم بتسوية الرصيد المستحق في أقرب وقت ممكن. إذا كنت قد سددت هذا المبلغ مؤخراً، يرجى تجاهل هذه الرسالة. شكراً لتفهمك.
+📄 تفاصيل الفواتير المستحقة:
+
+🌐 فواتير الاشتراك:
+📅 فاتورة 2026-04 (رقم 10794) بمبلغ 25.00$
+📅 فاتورة كيبل + ادبتر 2025-09 (رقم 3068) بمبلغ 20.00$
+
+🔧 فواتير الخدمات:
+🔧 فاتورة راوتر 2026-05 (رقم 13281) بمبلغ 25.00$
+🔧 فاتورة كيبل 2026-03 (رقم 13282) بمبلغ 15.00$
+
+💳 يرجى التكرم بتسوية الرصيد المستحق في أقرب وقت ممكن.
+إذا كنت قد سددت هذا المبلغ مؤخراً، يرجى تجاهل هذه الرسالة.
+
+🙏 شكراً لتفهمك.
 ```
+
+### Routes
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `settings/whatsapp` | GET | Settings page |
+| `settings/whatsapp` | POST | Update settings |
+| `settings/whatsapp/preview` | POST | Template preview |
+| `settings/whatsapp/test` | POST | Test send |
+| `settings/whatsapp/restart` | POST | Restart service |
+| `settings/whatsapp/status` | GET | API status check |
+| `settings/whatsapp/qr-code` | GET | API QR code |
+| `settings/whatsapp/reminders-preview` | GET | Reminder timing preview |
+| `settings/whatsapp/send-reminders` | POST | Send reminders (selected) |
+| `settings/whatsapp/monthly-preview` | GET | Month preview + day calendar data |
+| `settings/whatsapp/send-monthly` | POST | Send monthly (all clients in month) |
+| `settings/whatsapp/daily-preview` | GET | Day preview (Option B: all client invoices) |
+| `settings/whatsapp/send-daily` | POST | Send daily (all clients on day) |
+| `settings/whatsapp/send-selected` | POST | Send to selected clients |
+
+### Database
+- `whatsapp_message_logs` table: `client_id`, `invoice_id`, `invoice_ids` (JSON), `phone`, `message`, `status`, `error`
+- `last_notified_at` updated on ALL unpaid invoices for a client after sending
 
 ### Setup / Restart
 ```bash
@@ -316,13 +387,8 @@ cd whatsapp-service && npm install
 supervisorctl reread && supervisorctl update
 supervisorctl restart whatsapp-service
 ```
-- If disconnected: go to Settings → WhatsApp, scan new QR code
-- QR code refreshes every ~30 seconds on server side
-
-### Admin Settings Page
-- Route: `/{locale}/admin/settings/whatsapp`
-- Sections: Connection Status + QR, Reminder Settings, Message Template, Test Send, Message Logs
-- Sidebar link: WhatsApp icon (green) under Settings section
+- If disconnected: QR auto-appears on settings page (polls every 15s)
+- To force new QR: `rm -rf whatsapp-service/session/* && supervisorctl restart whatsapp-service`
 
 ## Testing
 - PHPUnit 10: `./vendor/bin/phpunit`
