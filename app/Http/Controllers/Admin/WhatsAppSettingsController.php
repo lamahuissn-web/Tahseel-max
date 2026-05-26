@@ -460,22 +460,39 @@ class WhatsAppSettingsController extends Controller
 
         $monthName = $this->arabicMonths[(int)$month] ?? Carbon::createFromDate($year, $month, 1)->format('F');
 
+        $daysWithInvoices = [];
+        foreach ($invoices as $clientId => $clientInvoices) {
+            foreach ($clientInvoices as $inv) {
+                $dayNum = (int) Carbon::parse($inv->due_date)->format('j');
+                if (!isset($daysWithInvoices[$dayNum])) {
+                    $daysWithInvoices[$dayNum] = ['count' => 0, 'total' => 0];
+                }
+                $daysWithInvoices[$dayNum]['count']++;
+                $daysWithInvoices[$dayNum]['total'] += $inv->remaining_amount;
+            }
+        }
+        foreach ($daysWithInvoices as $day => $data) {
+            $daysWithInvoices[$day]['total'] = number_format($data['total'], 2);
+        }
+
         return response()->json([
             'month_name' => $monthName,
             'year' => $year,
             'clients' => $previewData,
             'total' => count($previewData),
             'grandTotal' => number_format($grandTotal, 2),
+            'days_with_invoices' => $daysWithInvoices,
         ]);
     }
 
-    public function sendMonthly(Request $request)
+    public function dailyPreview(Request $request)
     {
         $month = $request->input('month');
         $year = $request->input('year');
+        $day = $request->input('day');
 
-        if (!$month || !$year) {
-            return response()->json(['error' => 'Month and year are required']);
+        if (!$month || !$year || !$day) {
+            return response()->json(['error' => 'Month, year, and day are required']);
         }
 
         $enabled = DB::table('app_config')->where('key', 'whatsapp_enabled')->value('value');
@@ -491,11 +508,10 @@ class WhatsAppSettingsController extends Controller
         $template = DB::table('app_config')->where('key', 'whatsapp_message_template')->value('value')
             ?? $this->defaultTemplate();
 
-        $startDate = Carbon::createFromDate($year, $month, 1)->startOfMonth()->format('Y-m-d');
-        $endDate = Carbon::createFromDate($year, $month, 1)->endOfMonth()->format('Y-m-d');
+        $targetDate = Carbon::createFromDate($year, $month, $day)->format('Y-m-d');
 
         $invoices = Invoice::with(['client'])
-            ->whereBetween('due_date', [$startDate, $endDate])
+            ->where('due_date', $targetDate)
             ->whereIn('status', ['unpaid', 'partial'])
             ->whereHas('client', function ($q) {
                 $q->whereNotNull('phone')->where('phone', '!=', '');
@@ -505,7 +521,101 @@ class WhatsAppSettingsController extends Controller
             ->groupBy('client_id');
 
         if ($invoices->isEmpty()) {
-            return response()->json(['error' => 'No unpaid invoices found for this month']);
+            $monthName = $this->arabicMonths[(int)$month] ?? Carbon::createFromDate($year, $month, 1)->format('F');
+            return response()->json([
+                'month_name' => $monthName,
+                'year' => $year,
+                'day' => $day,
+                'date' => $targetDate,
+                'clients' => [],
+                'total' => 0,
+                'grandTotal' => 0,
+            ]);
+        }
+
+        $previewData = [];
+        $grandTotal = 0;
+
+        foreach ($invoices as $clientId => $clientInvoices) {
+            $client = $clientInvoices->first()->client;
+            if (!$client || !$client->phone) continue;
+
+            $totalAmount = $clientInvoices->sum('remaining_amount');
+            $invoiceDetailsList = $this->buildInvoiceDetailsList($clientInvoices);
+            $message = $this->buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
+            $phone = preg_replace('/[^0-9]/', '', $client->phone);
+
+            $invoiceLines = $clientInvoices->map(function ($inv) {
+                $monthNum = (int) Carbon::parse($inv->due_date)->format('n');
+                $monthName = $this->arabicMonths[$monthNum] ?? Carbon::parse($inv->due_date)->format('M');
+                $amount = number_format($inv->remaining_amount, 2);
+                return "{$monthName} ({$inv->invoice_number}) - {$amount}$";
+            })->toArray();
+
+            $grandTotal += $totalAmount;
+
+            $previewData[] = [
+                'client_id' => $clientId,
+                'client_name' => $client->name,
+                'phone' => $phone,
+                'total_amount' => number_format($totalAmount, 2),
+                'invoice_details_list' => $invoiceDetailsList,
+                'invoice_lines' => $invoiceLines,
+                'message' => $message,
+                'invoices' => $clientInvoices->pluck('id')->toArray(),
+            ];
+        }
+
+        $monthName = $this->arabicMonths[(int)$month] ?? Carbon::createFromDate($year, $month, 1)->format('F');
+
+        return response()->json([
+            'month_name' => $monthName,
+            'year' => $year,
+            'day' => $day,
+            'date' => $targetDate,
+            'clients' => $previewData,
+            'total' => count($previewData),
+            'grandTotal' => number_format($grandTotal, 2),
+        ]);
+    }
+
+    public function sendDaily(Request $request)
+    {
+        $month = $request->input('month');
+        $year = $request->input('year');
+        $day = $request->input('day');
+
+        if (!$month || !$year || !$day) {
+            return response()->json(['error' => 'Month, year, and day are required']);
+        }
+
+        $enabled = DB::table('app_config')->where('key', 'whatsapp_enabled')->value('value');
+        if ($enabled != '1') {
+            return response()->json(['error' => 'WhatsApp reminders are disabled']);
+        }
+
+        $status = $this->whatsapp->status();
+        if (!$status['connected']) {
+            return response()->json(['error' => 'WhatsApp is not connected']);
+        }
+
+        $template = DB::table('app_config')->where('key', 'whatsapp_message_template')->value('value')
+            ?? $this->defaultTemplate();
+
+        $targetDate = Carbon::createFromDate($year, $month, $day)->format('Y-m-d');
+
+        $invoices = Invoice::with(['client'])
+            ->where('due_date', $targetDate)
+            ->whereIn('status', ['unpaid', 'partial'])
+            ->whereHas('client', function ($q) {
+                $q->whereNotNull('phone')->where('phone', '!=', '');
+            })
+            ->orderBy('due_date')
+            ->get()
+            ->groupBy('client_id');
+
+        if ($invoices->isEmpty()) {
+            return response()->json(['error' => 'No unpaid invoices found for this date']);
         }
 
         $sentCount = 0;
@@ -559,6 +669,8 @@ class WhatsAppSettingsController extends Controller
             'success' => true,
             'month_name' => $monthName,
             'year' => $year,
+            'day' => $day,
+            'date' => $targetDate,
             'sent' => $sentCount,
             'failed' => $failedCount,
             'results' => $results,

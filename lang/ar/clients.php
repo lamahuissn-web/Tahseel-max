@@ -303,4 +303,7 @@
         'whatsapp_select_month' => 'اختر الشهر',
         'whatsapp_select_month_hint' => 'اختر شهراً لعرض العملاء المستهدفين',
         'whatsapp_no_invoices_month' => 'لا توجد فواتير مستحقة في شهر',
+        'whatsapp_select_day_hint' => 'اختر يوماً من التقويم لعرض العملاء',
+        'whatsapp_back_to_months' => 'العودة للأشهر',
+        'whatsapp_send_daily_confirm' => 'هل تريد إرسال رسائل واتساب لعملاء هذا اليوم؟',
      );

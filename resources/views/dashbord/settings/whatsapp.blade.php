@@ -41,6 +41,26 @@
 .wa-year-selector select { padding: 6px 14px; border-radius: 6px; border: 1px solid #dee2e6; font-size: 14px; font-weight: 600; cursor: pointer; }
 .wa-year-selector i { color: #6c757d; cursor: pointer; font-size: 16px; }
 .wa-year-selector i:hover { color: #0d6efd; }
+.wa-day-calendar { width: 100%; border-collapse: separate; border-spacing: 3px; margin: 10px 0; }
+.wa-day-calendar th { padding: 6px 4px; text-align: center; font-size: 11px; color: #888; font-weight: 600; text-transform: uppercase; }
+.wa-day-calendar td { padding: 6px 4px; text-align: center; cursor: pointer; position: relative; min-width: 36px; height: 36px; border-radius: 6px; font-size: 13px; font-weight: 500; transition: all 0.15s; }
+.wa-day-calendar td:hover:not(.empty) { background: #e7f1ff; }
+.wa-day-calendar td.today { box-shadow: inset 0 0 0 2px #0d6efd; }
+.wa-day-calendar td.selected { background: #0d6efd; color: #fff; }
+.wa-day-calendar td.selected:hover { background: #0b5ed7; }
+.wa-day-calendar td.has-invoices { background: #fff3cd; font-weight: 700; }
+.wa-day-calendar td.has-invoices:hover { background: #ffe69c; }
+.wa-day-calendar td.selected.has-invoices { background: #0d6efd; color: #fff; }
+.wa-day-calendar td.empty { background: transparent; cursor: default; }
+.wa-day-calendar td.empty:hover { background: transparent; }
+.wa-day-badge { position: absolute; top: 1px; right: 1px; background: #e65100; color: #fff; border-radius: 50%; min-width: 16px; height: 16px; font-size: 9px; display: flex; align-items: center; justify-content: center; padding: 0 3px; line-height: 1; }
+.wa-day-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding: 6px 0; }
+.wa-day-nav button { border: none; background: none; cursor: pointer; font-size: 18px; color: #6c757d; padding: 4px 10px; border-radius: 6px; }
+.wa-day-nav button:hover { background: #f0f0f0; color: #0d6efd; }
+.wa-day-nav .month-title { font-weight: 700; font-size: 15px; text-align: center; }
+.wa-back-btn { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; color: #0d6efd; font-size: 13px; margin-bottom: 10px; border: none; background: none; padding: 4px 8px; border-radius: 4px; }
+.wa-back-btn:hover { background: #e7f1ff; text-decoration: none; }
+.wa-day-hint { text-align: center; color: #888; font-size: 13px; margin-top: 8px; }
 </style>
 @endsection
 
@@ -185,12 +205,16 @@
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">{{ trans('clients.whatsapp_select_month') }}</label>
                             <div id="wa_month_grid"></div>
+                            <div id="wa_day_calendar_wrapper" style="display:none;">
+                                <button class="wa-back-btn" onclick="backToMonthGrid()"><i class="bi bi-arrow-left"></i> {{ trans('clients.whatsapp_back_to_months') }}</button>
+                                <div id="wa_day_calendar_container"></div>
+                            </div>
                         </div>
                         <div class="col-md-6">
                             <div id="wa_month_preview_container">
                                 <div class="text-center text-muted py-4">
                                     <i class="bi bi-calendar-event fs-1"></i>
-                                    <p class="mt-2">{{ trans('clients.whatsapp_select_month_hint') }}</p>
+                                    <p class="mt-2">{{ trans('clients.whatsapp_select_day_hint') }}</p>
                                 </div>
                             </div>
                             <div id="wa_month_progress" class="mt-3" style="display:none;">
@@ -504,7 +528,11 @@ window.addEventListener('load', function() {
 
 var selectedMonth = null;
 var selectedYear = null;
+var selectedDay = null;
 var monthlyData = [];
+var currentCalMonth = null;
+var currentCalYear = null;
+var daysWithInvoices = {};
 
 function initMonthGrid() {
     console.log('initMonthGrid called');
@@ -590,7 +618,215 @@ function selectMonth(month, year) {
     $('.wa-month-btn').removeClass('active');
     $('#wa_month_' + month).addClass('active');
 
-    loadMonthlyPreview(month, year);
+    loadMonthForDayCalendar(month, year);
+}
+
+function loadMonthForDayCalendar(month, year) {
+    $.ajax({
+        url: '{{ route('admin.settings.whatsapp.monthly_preview') }}',
+        type: 'GET',
+        data: { month: month, year: year },
+        success: function(res) {
+            if (res.error) return;
+            daysWithInvoices = res.days_with_invoices || {};
+            currentCalMonth = month;
+            currentCalYear = year;
+            renderDayCalendar(month, year);
+        }
+    });
+}
+
+function renderDayCalendar(month, year) {
+    $('#wa_month_grid').hide();
+    $('#wa_day_calendar_wrapper').show();
+
+    var isArabic = '{{ app()->getLocale() }}' === 'ar';
+    var monthNames = isArabic
+        ? ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر']
+        : ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+    var firstDay = new Date(year, month - 1, 1).getDay();
+    var daysInMonth = new Date(year, month, 0).getDate();
+    var today = new Date();
+    var isCurrentMonth = (month === today.getMonth() + 1 && year === today.getFullYear());
+    var todayDate = today.getDate();
+
+    var dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    var html = '<div class="wa-day-nav">';
+    html += '<button onclick="navigateDayCalendar(-1)"><i class="bi bi-chevron-left"></i></button>';
+    html += '<span class="month-title">' + monthNames[month - 1] + ' ' + year + '</span>';
+    html += '<button onclick="navigateDayCalendar(1)"><i class="bi bi-chevron-right"></i></button>';
+    html += '</div>';
+
+    html += '<table class="wa-day-calendar"><thead><tr>';
+    dayNames.forEach(function(d) { html += '<th>' + d + '</th>'; });
+    html += '</tr></thead><tbody><tr>';
+
+    for (var i = 0; i < firstDay; i++) {
+        html += '<td class="empty"></td>';
+    }
+
+    var currentDayOfWeek = firstDay;
+    for (var d = 1; d <= daysInMonth; d++) {
+        var classes = [];
+        if (isCurrentMonth && d === todayDate) classes.push('today');
+        if (daysWithInvoices[d]) classes.push('has-invoices');
+
+        html += '<td class="' + classes.join(' ') + '" onclick="selectDay(' + year + ', ' + month + ', ' + d + ')">';
+        html += d;
+        if (daysWithInvoices[d]) {
+            html += '<span class="wa-day-badge">' + daysWithInvoices[d].count + '</span>';
+        }
+        html += '</td>';
+
+        currentDayOfWeek++;
+        if (currentDayOfWeek === 7 && d < daysInMonth) {
+            html += '</tr><tr>';
+            currentDayOfWeek = 0;
+        }
+    }
+
+    var remaining = 7 - currentDayOfWeek;
+    if (remaining < 7) {
+        for (var r = 0; r < remaining; r++) {
+            html += '<td class="empty"></td>';
+        }
+    }
+
+    html += '</tr></tbody></table>';
+    html += '<div class="wa-day-hint">{{ trans("clients.whatsapp_select_day_hint") }}</div>';
+
+    $('#wa_day_calendar_container').html(html);
+
+    var $container = $('#wa_month_preview_container');
+    $container.html('<div class="text-center text-muted py-4"><i class="bi bi-calendar-day fs-1"></i><p class="mt-2">{{ trans("clients.whatsapp_select_day_hint") }}</p></div>');
+}
+
+function navigateDayCalendar(direction) {
+    var newMonth = currentCalMonth + direction;
+    var newYear = currentCalYear;
+    if (newMonth > 12) { newMonth = 1; newYear++; }
+    if (newMonth < 1) { newMonth = 12; newYear--; }
+    loadMonthForDayCalendar(newMonth, newYear);
+}
+
+function backToMonthGrid() {
+    $('#wa_day_calendar_wrapper').hide();
+    $('#wa_month_grid').show();
+    $('#wa_month_preview_container').html('<div class="text-center text-muted py-4"><i class="bi bi-calendar-event fs-1"></i><p class="mt-2">{{ trans("clients.whatsapp_select_day_hint") }}</p></div>');
+}
+
+function selectDay(year, month, day) {
+    selectedDay = day;
+    $('.wa-day-calendar td').removeClass('selected');
+    event.target.closest('td').classList.add('selected');
+    loadDailyPreview(year, month, day);
+}
+
+function loadDailyPreview(year, month, day) {
+    var $container = $('#wa_month_preview_container');
+    $container.html('<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted">{{ trans("clients.whatsapp_loading") }}</p></div>');
+    $('#wa_month_result').hide();
+    $('#wa_month_progress').hide();
+
+    $.ajax({
+        url: '{{ route('admin.settings.whatsapp.daily_preview') }}',
+        type: 'GET',
+        data: { month: month, year: year, day: day },
+        success: function(res) {
+            if (res.error) {
+                $container.html('<div class="alert alert-danger">' + res.error + '</div>');
+                return;
+            }
+
+            if (res.clients.length === 0) {
+                var isArabic = '{{ app()->getLocale() }}' === 'ar';
+                $container.html('<div class="alert alert-info text-center"><i class="bi bi-check-circle me-2"></i>' + (isArabic ? 'لا توجد فواتير مستحقة في ' : 'No invoices due on ') + res.month_name + ' ' + res.day + ', ' + res.year + '</div>');
+                return;
+            }
+
+            monthlyData = res.clients;
+            var isArabic = '{{ app()->getLocale() }}' === 'ar';
+
+            var html = '<h6 class="fw-bold mb-3"><i class="bi bi-calendar-day me-2"></i>' + res.month_name + ' ' + res.day + ', ' + res.year + '</h6>';
+            html += '<table class="wa-preview-table"><thead><tr>';
+            var headers = isArabic ? ['العميل', 'الهاتف', 'الإجمالي', 'الفواتير'] : ['Client', 'Phone', 'Total', 'Invoices'];
+            headers.forEach(function(h) { html += '<th>' + h + '</th>'; });
+            html += '</tr></thead><tbody>';
+
+            res.clients.forEach(function(c) {
+                html += '<tr>';
+                html += '<td>' + c.client_name + '</td>';
+                html += '<td dir="ltr">' + c.phone + '</td>';
+                html += '<td>$' + c.total_amount + '</td>';
+                html += '<td>';
+                c.invoice_lines.forEach(function(line) {
+                    html += '<span class="invoice-line">' + line + '</span>';
+                });
+                html += '</td>';
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            html += '<div class="wa-preview-summary">' +
+                (isArabic ? 'العملاء: ' + res.total + ' | الإجمالي: $' + res.grandTotal : 'Clients: ' + res.total + ' | Total: $' + res.grandTotal) +
+                '</div>';
+            html += '<div class="mt-3 text-center">';
+            html += '<button class="btn btn-success btn-sm" onclick="sendDailyReminders()">';
+            html += '<i class="bi bi-send me-1"></i> ' + (isArabic ? 'إرسال رسائل واتساب' : 'Send WhatsApp Messages') + '</button>';
+            html += '</div>';
+
+            $container.html(html);
+        },
+        error: function() {
+            $container.html('<div class="alert alert-danger">{{ trans("clients.whatsapp_preview_error") }}</div>');
+        }
+    });
+}
+
+function sendDailyReminders() {
+    var isArabic = '{{ app()->getLocale() }}' === 'ar';
+    if (!confirm(isArabic ? 'هل تريد إرسال رسائل واتساب لعملاء هذا اليوم؟' : 'Send WhatsApp messages to clients for this day?')) return;
+
+    $('#wa_month_progress').show();
+    $('#wa_month_result').hide().empty();
+
+    $.ajax({
+        url: '{{ route('admin.settings.whatsapp.send_daily') }}',
+        type: 'POST',
+        data: { _token: '{{ csrf_token() }}', month: currentCalMonth, year: currentCalYear, day: selectedDay },
+        success: function(res) {
+            if (res.error) {
+                $('#wa_month_result').html('<div class="alert alert-danger">' + res.error + '</div>').show();
+                return;
+            }
+
+            $('#wa_month_progress_bar').css('width', '100%').text('100%');
+            $('#wa_month_progress_text').text('');
+
+            var summaryHtml = '<div class="alert alert-success text-center fw-bold">';
+            summaryHtml += isArabic ? 'تم الإرسال: ' + res.sent + ' | فشل: ' + res.failed : 'Sent: ' + res.sent + ' | Failed: ' + res.failed;
+            summaryHtml += '</div>';
+
+            var detailsHtml = '';
+            res.results.forEach(function(r) {
+                var cls = r.status === 'sent' ? 'sent' : 'failed';
+                var icon = r.status === 'sent' ? '✓' : '✗';
+                detailsHtml += '<div class="wa-result-item ' + cls + '">' + icon + ' ' + r.client + ' (' + r.phone + ')';
+                if (r.error) detailsHtml += ' - ' + r.error;
+                detailsHtml += '</div>';
+            });
+
+            $('#wa_month_result').html(summaryHtml + detailsHtml).show();
+            toastr.success(isArabic ? 'تم الانتهاء' : 'Done');
+
+            loadMonthForDayCalendar(currentCalMonth, currentCalYear);
+        },
+        error: function() {
+            $('#wa_month_result').html('<div class="alert alert-danger">{{ trans("clients.whatsapp_send_error") }}</div>').show();
+        }
+    });
 }
 
 function loadMonthlyPreview(month, year) {
