@@ -28,6 +28,17 @@
 .wa-result-item { padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; font-size: 13px; }
 .wa-result-item.sent { background: #d1e7dd; color: #0f5132; }
 .wa-result-item.failed { background: #f8d7da; color: #842029; }
+.wa-month-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.wa-month-btn { padding: 12px 8px; border: 2px solid #e8e8e8; border-radius: 8px; background: #fff; cursor: pointer; text-align: center; transition: all 0.2s; }
+.wa-month-btn:hover { border-color: #0d6efd; background: #f0f7ff; }
+.wa-month-btn.active { border-color: #0d6efd; background: #e7f1ff; font-weight: 600; }
+.wa-month-btn.has-invoices { border-color: #ffc107; background: #fff8e1; }
+.wa-month-btn.has-invoices:hover { border-color: #ff9800; background: #fff3cd; }
+.wa-month-btn .month-name { font-weight: 600; font-size: 14px; }
+.wa-month-btn .month-count { font-size: 11px; color: #666; margin-top: 4px; }
+.wa-month-btn.has-invoices .month-count { color: #e65100; }
+.wa-year-selector { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 12px; }
+.wa-year-selector select { padding: 6px 12px; border-radius: 6px; border: 1px solid #dee2e6; font-size: 14px; font-weight: 600; }
 </style>
 @endsection
 
@@ -157,6 +168,38 @@
                         <div id="reminders_progress_text" class="text-center text-muted" style="font-size: 13px;"></div>
                     </div>
                     <div id="reminders_result" class="mt-3" style="display:none;"></div>
+                </div>
+            </div>
+        </div>
+
+        {{-- Monthly Calendar --}}
+        <div class="col-12">
+            <div class="wa-card shadow-sm">
+                <div class="wa-card-header bg-light">
+                    <i class="bi bi-calendar-month text-primary me-2"></i> {{ trans('clients.whatsapp_monthly_reminders') }}
+                </div>
+                <div class="wa-card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">{{ trans('clients.whatsapp_select_month') }}</label>
+                            <div class="wa-month-grid" id="wa_month_grid"></div>
+                        </div>
+                        <div class="col-md-6">
+                            <div id="wa_month_preview_container">
+                                <div class="text-center text-muted py-4">
+                                    <i class="bi bi-calendar-event fs-1"></i>
+                                    <p class="mt-2">{{ trans('clients.whatsapp_select_month_hint') }}</p>
+                                </div>
+                            </div>
+                            <div id="wa_month_progress" class="mt-3" style="display:none;">
+                                <div class="progress mb-2" style="height: 25px;">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" id="wa_month_progress_bar" role="progressbar" style="width: 0%;">0%</div>
+                                </div>
+                                <div id="wa_month_progress_text" class="text-center text-muted" style="font-size: 13px;"></div>
+                            </div>
+                            <div id="wa_month_result" class="mt-3" style="display:none;"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -453,6 +496,193 @@ function sendReminders() {
 
 $(document).ready(function() {
     previewTemplate();
+    initMonthGrid();
 });
+
+var selectedMonth = null;
+var selectedYear = null;
+var monthlyData = [];
+
+function initMonthGrid() {
+    var currentYear = new Date().getFullYear();
+    var html = '<div class="wa-year-selector">';
+    html += '<i class="bi bi-chevron-left"></i>';
+    html += '<select id="wa_year_select" onchange="changeYear(this.value)">';
+    for (var y = currentYear - 2; y <= currentYear + 1; y++) {
+        html += '<option value="' + y + '"' + (y === currentYear ? ' selected' : '') + '>' + y + '</option>';
+    }
+    html += '</select>';
+    html += '<i class="bi bi-chevron-right"></i>';
+    html += '</div>';
+    html += '<div class="wa-month-grid" id="wa_months_container"></div>';
+    $('#wa_month_grid').html(html);
+    renderMonths(currentYear);
+}
+
+function changeYear(year) {
+    renderMonths(parseInt(year));
+}
+
+function renderMonths(year) {
+    var isArabic = '{{ app()->getLocale() }}' === 'ar';
+    var monthNames = isArabic
+        ? ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر']
+        : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    var currentMonth = new Date().getMonth() + 1;
+    var currentYear = new Date().getFullYear();
+
+    var html = '';
+    for (var m = 1; m <= 12; m++) {
+        var isCurrentMonth = (m === currentMonth && year === currentYear);
+        var classes = 'wa-month-btn' + (isCurrentMonth ? ' active' : '');
+        html += '<div class="' + classes + '" id="wa_month_' + m + '" onclick="selectMonth(' + m + ', ' + year + ')">';
+        html += '<div class="month-name">' + monthNames[m - 1] + '</div>';
+        html += '<div class="month-count" id="wa_month_count_' + m + '">...</div>';
+        html += '</div>';
+    }
+    $('#wa_months_container').html(html);
+
+    loadMonthInvoiceCounts(year);
+}
+
+function loadMonthInvoiceCounts(year) {
+    for (var m = 1; m <= 12; m++) {
+        (function(month) {
+            $.ajax({
+                url: '{{ route('admin.settings.whatsapp.monthly_preview') }}',
+                type: 'GET',
+                data: { month: month, year: year },
+                success: function(res) {
+                    if (res.error) return;
+                    var $count = $('#wa_month_count_' + month);
+                    if (res.total > 0) {
+                        $count.text(res.total + ' عميل | $' + res.grandTotal);
+                        $('#wa_month_' + month).addClass('has-invoices');
+                    } else {
+                        $count.text('لا يوجد');
+                    }
+                }
+            });
+        })(m);
+    }
+}
+
+function selectMonth(month, year) {
+    selectedMonth = month;
+    selectedYear = year;
+
+    $('.wa-month-btn').removeClass('active');
+    $('#wa_month_' + month).addClass('active');
+
+    loadMonthlyPreview(month, year);
+}
+
+function loadMonthlyPreview(month, year) {
+    var $container = $('#wa_month_preview_container');
+    $container.html('<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted">{{ trans("clients.whatsapp_loading") }}</p></div>');
+    $('#wa_month_result').hide();
+    $('#wa_month_progress').hide();
+
+    $.ajax({
+        url: '{{ route('admin.settings.whatsapp.monthly_preview') }}',
+        type: 'GET',
+        data: { month: month, year: year },
+        success: function(res) {
+            if (res.error) {
+                $container.html('<div class="alert alert-danger">' + res.error + '</div>');
+                return;
+            }
+
+            if (res.clients.length === 0) {
+                $container.html('<div class="alert alert-info text-center"><i class="bi bi-check-circle me-2"></i>{{ trans("clients.whatsapp_no_invoices_month") }} ' + res.month_name + ' ' + res.year + '</div>');
+                return;
+            }
+
+            monthlyData = res.clients;
+            var isArabic = '{{ app()->getLocale() }}' === 'ar';
+
+            var html = '<h6 class="fw-bold mb-3"><i class="bi bi-calendar-event me-2"></i>' + res.month_name + ' ' + res.year + '</h6>';
+            html += '<table class="wa-preview-table"><thead><tr>';
+            var headers = isArabic ? ['العميل', 'الهاتف', 'الإجمالي', 'الفواتير'] : ['Client', 'Phone', 'Total', 'Invoices'];
+            headers.forEach(function(h) { html += '<th>' + h + '</th>'; });
+            html += '</tr></thead><tbody>';
+
+            res.clients.forEach(function(c) {
+                html += '<tr>';
+                html += '<td>' + c.client_name + '</td>';
+                html += '<td dir="ltr">' + c.phone + '</td>';
+                html += '<td>$' + c.total_amount + '</td>';
+                html += '<td>';
+                c.invoice_lines.forEach(function(line) {
+                    html += '<span class="invoice-line">' + line + '</span>';
+                });
+                html += '</td>';
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            html += '<div class="wa-preview-summary">' +
+                (isArabic ? 'العملاء: ' + res.total + ' | الإجمالي: $' + res.grandTotal : 'Clients: ' + res.total + ' | Total: $' + res.grandTotal) +
+                '</div>';
+            html += '<div class="mt-3 text-center">';
+            html += '<button class="btn btn-success btn-sm" onclick="sendMonthlyReminders()">';
+            html += '<i class="bi bi-send me-1"></i> ' + (isArabic ? 'إرسال رسائل واتساب' : 'Send WhatsApp Messages') + '</button>';
+            html += '</div>';
+
+            $container.html(html);
+        },
+        error: function() {
+            $container.html('<div class="alert alert-danger">{{ trans("clients.whatsapp_preview_error") }}</div>');
+        }
+    });
+}
+
+function sendMonthlyReminders() {
+    if (!selectedMonth || !selectedYear) return;
+    var isArabic = '{{ app()->getLocale() }}' === 'ar';
+    if (!confirm(isArabic ? 'هل أنت متأكد من إرسال رسائل واتساب لجميع عملاء هذا الشهر؟' : 'Are you sure you want to send WhatsApp messages to all clients for this month?')) return;
+
+    $('#wa_month_progress').show();
+    $('#wa_month_result').hide().empty();
+    $('.wa-month-btn').off('click');
+
+    $.ajax({
+        url: '{{ route('admin.settings.whatsapp.send_monthly') }}',
+        type: 'POST',
+        data: { _token: '{{ csrf_token() }}', month: selectedMonth, year: selectedYear },
+        success: function(res) {
+            if (res.error) {
+                $('#wa_month_result').html('<div class="alert alert-danger">' + res.error + '</div>').show();
+                initMonthGrid();
+                return;
+            }
+
+            $('#wa_month_progress_bar').css('width', '100%').text('100%');
+            $('#wa_month_progress_text').text('');
+
+            var summaryHtml = '<div class="alert alert-success text-center fw-bold">';
+            summaryHtml += isArabic ? 'تم الإرسال: ' + res.sent + ' | فشل: ' + res.failed : 'Sent: ' + res.sent + ' | Failed: ' + res.failed;
+            summaryHtml += '</div>';
+
+            var detailsHtml = '';
+            res.results.forEach(function(r) {
+                var cls = r.status === 'sent' ? 'sent' : 'failed';
+                var icon = r.status === 'sent' ? '✓' : '✗';
+                detailsHtml += '<div class="wa-result-item ' + cls + '">' + icon + ' ' + r.client + ' (' + r.phone + ')';
+                if (r.error) detailsHtml += ' - ' + r.error;
+                detailsHtml += '</div>';
+            });
+
+            $('#wa_month_result').html(summaryHtml + detailsHtml).show();
+            initMonthGrid();
+            toastr.success(isArabic ? 'تم الانتهاء' : 'Done');
+        },
+        error: function() {
+            $('#wa_month_result').html('<div class="alert alert-danger">{{ trans("clients.whatsapp_send_error") }}</div>').show();
+            initMonthGrid();
+        }
+    });
+}
 </script>
 @endsection

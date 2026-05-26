@@ -299,4 +299,8 @@
         'whatsapp_preview_error' => 'حدث خطأ أثناء تحميل المعاينة',
         'whatsapp_confirm_send' => 'هل أنت متأكد من إرسال رسائل واتساب لجميع العملاء المعروضين؟',
         'whatsapp_send_error' => 'حدث خطأ أثناء الإرسال',
+        'whatsapp_monthly_reminders' => 'تذكيرات شهرية',
+        'whatsapp_select_month' => 'اختر الشهر',
+        'whatsapp_select_month_hint' => 'اختر شهراً لعرض العملاء المستهدفين',
+        'whatsapp_no_invoices_month' => 'لا توجد فواتير مستحقة في شهر',
      );

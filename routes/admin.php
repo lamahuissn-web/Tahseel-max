@@ -227,6 +227,8 @@ Route::group(
             Route::post('settings/whatsapp/restart', [WhatsAppSettingsController::class, 'restartService'])->name('settings.whatsapp.restart');
             Route::get('settings/whatsapp/reminders-preview', [WhatsAppSettingsController::class, 'remindersPreview'])->name('settings.whatsapp.reminders_preview');
             Route::post('settings/whatsapp/send-reminders', [WhatsAppSettingsController::class, 'sendReminders'])->name('settings.whatsapp.send_reminders');
+            Route::get('settings/whatsapp/monthly-preview', [WhatsAppSettingsController::class, 'monthlyPreview'])->name('settings.whatsapp.monthly_preview');
+            Route::post('settings/whatsapp/send-monthly', [WhatsAppSettingsController::class, 'sendMonthly'])->name('settings.whatsapp.send_monthly');
 
             Route::get('/logs', [LogController::class, 'index'])->name('logs.index');
             Route::get('/logs/{id}', [LogController::class, 'show'])->name('logs.show');
