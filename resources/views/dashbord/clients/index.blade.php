@@ -487,7 +487,9 @@
             "order": [],
             "deferRender": true,
             "stateSave": false,
-            "responsive": true,
+            "responsive": {
+                "details": false
+            },
             "pagingType": "simple_numbers",
             "ajax": {
                 url: "{{ route('admin.clients.index') }}",

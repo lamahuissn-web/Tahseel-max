@@ -102,7 +102,7 @@
                         <div class="col-6">
                             <div class="quick-info-item">
                                 <span class="quick-label">{{ trans('clients.remaining_amount') }}</span>
-                                <span class="quick-value fw-bold text-danger remaining-trigger" onclick="showRemainingInvoices({{ $client->id }})">{{ $client->remaining_amount_total ?? '0.00' }} ◀</span>
+                                <span class="quick-value fw-bold text-danger remaining-trigger" onclick="$('#clientQuickPanelModal').modal('hide'); showRemainingInvoices({{ $client->id }})">{{ $client->remaining_amount_total ?? '0.00' }} ◀</span>
                             </div>
                         </div>
                         <div class="col-6">
@@ -129,7 +129,7 @@
                 </div>
                 <div class="card-body p-3">
                     <div class="d-grid gap-2">
-                        <button class="btn btn-outline-warning btn-sm" onclick="showRemainingInvoices({{ $client->id }})">
+                        <button class="btn btn-outline-warning btn-sm" onclick="$('#clientQuickPanelModal').modal('hide'); showRemainingInvoices({{ $client->id }})">
                             <i class="bi bi-receipt-cutoff"></i> {{ trans('clients.client_unpaid_invoices') }}
                         </button>
                         @can('add_client_invoice')
