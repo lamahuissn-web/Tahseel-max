@@ -227,10 +227,13 @@ class WhatsAppSettingsController extends Controller
             $phone = preg_replace('/[^0-9]/', '', $client->phone);
 
             $invoiceLines = $clientInvoices->map(function ($inv) {
-                $monthNum = (int) Carbon::parse($inv->due_date)->format('n');
-                $monthName = $this->arabicMonths[$monthNum] ?? Carbon::parse($inv->due_date)->format('M');
+                $dateFormatted = Carbon::parse($inv->due_date)->format('Y-m');
                 $amount = number_format($inv->remaining_amount, 2);
-                return "{$monthName} ({$inv->invoice_number}) - {$amount}$";
+                if ($inv->invoice_type === 'service') {
+                    $label = !empty($inv->notes) ? preg_replace('/\s+/', ' ', trim($inv->notes)) : 'خدمة';
+                    return "{$label} {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
+                }
+                return "{$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
             })->toArray();
 
             $grandTotal += $totalAmount;
@@ -482,10 +485,13 @@ class WhatsAppSettingsController extends Controller
             $phone = preg_replace('/[^0-9]/', '', $client->phone);
 
             $invoiceLines = $clientInvoices->map(function ($inv) {
-                $monthNum = (int) Carbon::parse($inv->due_date)->format('n');
-                $monthName = $this->arabicMonths[$monthNum] ?? Carbon::parse($inv->due_date)->format('M');
+                $dateFormatted = Carbon::parse($inv->due_date)->format('Y-m');
                 $amount = number_format($inv->remaining_amount, 2);
-                return "{$monthName} ({$inv->invoice_number}) - {$amount}$";
+                if ($inv->invoice_type === 'service') {
+                    $label = !empty($inv->notes) ? preg_replace('/\s+/', ' ', trim($inv->notes)) : 'خدمة';
+                    return "{$label} {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
+                }
+                return "{$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
             })->toArray();
 
             $grandTotal += $totalAmount;
@@ -598,10 +604,13 @@ class WhatsAppSettingsController extends Controller
             $phone = preg_replace('/[^0-9]/', '', $client->phone);
 
             $invoiceLines = $clientInvoices->map(function ($inv) {
-                $monthNum = (int) Carbon::parse($inv->due_date)->format('n');
-                $monthName = $this->arabicMonths[$monthNum] ?? Carbon::parse($inv->due_date)->format('M');
+                $dateFormatted = Carbon::parse($inv->due_date)->format('Y-m');
                 $amount = number_format($inv->remaining_amount, 2);
-                return "{$monthName} ({$inv->invoice_number}) - {$amount}$";
+                if ($inv->invoice_type === 'service') {
+                    $label = !empty($inv->notes) ? preg_replace('/\s+/', ' ', trim($inv->notes)) : 'خدمة';
+                    return "{$label} {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
+                }
+                return "{$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
             })->toArray();
 
             $grandTotal += $totalAmount;
