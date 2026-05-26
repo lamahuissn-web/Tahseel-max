@@ -1,151 +1,112 @@
-<style>
-.qp-summary { text-align: center; padding: 16px 12px 12px; background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%); border-radius: 10px 10px 0 0; margin-bottom: 0; }
-.qp-summary .qp-name { font-size: 17px; font-weight: 700; color: #fff; display: block; margin-bottom: 4px; }
-.qp-summary .qp-badges { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; }
-
-.qp-section { border: 1px solid #e9ecef; border-radius: 10px; overflow: hidden; background: #fff; }
-.qp-section-header { padding: 10px 14px; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #e9ecef; }
-.qp-section-header.bg-primary-soft { background: #e7f1ff; color: #0d6efd; }
-.qp-section-header.bg-success-soft { background: #e8f5e9; color: #198754; }
-.qp-section-header.bg-warning-soft { background: #fff8e1; color: #f39c12; }
-.qp-section-header .qp-icon-circle { width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; }
-.qp-section-header.bg-primary-soft .qp-icon-circle { background: #0d6efd; color: #fff; }
-.qp-section-header.bg-success-soft .qp-icon-circle { background: #198754; color: #fff; }
-.qp-section-header.bg-warning-soft .qp-icon-circle { background: #f39c12; color: #fff; }
-
-.qp-info-row { display: flex; align-items: center; padding: 10px 14px; gap: 10px; border-bottom: 1px solid #f0f0f0; }
-.qp-info-row:last-child { border-bottom: none; }
-.qp-info-icon { width: 32px; height: 32px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
-.qp-info-icon.bg-blue { background: #e7f1ff; color: #0d6efd; }
-.qp-info-icon.bg-green { background: #e8f5e9; color: #198754; }
-.qp-info-icon.bg-red { background: #ffebee; color: #dc3545; }
-.qp-info-icon.bg-orange { background: #fff3e0; color: #e65100; }
-.qp-info-icon.bg-purple { background: #f3e5f5; color: #7b1fa2; }
-.qp-info-icon.bg-teal { background: #e0f2f1; color: #00695c; }
-.qp-info-icon.bg-gray { background: #f5f5f5; color: #616161; }
-.qp-info-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.3px; display: block; line-height: 1.2; }
-.qp-info-val { font-size: 13px; font-weight: 600; color: #222; display: block; line-height: 1.3; word-break: break-word; }
-
-.qp-remaining-chip { display: inline-flex; align-items: center; gap: 5px; background: #fff3cd; color: #856404; border: 1px solid #ffc107; padding: 5px 12px; border-radius: 20px; font-weight: 700; font-size: 14px; cursor: pointer; transition: all .2s; }
-.qp-remaining-chip:hover { background: #ffe082; border-color: #f9a825; }
-.qp-remaining-chip i { font-size: 12px; }
-
-.qp-actions { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
-.qp-action-btn { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; border: 1px solid transparent; text-decoration: none; cursor: pointer; transition: all .15s; }
-.qp-action-btn:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,.1); }
-.qp-action-btn.qp-warn { background: #fff8e1; border-color: #ffc107; color: #856404; }
-.qp-action-btn.qp-success { background: #e8f5e9; border-color: #66bb6a; color: #2e7d32; }
-.qp-action-btn.qp-primary { background: #e7f1ff; border-color: #90caf9; color: #0d6efd; }
-.qp-action-btn.qp-danger { background: #ffebee; border-color: #ef9a9a; color: #c62828; }
-</style>
-
 <div id="clientQuickPanelContent" data-client-id="{{ $client->id }}">
 
-    <div class="qp-summary">
-        <span class="qp-name">{{ $client->name }}</span>
-        <div class="qp-badges">
-            <span class="badge bg-light text-dark">{{ $client->client_code ?? '—' }}</span>
+    {{-- Header --}}
+    <div class="text-center text-white p-4" style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);">
+        <div class="mb-2" style="opacity: 0.6; font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase;">{{ trans('clients.ID') }} {{ $client->id }}</div>
+        <div class="fw-bold mb-3" style="font-size: 20px; letter-spacing: -0.3px;">{{ $client->name }}</div>
+        <div class="d-flex justify-content-center gap-2 flex-wrap">
             @if($client->is_active == '1')
-                <span class="badge bg-success"><i class="bi bi-check-circle-fill me-1"></i> {{ trans('clients.active') }}</span>
+                <span class="badge rounded-pill" style="background: rgba(40,167,69,0.25); color: #2ecc71; border: 1px solid rgba(46,204,113,0.4); font-size: 12px; padding: 6px 14px;">
+                    {{ trans('clients.active') }}
+                </span>
             @else
-                <span class="badge bg-danger"><i class="bi bi-x-circle-fill me-1"></i> {{ trans('clients.inactive') }}</span>
+                <span class="badge rounded-pill" style="background: rgba(220,53,69,0.25); color: #ff6b6b; border: 1px solid rgba(255,107,107,0.4); font-size: 12px; padding: 6px 14px;">
+                    {{ trans('clients.inactive') }}
+                </span>
+            @endif
+            @if($client->client_code)
+                <span class="badge rounded-pill" style="background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.85); border: 1px solid rgba(255,255,255,0.25); font-size: 12px; padding: 6px 14px;">
+                    {{ $client->client_code }}
+                </span>
             @endif
         </div>
     </div>
 
-    <div class="qp-section">
-        <div class="qp-section-header bg-primary-soft">
-            <span class="qp-icon-circle"><i class="bi bi-person-fill"></i></span>
-            {{ trans('clients.client_information') }}
+    {{-- Info List --}}
+    <div class="bg-white">
+
+        <div class="d-flex justify-content-between align-items-center px-4" style="padding-top: 18px; padding-bottom: 14px; border-bottom: 1px solid #f0f0f0;">
+            <span class="text-muted" style="font-size: 14px;">{{ trans('clients.phone') }}</span>
+            <span class="fw-medium" style="font-size: 14px; color: #222; direction: ltr;">{{ $client->phone ?? '—' }}</span>
         </div>
 
-        <div class="qp-info-row">
-            <span class="qp-info-icon bg-blue"><i class="bi bi-hash"></i></span>
-            <div class="flex-grow-1"><span class="qp-info-label">{{ trans('clients.ID') }}</span><span class="qp-info-val"><span class="badge bg-primary">{{ $client->id }}</span></span></div>
+        <div class="d-flex justify-content-between align-items-center px-4" style="padding-top: 14px; padding-bottom: 14px; border-bottom: 1px solid #f0f0f0;">
+            <span class="text-muted" style="font-size: 14px;">{{ trans('clients.user') }}</span>
+            <span class="fw-medium" style="font-size: 14px; color: #222;">{{ $client->user ?? '—' }}</span>
         </div>
-        <div class="qp-info-row">
-            <span class="qp-info-icon bg-teal"><i class="bi bi-phone"></i></span>
-            <div class="flex-grow-1"><span class="qp-info-label">{{ trans('clients.phone') }}</span><span class="qp-info-val text-success">{{ $client->phone ?? '—' }}</span></div>
+
+        <div class="d-flex justify-content-between align-items-center px-4" style="padding-top: 14px; padding-bottom: 14px; border-bottom: 1px solid #f0f0f0;">
+            <span class="text-muted" style="font-size: 14px;">{{ trans('clients.box_switch') }}</span>
+            <span class="fw-medium" style="font-size: 14px; color: #222;">{{ $client->box_switch ?? '—' }}</span>
         </div>
-        <div class="qp-info-row">
-            <span class="qp-info-icon bg-purple"><i class="bi bi-person-badge"></i></span>
-            <div class="flex-grow-1"><span class="qp-info-label">{{ trans('clients.user') }}</span><span class="qp-info-val">{{ $client->user ?? '—' }}</span></div>
+
+        <div class="d-flex justify-content-between align-items-center px-4" style="padding-top: 14px; padding-bottom: 14px; border-bottom: 1px solid #f0f0f0;">
+            <span class="text-muted" style="font-size: 14px;">{{ trans('clients.client_type') }}</span>
+            <span class="fw-medium" style="font-size: 14px; color: #222;">{{ $client->client_type ?? '—' }}</span>
         </div>
-        <div class="qp-info-row">
-            <span class="qp-info-icon bg-red"><i class="bi bi-router"></i></span>
-            <div class="flex-grow-1"><span class="qp-info-label">{{ trans('clients.box_switch') }}</span><span class="qp-info-val text-danger">{{ $client->box_switch ?? '—' }}</span></div>
+
+        <div class="d-flex justify-content-between align-items-center px-4" style="padding-top: 14px; padding-bottom: 14px; border-bottom: 1px solid #f0f0f0;">
+            <span class="text-muted" style="font-size: 14px;">{{ trans('clients.subscription') }}</span>
+            <span class="fw-medium" style="font-size: 14px; color: #222;">{{ $client->subscription->name ?? '—' }}</span>
         </div>
-        <div class="qp-info-row">
-            <span class="qp-info-icon bg-gray"><i class="bi bi-tag-fill"></i></span>
-            <div class="flex-grow-1"><span class="qp-info-label">{{ trans('clients.client_type') }}</span><span class="qp-info-val"><span class="badge bg-info">{{ $client->client_type ?? '—' }}</span></span></div>
+
+        <div class="d-flex justify-content-between align-items-center px-4" style="padding-top: 14px; padding-bottom: 14px; border-bottom: 1px solid #f0f0f0;">
+            <span class="text-muted" style="font-size: 14px;">{{ trans('clients.price') }}</span>
+            <span class="fw-medium" style="font-size: 14px; color: #222;">{{ $client->price ?? '—' }}</span>
         </div>
+
+        <div class="d-flex justify-content-between align-items-center px-4" style="padding-top: 14px; padding-bottom: 14px; border-bottom: 1px solid #f0f0f0;">
+            <span class="text-muted" style="font-size: 14px;">{{ trans('clients.remaining_amount') }}</span>
+            <span class="fw-bold" style="font-size: 14px; color: #dc3545; cursor: pointer;" onclick="$('#clientQuickPanelModal').modal('hide'); showRemainingInvoices({{ $client->id }})">
+                {{ number_format($client->remaining_amount_total ?? 0, 2) }}
+                <i class="bi bi-chevron-left" style="font-size: 10px; opacity: 0.5;"></i>
+            </span>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center px-4" style="padding-top: 14px; padding-bottom: 18px;">
+            <span class="text-muted" style="font-size: 14px;">{{ trans('clients.status') }}</span>
+            <span class="fw-medium" style="font-size: 14px; color: #222;">
+                @if($client->is_active == '1')
+                    {{ trans('clients.active') }}
+                @else
+                    {{ trans('clients.inactive') }}
+                @endif
+            </span>
+        </div>
+
         @if($client->address1)
-        <div class="qp-info-row">
-            <span class="qp-info-icon bg-gray"><i class="bi bi-geo-alt-fill"></i></span>
-            <div class="flex-grow-1"><span class="qp-info-label">{{ trans('clients.address1') }}</span><span class="qp-info-val">{{ $client->address1 }}</span></div>
+        <div class="px-4" style="padding-top: 14px; padding-bottom: 18px; border-top: 1px solid #f0f0f0;">
+            <span class="text-muted d-block mb-1" style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">{{ trans('clients.address1') }}</span>
+            <span class="fw-medium d-block" style="font-size: 14px; color: #222;">{{ $client->address1 }}</span>
         </div>
         @endif
+
     </div>
 
-    <div class="mt-3 qp-section">
-        <div class="qp-section-header bg-success-soft">
-            <span class="qp-icon-circle"><i class="bi bi-credit-card"></i></span>
-            {{ trans('clients.subscription_info') }}
-        </div>
+    {{-- Actions --}}
+    <div class="p-4" style="background: #f8f9fa; border-top: 1px solid #e9ecef;">
+        <button class="btn w-100 mb-2 fw-semibold" style="background: #0d6efd; color: #fff; border-radius: 10px; padding: 12px; font-size: 15px; border: none; letter-spacing: 0.2px;" onclick="$('#clientQuickPanelModal').modal('hide'); showRemainingInvoices({{ $client->id }})">
+            {{ trans('clients.client_unpaid_invoices') }}
+        </button>
 
-        <div class="qp-info-row">
-            <span class="qp-info-icon bg-green"><i class="bi bi-box2-fill"></i></span>
-            <div class="flex-grow-1"><span class="qp-info-label">{{ trans('clients.subscription') }}</span><span class="qp-info-val">@if($client->subscription)<span class="badge bg-success">{{ $client->subscription->name }}</span>@else<span class="text-muted">—</span>@endif</span></div>
-        </div>
-        <div class="qp-info-row">
-            <span class="qp-info-icon bg-teal"><i class="bi bi-currency-dollar"></i></span>
-            <div class="flex-grow-1"><span class="qp-info-label">{{ trans('clients.price') }}</span><span class="qp-info-val text-success fw-bold fs-6">{{ $client->price ?? '—' }}</span></div>
-        </div>
-        <div class="qp-info-row">
-            <span class="qp-info-icon bg-blue"><i class="bi bi-calendar-event"></i></span>
-            <div class="flex-grow-1"><span class="qp-info-label">{{ trans('clients.start_date') }}</span><span class="qp-info-val">{{ $client->start_date ?? '—' }}</span></div>
-        </div>
-        <div class="qp-info-row">
-            <span class="qp-info-icon bg-orange"><i class="bi bi-calendar-check"></i></span>
-            <div class="flex-grow-1"><span class="qp-info-label">{{ trans('clients.subscription_date') }}</span><span class="qp-info-val">{{ $client->subscription_date ?? '—' }}</span></div>
-        </div>
-        <div class="qp-info-row">
-            <span class="qp-info-icon bg-red"><i class="bi bi-exclamation-triangle-fill"></i></span>
-            <div class="flex-grow-1">
-                <span class="qp-info-label">{{ trans('clients.remaining_amount') }}</span>
-                <span class="qp-remaining-chip" onclick="$('#clientQuickPanelModal').modal('hide'); showRemainingInvoices({{ $client->id }})">
-                    {{ number_format($client->remaining_amount_total ?? 0, 2) }}
-                    <i class="bi bi-chevron-left"></i>
-                </span>
-            </div>
-        </div>
-    </div>
+        @can('add_client_invoice')
+        <a href="{{ route('admin.client_invoices', $client->id) }}" class="btn w-100 mb-2 fw-semibold" style="background: #fff; color: #198754; border-radius: 10px; padding: 12px; font-size: 15px; border: 1px solid #198754; letter-spacing: 0.2px;">
+            {{ trans('clients.client_add_invoice') }}
+        </a>
+        @endcan
 
-    <div class="mt-3 qp-section">
-        <div class="qp-section-header bg-warning-soft">
-            <span class="qp-icon-circle"><i class="bi bi-lightning-fill"></i></span>
-            {{ trans('clients.quick_actions') }}
-        </div>
-        <div class="qp-actions">
-            <button class="qp-action-btn qp-warn" onclick="$('#clientQuickPanelModal').modal('hide'); showRemainingInvoices({{ $client->id }})">
-                <i class="bi bi-receipt-cutoff"></i> {{ trans('clients.client_unpaid_invoices') }}
-            </button>
-            @can('add_client_invoice')
-            <a href="{{ route('admin.client_invoices', $client->id) }}" class="qp-action-btn qp-success">
-                <i class="bi bi-file-earmark-plus"></i> {{ trans('clients.client_add_invoice') }}
-            </a>
-            @endcan
-            @can('update_client')
-            <a href="{{ route('admin.clients.change_status', [$client->id, $client->is_active]) }}"
-               class="qp-action-btn qp-danger"
-               onclick="return confirm('{{ trans('clients.change_status_msg') }}');">
-                <i class="bi bi-arrow-repeat"></i> {{ trans('clients.change_status') }}
-            </a>
-            @endcan
-            <button class="qp-action-btn qp-primary" onclick="showClientDetails({{ $client->id }}); $('#clientQuickPanelModal').modal('hide');">
-                <i class="bi bi-person-circle"></i> {{ trans('clients.view_full_details') }}
-            </button>
-        </div>
+        @can('update_client')
+        <a href="{{ route('admin.clients.change_status', [$client->id, $client->is_active]) }}"
+           class="btn w-100 mb-2 fw-semibold"
+           style="background: #fff; color: #dc3545; border-radius: 10px; padding: 12px; font-size: 15px; border: 1px solid #dc3545; letter-spacing: 0.2px;"
+           onclick="return confirm('{{ trans('clients.change_status_msg') }}');">
+            {{ trans('clients.change_status') }}
+        </a>
+        @endcan
+
+        <button class="btn w-100 fw-semibold" style="background: #fff; color: #0d6efd; border-radius: 10px; padding: 12px; font-size: 15px; border: 1px solid #0d6efd; letter-spacing: 0.2px;" onclick="showClientDetails({{ $client->id }}); $('#clientQuickPanelModal').modal('hide');">
+            {{ trans('clients.view_full_details') }}
+        </button>
     </div>
 
 </div>
