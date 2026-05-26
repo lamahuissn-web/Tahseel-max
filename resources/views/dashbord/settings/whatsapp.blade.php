@@ -402,12 +402,94 @@ function restartWhatsApp() {
         success: function(res) {
             if (res.success) {
                 toastr.success(res.message);
-                setTimeout(function() { location.reload(); }, 2000);
+                setTimeout(function() { refreshConnectionStatus(); }, 3000);
             } else {
                 toastr.error(res.message);
             }
         }
     });
+}
+
+var waStatusInterval = null;
+
+function refreshConnectionStatus() {
+    $.ajax({
+        url: '{{ route('admin.settings.whatsapp.api_status') }}',
+        type: 'GET',
+        success: function(res) {
+            if (res.connected) {
+                updateConnectionUI(res);
+            } else {
+                $.ajax({
+                    url: '{{ route('admin.settings.whatsapp.api_qr') }}',
+                    type: 'GET',
+                    success: function(qrRes) {
+                        res.qr = qrRes.qr || null;
+                        updateConnectionUI(res);
+                    },
+                    error: function() {
+                        updateConnectionUI(res);
+                    }
+                });
+            }
+        },
+        error: function() {
+            $.ajax({
+                url: '{{ route('admin.settings.whatsapp.api_qr') }}',
+                type: 'GET',
+                success: function(res) {
+                    updateConnectionUI({ connected: false, qr: res.qr || null });
+                },
+                error: function() {
+                    updateConnectionUI({ connected: false, qr: null });
+                }
+            });
+        }
+    });
+}
+
+function updateConnectionUI(res) {
+    var $dot = $('.wa-status-dot');
+    var $statusText = $dot.next('.fw-semibold');
+    var $phoneInfo = $dot.closest('.col-md-6').find('.text-muted');
+    var $qrContainer = $('.wa-qr-container');
+
+    if (res.connected) {
+        $dot.removeClass('disconnected').addClass('connected');
+        $statusText.text('{{ trans('clients.whatsapp_connected') }}');
+        if (res.phone) {
+            if ($phoneInfo.length === 0) {
+                $dot.closest('.col-md-6').append('<div class="text-muted" style="font-size: 13px;"><i class="bi bi-phone me-1"></i> ' + res.phone + '</div>');
+            } else {
+                $phoneInfo.html('<i class="bi bi-phone me-1"></i> ' + res.phone);
+            }
+        }
+        if ($qrContainer.length) $qrContainer.hide();
+        if (waStatusInterval) { clearInterval(waStatusInterval); waStatusInterval = null; }
+    } else {
+        $dot.removeClass('connected').addClass('disconnected');
+        $statusText.text('{{ trans('clients.whatsapp_disconnected') }}');
+        $phoneInfo.remove();
+
+        if (res.qr) {
+            if ($qrContainer.length === 0) {
+                $('.wa-card-body').first().append('<div class="wa-qr-container mt-3"><img src="' + res.qr + '" alt="QR Code"><div class="text-muted mt-2" style="font-size: 13px;"><i class="bi bi-qr-code me-1"></i> {{ trans('clients.whatsapp_qr_scan') }}</div></div>');
+            } else {
+                $qrContainer.show().find('img').attr('src', res.qr);
+                $qrContainer.find('.text-muted').show();
+            }
+        } else {
+            if ($qrContainer.length === 0) {
+                $('.wa-card-body').first().append('<div class="wa-qr-container mt-3"><div class="text-muted py-4"><i class="bi bi-hourglass-split fs-1"></i><p class="mt-2">{{ trans('clients.whatsapp_connecting') }}</p></div></div>');
+            } else {
+                $qrContainer.show().html('<div class="text-muted py-4"><i class="bi bi-hourglass-split fs-1"></i><p class="mt-2">{{ trans('clients.whatsapp_connecting') }}</p></div>');
+            }
+        }
+
+        if (!waStatusInterval) {
+            waStatusInterval = setInterval(refreshConnectionStatus, 15000);
+        }
+    }
 }
 
 var remindersData = [];
@@ -524,6 +606,8 @@ window.addEventListener('load', function() {
     console.log('Window loaded, calling previewTemplate and initMonthGrid');
     previewTemplate();
     initMonthGrid();
+    refreshConnectionStatus();
+    waStatusInterval = setInterval(refreshConnectionStatus, 15000);
 });
 
 var selectedMonth = null;

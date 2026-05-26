@@ -123,6 +123,16 @@ class WhatsAppSettingsController extends Controller
         }
     }
 
+    public function apiStatus()
+    {
+        return response()->json($this->whatsapp->status());
+    }
+
+    public function apiQR()
+    {
+        return response()->json($this->whatsapp->getQR());
+    }
+
     public function remindersPreview()
     {
         $enabled = DB::table('app_config')->where('key', 'whatsapp_enabled')->value('value');

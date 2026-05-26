@@ -225,6 +225,8 @@ Route::group(
             Route::post('settings/whatsapp/preview', [WhatsAppSettingsController::class, 'preview'])->name('settings.whatsapp.preview');
             Route::post('settings/whatsapp/test', [WhatsAppSettingsController::class, 'testSend'])->name('settings.whatsapp.test');
             Route::post('settings/whatsapp/restart', [WhatsAppSettingsController::class, 'restartService'])->name('settings.whatsapp.restart');
+            Route::get('settings/whatsapp/status', [WhatsAppSettingsController::class, 'apiStatus'])->name('settings.whatsapp.api_status');
+            Route::get('settings/whatsapp/qr-code', [WhatsAppSettingsController::class, 'apiQR'])->name('settings.whatsapp.api_qr');
             Route::get('settings/whatsapp/reminders-preview', [WhatsAppSettingsController::class, 'remindersPreview'])->name('settings.whatsapp.reminders_preview');
             Route::post('settings/whatsapp/send-reminders', [WhatsAppSettingsController::class, 'sendReminders'])->name('settings.whatsapp.send_reminders');
             Route::get('settings/whatsapp/monthly-preview', [WhatsAppSettingsController::class, 'monthlyPreview'])->name('settings.whatsapp.monthly_preview');
