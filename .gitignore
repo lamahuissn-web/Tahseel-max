@@ -22,3 +22,7 @@ yarn-error.log
 *.sql
 *.sql.gz
 .env
+
+# WhatsApp service
+/whatsapp-service/session/
+/whatsapp-service/node_modules/

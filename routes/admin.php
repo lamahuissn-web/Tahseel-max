@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\app_setting\DiscountController;
 use App\Http\Controllers\Admin\ClientController;
 use App\Http\Controllers\Admin\CompanyController;
 use App\Http\Controllers\Admin\ConfigAppController;
+use App\Http\Controllers\Admin\WhatsAppSettingsController;
 use App\Http\Controllers\Admin\EmployeesController;
 
 use App\Http\Controllers\Admin\FinancialTransactionsController;
@@ -218,6 +219,12 @@ Route::group(
             /*************************************************************************************************/
             Route::get('setting/app_config', [ConfigAppController::class, 'index'])->name('app_config');
             Route::post('setting/app_config/save', [ConfigAppController::class, 'store'])->name('save_app_config');
+
+            Route::get('settings/whatsapp', [WhatsAppSettingsController::class, 'index'])->name('settings.whatsapp');
+            Route::post('settings/whatsapp', [WhatsAppSettingsController::class, 'update'])->name('settings.whatsapp.update');
+            Route::post('settings/whatsapp/preview', [WhatsAppSettingsController::class, 'preview'])->name('settings.whatsapp.preview');
+            Route::post('settings/whatsapp/test', [WhatsAppSettingsController::class, 'testSend'])->name('settings.whatsapp.test');
+            Route::post('settings/whatsapp/restart', [WhatsAppSettingsController::class, 'restartService'])->name('settings.whatsapp.restart');
 
             Route::get('/logs', [LogController::class, 'index'])->name('logs.index');
             Route::get('/logs/{id}', [LogController::class, 'show'])->name('logs.show');
