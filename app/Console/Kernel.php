@@ -5,7 +5,6 @@ namespace App\Console;
 use App\Console\Commands\AddNewInvoices;
 use App\Console\Commands\AutoBackupCommand;
 use App\Console\Commands\SendOverdueReminders;
-use App\Console\Commands\WhatsAppRemindersCommand;
 use App\Models\AppConfig;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
@@ -58,7 +57,7 @@ class Kernel extends ConsoleKernel
                 $days = array_map('intval', array_filter(explode(',', $autoDays)));
 
                 if (count($days) === 7) {
-                    $schedule->command(WhatsAppRemindersCommand::class . ' --send')->dailyAt($autoTime);
+                    $schedule->command('whatsapp:reminders --send')->dailyAt($autoTime);
                 } elseif (!empty($days)) {
                     $dayMap = [1 => 6, 2 => 0, 3 => 1, 4 => 2, 5 => 3, 6 => 4, 7 => 5];
                     $cronDays = [];
@@ -71,7 +70,7 @@ class Kernel extends ConsoleKernel
                         $parts = explode(':', $autoTime);
                         $hour = (int) ($parts[0] ?? 9);
                         $minute = (int) ($parts[1] ?? 0);
-                        $schedule->command(WhatsAppRemindersCommand::class . ' --send')
+                        $schedule->command('whatsapp:reminders --send')
                             ->cron("{$minute} {$hour} * * " . implode(',', array_unique($cronDays)));
                     }
                 }

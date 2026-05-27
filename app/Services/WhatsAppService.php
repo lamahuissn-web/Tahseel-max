@@ -8,19 +8,48 @@ use Illuminate\Support\Facades\Log;
 class WhatsAppService
 {
     protected $baseUrl;
+    protected $apiKey;
+    protected $sessionId;
 
     public function __construct()
     {
-        $this->baseUrl = config('app.url') ? 'http://127.0.0.1:3000' : 'http://127.0.0.1:3000';
+        $this->baseUrl = rtrim(config('app.openwa_api_url', env('OPENWA_API_URL', 'http://192.168.0.75:2785/api')), '/');
+        $this->apiKey = config('app.openwa_api_key', env('OPENWA_API_KEY', ''));
+        $this->sessionId = config('app.openwa_session_id', env('OPENWA_SESSION_ID', ''));
+    }
+
+    protected function headers()
+    {
+        return [
+            'X-API-Key' => $this->apiKey,
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json',
+        ];
     }
 
     public function status()
     {
         try {
-            $response = Http::timeout(5)->get("{$this->baseUrl}/status");
-            return $response->json();
+            $response = Http::withHeaders($this->headers())
+                ->timeout(5)
+                ->get("{$this->baseUrl}/sessions/{$this->sessionId}");
+
+            $data = $response->json();
+
+            if (!$data || isset($data['error'])) {
+                return ['connected' => false, 'phone' => null];
+            }
+
+            $status = $data['status'] ?? '';
+            $connected = in_array(strtolower($status), ['connected', 'ready', 'scan_qr', 'qr_ready']);
+
+            return [
+                'connected' => $connected,
+                'phone' => $data['phoneNumber'] ?? $data['phone'] ?? null,
+                'status' => $status,
+            ];
         } catch (\Exception $e) {
-            Log::error('WhatsApp service status check failed: ' . $e->getMessage());
+            Log::error('OpenWA status check failed: ' . $e->getMessage());
             return ['connected' => false, 'phone' => null];
         }
     }
@@ -28,10 +57,26 @@ class WhatsAppService
     public function getQR()
     {
         try {
-            $response = Http::timeout(5)->get("{$this->baseUrl}/qr");
-            return $response->json();
+            $response = Http::withHeaders($this->headers())
+                ->timeout(5)
+                ->get("{$this->baseUrl}/sessions/{$this->sessionId}/qr");
+
+            $data = $response->json();
+
+            if (!$data || isset($data['error'])) {
+                return ['qr' => null, 'connected' => false];
+            }
+
+            $qrCode = $data['qrCode'] ?? $data['qr'] ?? null;
+            $status = $data['status'] ?? '';
+            $connected = in_array(strtolower($status), ['connected', 'ready', 'scan_qr', 'qr_ready']);
+
+            return [
+                'qr' => $qrCode,
+                'connected' => $connected,
+            ];
         } catch (\Exception $e) {
-            Log::error('WhatsApp service QR fetch failed: ' . $e->getMessage());
+            Log::error('OpenWA QR fetch failed: ' . $e->getMessage());
             return ['qr' => null, 'connected' => false];
         }
     }
@@ -39,25 +84,32 @@ class WhatsAppService
     public function send($phone, $message)
     {
         try {
-            $response = Http::timeout(30)->post("{$this->baseUrl}/send", [
-                'phone' => $phone,
-                'message' => $message,
-            ]);
-            return $response->json();
+            $cleanPhone = preg_replace('/[^0-9]/', '', $phone);
+            $chatId = "{$cleanPhone}@c.us";
+
+            $response = Http::withHeaders($this->headers())
+                ->timeout(30)
+                ->post("{$this->baseUrl}/sessions/{$this->sessionId}/messages/send-text", [
+                    'chatId' => $chatId,
+                    'text' => $message,
+                ]);
+
+            $data = $response->json();
+
+            if (isset($data['messageId']) || (isset($data['success']) && $data['success'])) {
+                return ['success' => true];
+            }
+
+            $errorMsg = $data['error']['message'] ?? $data['message'] ?? 'Unknown error';
+            return ['success' => false, 'error' => $errorMsg];
         } catch (\Exception $e) {
-            Log::error('WhatsApp send failed: ' . $e->getMessage());
+            Log::error('OpenWA send failed: ' . $e->getMessage());
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
 
     public function getLogs($limit = 50)
     {
-        try {
-            $response = Http::timeout(5)->get("{$this->baseUrl}/logs", ['limit' => $limit]);
-            return $response->json();
-        } catch (\Exception $e) {
-            Log::error('WhatsApp logs fetch failed: ' . $e->getMessage());
-            return [];
-        }
+        return [];
     }
 }

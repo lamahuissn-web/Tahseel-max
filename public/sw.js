@@ -1,7 +1,8 @@
-const CACHE_NAME = 'tahseel-cache-v1';
+const CACHE_NAME = 'tahseel-cache-v2';
 
 // Install event
 self.addEventListener('install', (event) => {
+    self.skipWaiting();
     event.waitUntil(
         caches.open(CACHE_NAME).then((cache) => {
             return cache.addAll([
@@ -12,9 +13,20 @@ self.addEventListener('install', (event) => {
     );
 });
 
+// Activate event — clean old caches and take control
+self.addEventListener('activate', (event) => {
+    event.waitUntil(Promise.all([
+        self.clients.claim(),
+        caches.keys().then((keys) => {
+            return Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)));
+        }),
+    ]));
+});
+
 // Fetch event (Network first)
 self.addEventListener('fetch', (event) => {
     if (event.request.method !== 'GET') return;
+    if (!event.request.url.startsWith('http')) return;
 
     event.respondWith(
         fetch(event.request)

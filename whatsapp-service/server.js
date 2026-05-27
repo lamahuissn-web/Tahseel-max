@@ -2,7 +2,9 @@ const express = require('express');
 const cors = require('cors');
 const qrcode = require('qrcode');
 const pino = require('pino');
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const NodeCache = require('node-cache');
+const fs = require('fs');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeCacheableSignalKeyStore, generateMessageID, isJidBroadcast, isJidStatusBroadcast } = require('@whiskeysockets/baileys');
 const path = require('path');
 
 const app = express();
@@ -13,6 +15,7 @@ app.use(express.json());
 
 const sessionPath = path.join(__dirname, 'session');
 const logger = pino({ level: 'silent' });
+const msgRetryCounterCache = new NodeCache({ stdTTL: 300, useClones: false });
 
 let sock = null;
 let isConnected = false;
@@ -20,6 +23,10 @@ let currentQR = null;
 let phoneNumber = null;
 const messageLogs = [];
 const MAX_LOGS = 100;
+const sentMessages = new Map();
+const messageTimestamps = new Map();
+let isConnectionReady = false;
+const READINESS_DELAY = 10000; // 10 seconds for key sync
 
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
@@ -28,9 +35,25 @@ async function connectToWhatsApp() {
     sock = makeWASocket({
         version,
         logger,
-        auth: state,
-        printQRInTerminal: true,
-        browser: ['Tahseel', 'Chrome', '1.0.0'],
+        auth: {
+            creds: state.creds,
+            keys: makeCacheableSignalKeyStore(state.keys, logger),
+        },
+        browser: ['Ubuntu', 'Chrome', '120.0.0.0'],
+        syncFullHistory: false,
+        markOnlineOnConnect: false,
+        shouldIgnoreJid: (jid) => isJidBroadcast(jid) || isJidStatusBroadcast(jid),
+        msgRetryCounterCache,
+        getMessage: async (key) => {
+            if (!key?.id) return undefined;
+            const msg = sentMessages.get(key.id);
+            if (msg) {
+                console.log('getMessage: found full proto for', key.id);
+                return msg;
+            }
+            console.log('getMessage: not found for', key.id);
+            return undefined;
+        },
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -50,34 +73,79 @@ async function connectToWhatsApp() {
         }
 
         if (connection === 'close') {
-            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+            const statusCode = lastDisconnect?.error?.output?.statusCode;
             isConnected = false;
+            isConnectionReady = false;
             phoneNumber = null;
             currentQR = null;
-            console.log(`Connection closed: ${lastDisconnect?.error?.output?.statusCode}`);
-            if (shouldReconnect) {
+            console.log(`Connection closed: ${statusCode}`);
+            if (statusCode === DisconnectReason.loggedOut) {
+                console.log('Session logged out — clearing stale session and reconnecting...');
+                try {
+                    const files = fs.readdirSync(sessionPath);
+                    files.forEach(f => fs.rmSync(path.join(sessionPath, f), { recursive: true, force: true }));
+                } catch (e) {
+                    console.error('Failed to clear session:', e.message);
+                }
+                setTimeout(connectToWhatsApp, 3000);
+            } else {
                 setTimeout(connectToWhatsApp, 3000);
             }
         } else if (connection === 'open') {
             isConnected = true;
+            isConnectionReady = false;
             phoneNumber = sock.user?.id ? `+${sock.user.id.split(':')[0]}` : null;
             currentQR = null;
             console.log(`WhatsApp connected: ${phoneNumber}`);
+            console.log(`Waiting ${READINESS_DELAY / 1000}s for key sync...`);
+            setTimeout(() => {
+                isConnectionReady = true;
+                console.log('Connection ready for sending');
+            }, READINESS_DELAY);
         }
     });
 
-    sock.ev.on('messages.upsert', (m) => {
-        if (m.type === 'notify' && m.messages[0]) {
-            console.log('Received message from:', m.messages[0].key.remoteJid);
+    sock.ev.on('messages.upsert', async (m) => {
+        if (m.messages[0]) {
+            const msg = m.messages[0];
+            const remoteJid = msg.key?.remoteJid || 'unknown';
+            const msgId = msg.key?.id || 'unknown';
+            const msgType = msg.message ? Object.keys(msg.message)[0] : 'none';
+            console.log('messages.upsert type:', m.type, '| jid:', remoteJid, '| id:', msgId, '| type:', msgType);
+
+            // Capture the ACTUAL proto message from Baileys after sending
+            if (msg.key?.fromMe && msg.message) {
+                sentMessages.set(msgId, msg.message);
+                messageTimestamps.set(msgId, Date.now());
+                console.log('Captured actual proto for sent message:', msgId);
+            }
+        }
+    });
+
+    sock.ev.on('messages.update', async (updates) => {
+        for (const update of updates) {
+            console.log('messages.update:', JSON.stringify(update));
         }
     });
 }
 
 connectToWhatsApp();
 
+// Cleanup old stored sent messages every 30 minutes
+setInterval(() => {
+    const cutoff = Date.now() - 30 * 60 * 1000;
+    for (const [id, ts] of messageTimestamps.entries()) {
+        if (ts < cutoff) {
+            sentMessages.delete(id);
+            messageTimestamps.delete(id);
+        }
+    }
+}, 30 * 60 * 1000);
+
 app.get('/status', (req, res) => {
     res.json({
         connected: isConnected,
+        ready: isConnectionReady,
         phone: phoneNumber
     });
 });
@@ -99,12 +167,28 @@ app.post('/send', async (req, res) => {
     if (!isConnected || !sock) {
         return res.status(503).json({ success: false, error: 'WhatsApp not connected' });
     }
+    if (!isConnectionReady) {
+        return res.status(503).json({ success: false, error: 'WhatsApp is syncing keys — please wait a few seconds' });
+    }
 
     try {
         const cleanPhone = phone.replace(/[^0-9]/g, '');
         const jid = `${cleanPhone}@s.whatsapp.net`;
 
-        await sock.sendMessage(jid, { text: message });
+        // Send presence update to ensure connection is fully established
+        await sock.sendPresenceUpdate('available', jid);
+        await new Promise(r => setTimeout(r, 1000));
+
+        // Pre-generate message ID and store the FULL proto object BEFORE sending
+        const msgId = generateMessageID();
+        const messageProto = { extendedTextMessage: { text: message } };
+        sentMessages.set(msgId, messageProto);
+        messageTimestamps.set(msgId, Date.now());
+
+        const result = await sock.sendMessage(jid, { text: message }, { messageId: msgId });
+
+        // Wait 3s to allow encryption handshake to finalize
+        await new Promise(r => setTimeout(r, 3000));
 
         const log = {
             phone: phone,

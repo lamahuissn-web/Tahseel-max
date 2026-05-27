@@ -264,7 +264,17 @@ class WhatsAppRemindersCommand extends Command
 
     protected function defaultTemplate()
     {
-        return "مرحباً {name}،\nنود تذكيرك بوجود مبالغ مستحقة غير مدفوعة لحسابك بإجمالي {total_amount}$.\n\nتفاصيل الفواتير المستحقة:\n{invoice_details_list}\n\nيرجى التكرم بتسوية الرصيد المستحق في أقرب وقت ممكن. إذا كنت قد سددت هذا المبلغ مؤخراً، يرجى تجاهل هذه الرسالة. شكراً لتفهمك.";
+        return "👋 مرحباً {name}،
+
+📋 نود تذكيرك بوجود مبالغ مستحقة غير مدفوعة لحسابك بإجمالي {total_amount}$.
+
+📄 تفاصيل الفواتير المستحقة:
+{invoice_details_list}
+
+💳 يرجى التكرم بتسوية الرصيد المستحق في أقرب وقت ممكن.
+إذا كنت قد سددت هذا المبلغ مؤخراً، يرجى تجاهل هذه الرسالة.
+
+🙏 شكراً لتفهمك.";
     }
 
     protected function getTrans($key, $replace = [])
