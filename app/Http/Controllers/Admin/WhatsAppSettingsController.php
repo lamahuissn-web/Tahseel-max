@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Admin\Invoice;
 use App\Models\Clients;
+use App\Services\WhatsAppMessageBuilder;
 use App\Services\WhatsAppService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -194,7 +195,7 @@ class WhatsAppSettingsController extends Controller
         }
 
         $template = DB::table('app_config')->where('key', 'whatsapp_message_template')->value('value')
-            ?? $this->defaultTemplate();
+            ?? WhatsAppMessageBuilder::defaultTemplate();
 
         $today = Carbon::today();
         $targetDates = [];
@@ -252,8 +253,8 @@ class WhatsAppSettingsController extends Controller
 
             $suspicious = $this->isSuspiciousPhone($client->phone);
             $totalAmount = $clientInvoices->sum('remaining_amount');
-            $invoiceDetailsList = $this->buildInvoiceDetailsList($clientInvoices);
-            $message = $this->buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
+            $invoiceDetailsList = WhatsAppMessageBuilder::buildInvoiceDetailsList($clientInvoices);
+            $message = WhatsAppMessageBuilder::buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
             $phone = preg_replace('/[^0-9]/', '', $client->phone);
 
             $subscriptionLines = [];
@@ -318,7 +319,7 @@ class WhatsAppSettingsController extends Controller
         }
 
         $template = DB::table('app_config')->where('key', 'whatsapp_message_template')->value('value')
-            ?? $this->defaultTemplate();
+            ?? WhatsAppMessageBuilder::defaultTemplate();
 
         $today = Carbon::today();
         $targetDates = [];
@@ -399,8 +400,8 @@ class WhatsAppSettingsController extends Controller
             }
 
             $totalAmount = $clientInvoices->sum('remaining_amount');
-            $invoiceDetailsList = $this->buildInvoiceDetailsList($clientInvoices);
-            $message = $this->buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
+            $invoiceDetailsList = WhatsAppMessageBuilder::buildInvoiceDetailsList($clientInvoices);
+            $message = WhatsAppMessageBuilder::buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
             $phone = preg_replace('/[^0-9]/', '', $client->phone);
             $invoiceIds = $clientInvoices->pluck('id')->toArray();
 
@@ -440,53 +441,6 @@ class WhatsAppSettingsController extends Controller
         ]);
     }
 
-    protected function buildInvoiceDetailsList($clientInvoices)
-    {
-        $subscriptionLines = [];
-        $serviceLines = [];
-        
-        foreach ($clientInvoices as $invoice) {
-            $amount = number_format($invoice->remaining_amount, 2);
-            $dateFormatted = Carbon::parse($invoice->due_date)->format('Y-m');
-            
-            if ($invoice->invoice_type === 'service') {
-                $label = !empty($invoice->notes) 
-                    ? preg_replace('/\s+/', ' ', trim($invoice->notes)) 
-                    : 'خدمة';
-                $serviceLines[] = "🔧 فاتورة {$label} {$dateFormatted} (رقم {$invoice->invoice_number}) بمبلغ {$amount}$";
-            } else {
-                if (!empty($invoice->notes)) {
-                    $noteLabel = preg_replace('/\s+/', ' ', trim($invoice->notes));
-                    $subscriptionLines[] = "📅 فاتورة {$noteLabel} {$dateFormatted} (رقم {$invoice->invoice_number}) بمبلغ {$amount}$";
-                } else {
-                    $subscriptionLines[] = "📅 فاتورة {$dateFormatted} (رقم {$invoice->invoice_number}) بمبلغ {$amount}$";
-                }
-            }
-        }
-        
-        $sections = [];
-        if (!empty($subscriptionLines)) {
-            $sections[] = "🌐 فواتير الاشتراك:\n" . implode("\n", $subscriptionLines);
-        }
-        if (!empty($serviceLines)) {
-            $sections[] = "🔧 فواتير الخدمات:\n" . implode("\n", $serviceLines);
-        }
-        
-        return implode("\n\n", $sections);
-    }
-
-    protected function buildMessage($template, $clientName, $totalAmount, $invoiceDetailsList)
-    {
-        $message = str_replace('{name}', $clientName, $template);
-        $message = str_replace('{total_amount}', number_format($totalAmount, 2), $message);
-        $message = str_replace('{invoice_details_list}', $invoiceDetailsList, $message);
-        return $message;
-    }
-
-    protected function defaultTemplate()
-    {
-        return "👋 مرحباً {name}،\n\n📋 نود تذكيرك بوجود مبالغ مستحقة غير مدفوعة لحسابك بإجمالي {total_amount}$.\n\n📄 تفاصيل الفواتير المستحقة:\n{invoice_details_list}\n\n💳 يرجى التكرم بتسوية الرصيد المستحق في أقرب وقت ممكن.\nإذا كنت قد سددت هذا المبلغ مؤخراً، يرجى تجاهل هذه الرسالة.\n\n🙏 شكراً لتفهمك.";
-    }
 
     public function monthlyPreview(Request $request)
     {
@@ -508,7 +462,7 @@ class WhatsAppSettingsController extends Controller
         }
 
         $template = DB::table('app_config')->where('key', 'whatsapp_message_template')->value('value')
-            ?? $this->defaultTemplate();
+            ?? WhatsAppMessageBuilder::defaultTemplate();
 
         $startDate = Carbon::createFromDate($year, $month, 1)->startOfMonth()->format('Y-m-d');
         $endDate = Carbon::createFromDate($year, $month, 1)->endOfMonth()->format('Y-m-d');
@@ -543,8 +497,8 @@ class WhatsAppSettingsController extends Controller
 
             $suspicious = $this->isSuspiciousPhone($client->phone);
             $totalAmount = $clientInvoices->sum('remaining_amount');
-            $invoiceDetailsList = $this->buildInvoiceDetailsList($clientInvoices);
-            $message = $this->buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
+            $invoiceDetailsList = WhatsAppMessageBuilder::buildInvoiceDetailsList($clientInvoices);
+            $message = WhatsAppMessageBuilder::buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
             $phone = preg_replace('/[^0-9]/', '', $client->phone);
 
             $subscriptionLines = [];
@@ -637,7 +591,7 @@ class WhatsAppSettingsController extends Controller
         }
 
         $template = DB::table('app_config')->where('key', 'whatsapp_message_template')->value('value')
-            ?? $this->defaultTemplate();
+            ?? WhatsAppMessageBuilder::defaultTemplate();
 
         $targetDate = Carbon::createFromDate($year, $month, $day)->format('Y-m-d');
 
@@ -679,8 +633,8 @@ class WhatsAppSettingsController extends Controller
 
             $suspicious = $this->isSuspiciousPhone($client->phone);
             $totalAmount = $clientInvoices->sum('remaining_amount');
-            $invoiceDetailsList = $this->buildInvoiceDetailsList($clientInvoices);
-            $message = $this->buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
+            $invoiceDetailsList = WhatsAppMessageBuilder::buildInvoiceDetailsList($clientInvoices);
+            $message = WhatsAppMessageBuilder::buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
             $phone = preg_replace('/[^0-9]/', '', $client->phone);
 
             $subscriptionLines = [];
@@ -759,7 +713,7 @@ class WhatsAppSettingsController extends Controller
         }
 
         $template = DB::table('app_config')->where('key', 'whatsapp_message_template')->value('value')
-            ?? $this->defaultTemplate();
+            ?? WhatsAppMessageBuilder::defaultTemplate();
 
         $targetDate = Carbon::createFromDate($year, $month, $day)->format('Y-m-d');
 
@@ -797,8 +751,8 @@ class WhatsAppSettingsController extends Controller
             }
 
             $totalAmount = $clientInvoices->sum('remaining_amount');
-            $invoiceDetailsList = $this->buildInvoiceDetailsList($clientInvoices);
-            $message = $this->buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
+            $invoiceDetailsList = WhatsAppMessageBuilder::buildInvoiceDetailsList($clientInvoices);
+            $message = WhatsAppMessageBuilder::buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
             $phone = preg_replace('/[^0-9]/', '', $client->phone);
             $invoiceIds = $clientInvoices->pluck('id')->toArray();
 
@@ -867,7 +821,7 @@ class WhatsAppSettingsController extends Controller
         }
 
         $template = DB::table('app_config')->where('key', 'whatsapp_message_template')->value('value')
-            ?? $this->defaultTemplate();
+            ?? WhatsAppMessageBuilder::defaultTemplate();
 
         $query = Invoice::with(['client'])
             ->whereIn('client_id', $selectedIds)
@@ -911,8 +865,8 @@ class WhatsAppSettingsController extends Controller
             }
 
             $totalAmount = $clientInvoices->sum('remaining_amount');
-            $invoiceDetailsList = $this->buildInvoiceDetailsList($clientInvoices);
-            $message = $this->buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
+            $invoiceDetailsList = WhatsAppMessageBuilder::buildInvoiceDetailsList($clientInvoices);
+            $message = WhatsAppMessageBuilder::buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
             $phone = preg_replace('/[^0-9]/', '', $client->phone);
             $invoiceIds = $clientInvoices->pluck('id')->toArray();
 
@@ -987,11 +941,11 @@ class WhatsAppSettingsController extends Controller
         }
 
         $template = DB::table('app_config')->where('key', 'whatsapp_message_template')->value('value')
-            ?? $this->defaultTemplate();
+            ?? WhatsAppMessageBuilder::defaultTemplate();
 
         $totalAmount = $unpaidInvoices->sum('remaining_amount');
-        $invoiceDetailsList = $this->buildInvoiceDetailsList($unpaidInvoices);
-        $message = $this->buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
+        $invoiceDetailsList = WhatsAppMessageBuilder::buildInvoiceDetailsList($unpaidInvoices);
+        $message = WhatsAppMessageBuilder::buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
         $phone = preg_replace('/[^0-9]/', '', $client->phone);
         $invoiceIds = $unpaidInvoices->pluck('id')->toArray();
 

@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Admin\Invoice;
+use App\Services\WhatsAppMessageBuilder;
 use App\Services\WhatsAppService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
@@ -50,7 +51,7 @@ class WhatsAppRemindersCommand extends Command
         }
 
         $template = DB::table('app_config')->where('key', 'whatsapp_message_template')->value('value')
-            ?? $this->defaultTemplate();
+            ?? WhatsAppMessageBuilder::defaultTemplate();
 
         $clientType = DB::table('app_config')->where('key', 'whatsapp_auto_client_type')->value('value') ?? 'all';
         $minAmount = (float) (DB::table('app_config')->where('key', 'whatsapp_auto_min_amount')->value('value') ?? 0);
@@ -123,8 +124,8 @@ class WhatsAppRemindersCommand extends Command
                 continue;
             }
 
-            $invoiceDetailsList = $this->buildInvoiceDetailsList($clientInvoices);
-            $message = $this->buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
+            $invoiceDetailsList = WhatsAppMessageBuilder::buildInvoiceDetailsList($clientInvoices);
+            $message = WhatsAppMessageBuilder::buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
             $phone = preg_replace('/[^0-9]/', '', $client->phone);
 
             $invoiceSummary = $clientInvoices->map(function ($inv) {
@@ -204,26 +205,6 @@ class WhatsAppRemindersCommand extends Command
         return Command::SUCCESS;
     }
 
-    protected function buildInvoiceDetailsList($clientInvoices)
-    {
-        $lines = [];
-        foreach ($clientInvoices as $invoice) {
-            $monthNum = (int) Carbon::parse($invoice->due_date)->format('n');
-            $monthName = $this->arabicMonths[$monthNum] ?? Carbon::parse($invoice->due_date)->format('M');
-            $amount = number_format($invoice->remaining_amount, 2);
-            $lines[] = "فاتورة شهر {$monthName} (رقم {$invoice->invoice_number}) بمبلغ {$amount}$";
-        }
-        return implode("\n", $lines);
-    }
-
-    protected function buildMessage($template, $clientName, $totalAmount, $invoiceDetailsList)
-    {
-        $message = str_replace('{name}', $clientName, $template);
-        $message = str_replace('{total_amount}', number_format($totalAmount, 2), $message);
-        $message = str_replace('{invoice_details_list}', $invoiceDetailsList, $message);
-        return $message;
-    }
-
     protected function displayPreview($previewData)
     {
         $isArabic = app()->getLocale() === 'ar';
@@ -260,21 +241,6 @@ class WhatsAppRemindersCommand extends Command
         } else {
             $this->info("Clients to notify: {$clientCount} | Total outstanding: $" . number_format($grandTotal, 2));
         }
-    }
-
-    protected function defaultTemplate()
-    {
-        return "👋 مرحباً {name}،
-
-📋 نود تذكيرك بوجود مبالغ مستحقة غير مدفوعة لحسابك بإجمالي {total_amount}$.
-
-📄 تفاصيل الفواتير المستحقة:
-{invoice_details_list}
-
-💳 يرجى التكرم بتسوية الرصيد المستحق في أقرب وقت ممكن.
-إذا كنت قد سددت هذا المبلغ مؤخراً، يرجى تجاهل هذه الرسالة.
-
-🙏 شكراً لتفهمك.";
     }
 
     protected function getTrans($key, $replace = [])
