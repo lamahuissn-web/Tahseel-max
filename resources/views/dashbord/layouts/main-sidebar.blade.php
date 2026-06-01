@@ -213,6 +213,17 @@ use Illuminate\Support\Facades\Route; ?>
                     </a>
                 </div>
 
+                {{-- NAS (Routers) Management --}}
+                <div class="menu-item">
+                    <a class="menu-link sidebar-menu-link {{ request()->routeIs("admin.nas.*") ? "active" : "" }}"
+                        href="{{ route("admin.nas.index") }}">
+                        <span class="sidebar-menu-icon">
+                            <i class="bi bi-router text-primary fs-4"></i>
+                        </span>
+                        <span class="menu-title">أجهزة NAS (الرواتر)</span>
+                    </a>
+                </div>
+
                 {{-- User & Employees Management Section --}}
                 @canany(['list_roles', 'list_users', 'view_employees'])
                 <hr class="sidebar-section-divider">

@@ -221,6 +221,13 @@ Route::group(
             Route::post('setting/app_config/save', [ConfigAppController::class, 'store'])->name('save_app_config');
 
             Route::get('settings/whatsapp', [WhatsAppSettingsController::class, 'index'])->name('settings.whatsapp');
+            /***** NAS (MikroTik Routers) *****/
+            Route::get("nas", [\App\Http\Controllers\Admin\NasController::class, "index"])->name("nas.index");
+            Route::get("nas/create", [\App\Http\Controllers\Admin\NasController::class, "create"])->name("nas.create");
+            Route::post("nas", [\App\Http\Controllers\Admin\NasController::class, "store"])->name("nas.store");
+            Route::get("nas/{id}/edit", [\App\Http\Controllers\Admin\NasController::class, "edit"])->name("nas.edit");
+            Route::put("nas/{id}", [\App\Http\Controllers\Admin\NasController::class, "update"])->name("nas.update");
+            Route::delete("nas/{id}", [\App\Http\Controllers\Admin\NasController::class, "destroy"])->name("nas.destroy");
             Route::post('settings/whatsapp', [WhatsAppSettingsController::class, 'update'])->name('settings.whatsapp.update');
             Route::post('settings/whatsapp/preview', [WhatsAppSettingsController::class, 'preview'])->name('settings.whatsapp.preview');
             Route::post('settings/whatsapp/test', [WhatsAppSettingsController::class, 'testSend'])->name('settings.whatsapp.test');
