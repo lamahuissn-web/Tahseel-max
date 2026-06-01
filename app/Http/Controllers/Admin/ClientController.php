@@ -1076,6 +1076,16 @@ class ClientController extends Controller
                 $client->save();
             }
         }
+
+        // ---- RADIUS sync (always, regardless of SAS4) ----
+        if ($client->sas_username) {
+            try {
+                $radius = app(RadiusService::class);
+                $radius->syncClient($client);
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::error("Radius sync failed for client {$client->id}: " . $e->getMessage());
+            }
+        }
     }
 
 }
