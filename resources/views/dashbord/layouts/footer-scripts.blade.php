@@ -77,9 +77,10 @@
     }
 </script>
 
+@yield('js')
 <script>
     $(document).ready(function() {
-        if ($('#table_10').length) {
+        if ($('#table_10').length && !$.fn.dataTable.isDataTable('#table_10')) {
             $('#table_10').DataTable({
                 processing: true,
                 serverSide: false,
@@ -110,7 +111,6 @@
     });
 </script>
 
-@yield('js')
 
 <script>
     if ('serviceWorker' in navigator) {
