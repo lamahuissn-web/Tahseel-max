@@ -29,7 +29,7 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        if (!Auth::guard('admin')->user()->hasRole('Super-Admin')) {
+        if (!Auth::guard('admin')->user()->hasRole("super_admin")) {
             return redirect()->route('admin.mobile_view');
         }
 

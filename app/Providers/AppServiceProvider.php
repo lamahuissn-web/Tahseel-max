@@ -35,7 +35,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Paginator::useBootstrapFour();
-        URL::forceScheme("https");
+        // URL::forceScheme("https"); // Disabled for HTTP local access
         // Lang::handleMissingKeysUsing(function ($key) {
         //     if (strpos($key, 'flasher') !== false) {
         //         return $key;

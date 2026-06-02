@@ -119,13 +119,6 @@ Route::group(
             Route::get('/clients/details/{id}', [ClientController::class, 'getClientDetails'])->name('clients.details');
             Route::get('/clients/{id}/remaining-invoices', [ClientController::class, 'remainingInvoices'])->name('clients.remaining_invoices');
             Route::get('/clients/{id}/quick-panel', [ClientController::class, 'quickPanel'])->name('clients.quick_panel');
-            Route::get('/clients/{id}/sas4-info', [ClientController::class, 'getSas4Info'])->name('clients.sas4_info');
-            Route::get('/clients/{id}/sas4-traffic', [ClientController::class, 'getSas4Traffic'])->name('clients.sas4_traffic');
-            Route::get('/clients/{id}/sas4-daily-traffic', [ClientController::class, 'getSas4DailyTraffic'])->name('clients.sas4_daily_traffic');
-            Route::post('/clients/{id}/sas4-control', [ClientController::class, 'sas4Control'])->name('clients.sas4_control');
-            Route::post('/sas4/online-status', [ClientController::class, 'getSas4OnlineStatus'])->name('sas4.online_status');
-            Route::get('/sas4/search-users', [ClientController::class, 'searchSas4Users'])->name('sas4.search_users');
-            Route::get('/sas4/profiles', [ClientController::class, 'getSas4Profiles'])->name('sas4.profiles');
 
             Route::resource('roles', RolesController::class);
             Route::get('role/delete/{id}', [RolesController::class, 'destroy'])->name('delete_role');
@@ -228,6 +221,12 @@ Route::group(
             Route::get("nas/{id}/edit", [\App\Http\Controllers\Admin\NasController::class, "edit"])->name("nas.edit");
             Route::put("nas/{id}", [\App\Http\Controllers\Admin\NasController::class, "update"])->name("nas.update");
             Route::delete("nas/{id}", [\App\Http\Controllers\Admin\NasController::class, "destroy"])->name("nas.destroy");
+/***** Sessions (Live Monitoring) *****/
+            Route::get("sessions", [\App\Http\Controllers\Admin\SessionsController::class, "index"])->name("sessions.index");
+            Route::get("sessions/refresh", [\App\Http\Controllers\Admin\SessionsController::class, "refresh"])->name("sessions.refresh");
+            Route::get("sessions/disconnect/{username}", [\App\Http\Controllers\Admin\SessionsController::class, "disconnect"])->name("sessions.disconnect");
+            Route::get("sessions/change-speed/{username}", [\App\Http\Controllers\Admin\SessionsController::class, "changeSpeedForm"])->name("sessions.change-speed");
+            Route::post("sessions/change-speed/{username}", [\App\Http\Controllers\Admin\SessionsController::class, "changeSpeed"])->name("sessions.change-speed.post");
             Route::post('settings/whatsapp', [WhatsAppSettingsController::class, 'update'])->name('settings.whatsapp.update');
             Route::post('settings/whatsapp/preview', [WhatsAppSettingsController::class, 'preview'])->name('settings.whatsapp.preview');
             Route::post('settings/whatsapp/test', [WhatsAppSettingsController::class, 'testSend'])->name('settings.whatsapp.test');
@@ -242,6 +241,7 @@ Route::group(
             Route::post('settings/whatsapp/send-daily', [WhatsAppSettingsController::class, 'sendDaily'])->name('settings.whatsapp.send_daily');
             Route::post('settings/whatsapp/send-selected', [WhatsAppSettingsController::class, 'sendSelected'])->name('settings.whatsapp.send_selected');
             Route::post('/clients/{id}/whatsapp-reminder', [WhatsAppSettingsController::class, 'sendClientReminder'])->name('clients.whatsapp_reminder');
+            Route::post('/clients/{id}/disconnect', [ClientController::class, 'disconnect'])->name('clients.disconnect');
 
             Route::get('/logs', [LogController::class, 'index'])->name('logs.index');
             Route::get('/logs/{id}', [LogController::class, 'show'])->name('logs.show');

@@ -224,6 +224,7 @@ use Illuminate\Support\Facades\Route; ?>
                     </a>
                 </div>
 
+{{-- ISP Live Sessions --}}                <div class="menu-item">                    <a class="menu-link sidebar-menu-link {{ request()->routeIs("admin.sessions.*") ? "active" : "" }}"                        href="{{ route("admin.sessions.index") }}">                        <span class="sidebar-menu-icon">                            <i class="bi bi-activity text-info fs-4"></i>                        </span>                        <span class="menu-title">المتصلون الآن</span>                    </a>                </div>
                 {{-- User & Employees Management Section --}}
                 @canany(['list_roles', 'list_users', 'view_employees'])
                 <hr class="sidebar-section-divider">

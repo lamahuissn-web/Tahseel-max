@@ -107,7 +107,12 @@ class RadiusService
                 ]);
             }
 
-            $this->disconnectUser($username);
+            // Try CoA disconnect first, fall back to DB-only
+            $coaResult = $this->coaDisconnect($username);
+            if (!$coaResult["success"]) {
+                $this->disconnectUser($username);
+            }
+
             Log::info("RadiusService: Disabled {$username}");
             return true;
         } catch (\Exception $e) {
@@ -248,7 +253,7 @@ class RadiusService
     }
 
     /**
-     * Disconnect a user
+     * Disconnect a user (DB only fallback, no CoA)
      */
     public function disconnectUser(string $username): bool
     {
@@ -303,6 +308,134 @@ class RadiusService
         }
 
         return true;
+    }
+
+    // ─────────────────────────────────────────────
+    //  CoA (Change of Authorization) Methods
+    // ─────────────────────────────────────────────
+
+    /**
+     * Send CoA Disconnect-Request to NAS to forcibly drop a user session.
+     */
+    public function coaDisconnect(string $username): array
+    {
+        try {
+            $activeSession = DB::table("radacct")
+                ->where("username", $username)
+                ->whereNull("acctstoptime")
+                ->first();
+
+            if (!$activeSession) {
+                return ["success" => true, "message" => "المستخدم غير متصل"];
+            }
+
+            $nasIp = $activeSession->nasipaddress;
+            $nas = DB::table("nas")->where("nasname", $nasIp)->first();
+
+            if (!$nas) {
+                Log::warning("CoA: No NAS config for {$nasIp}");
+                return ["success" => false, "message" => "ما في إعدادات NAS للـ {$nasIp}"];
+            }
+
+            $secret = $nas->secret;
+            $port = 3799;
+
+            $cmd = sprintf(
+                'echo "User-Name = %s" | radclient %s:%d disconnect %s 2>&1',
+                escapeshellarg($username),
+                escapeshellarg($nasIp),
+                $port,
+                escapeshellarg($secret)
+            );
+
+            $output = shell_exec($cmd);
+
+            if (str_contains($output, "Disconnect-ACK")) {
+                DB::table("radacct")
+                    ->where("radacctid", $activeSession->radacctid)
+                    ->update([
+                        "acctstoptime" => now(),
+                        "acctterminatecause" => "Admin-Reset",
+                    ]);
+
+                Log::info("CoA: Disconnected {$username} from {$nasIp}");
+                return ["success" => true, "message" => "تم قطع المستخدم بنجاح"];
+            }
+
+            if (str_contains($output, "Disconnect-NAK")) {
+                return ["success" => false, "message" => "الـ NAS رفض طلب القطع"];
+            }
+
+            Log::warning("CoA: Unexpected response: " . trim($output ?? ""));
+            return ["success" => false, "message" => "فشل الاتصال بالـ NAS"];
+        } catch (\Exception $e) {
+            Log::error("CoA: Error disconnecting {$username}: " . $e->getMessage());
+            return ["success" => false, "message" => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Send CoA-Request to change bandwidth limit for an active user.
+     * Also updates radreply for future sessions.
+     */
+    public function coaChangeSpeed(string $username, string $speed): array
+    {
+        try {
+            $activeSession = DB::table("radacct")
+                ->where("username", $username)
+                ->whereNull("acctstoptime")
+                ->first();
+
+            if (!$activeSession) {
+                return ["success" => false, "message" => "المستخدم غير متصل حالياً"];
+            }
+
+            $nasIp = $activeSession->nasipaddress;
+            $nas = DB::table("nas")->where("nasname", $nasIp)->first();
+
+            if (!$nas) {
+                return ["success" => false, "message" => "ما في إعدادات NAS للـ {$nasIp}"];
+            }
+
+            $secret = $nas->secret;
+            $port = 3799;
+
+            $cmd = sprintf(
+                'echo "User-Name = %s
+Mikrotik-Rate-Limit = %s" | radclient %s:%d coa %s 2>&1',
+                escapeshellarg($username),
+                escapeshellarg($speed),
+                escapeshellarg($nasIp),
+                $port,
+                escapeshellarg($secret)
+            );
+
+            $output = shell_exec($cmd);
+
+            if (str_contains($output, "CoA-ACK")) {
+                // Update radreply for future sessions too
+                DB::table("radreply")
+                    ->where("username", $username)
+                    ->where("attribute", "Mikrotik-Rate-Limit")
+                    ->delete();
+
+                DB::table("radreply")->insert([
+                    "username" => $username,
+                    "attribute" => "Mikrotik-Rate-Limit",
+                    "op" => ":=",
+                    "value" => $speed,
+                ]);
+
+                Log::info("CoA: Changed speed for {$username} to {$speed}");
+                return ["success" => true, "message" => "تم تغيير السرعة إلى {$speed}"];
+            }
+
+            Log::warning("CoA: Speed change failed: " . trim($output ?? ""));
+            return ["success" => false, "message" => "فشل تغيير السرعة عبر CoA"];
+        } catch (\Exception $e) {
+            Log::error("CoA: Error changing speed for {$username}: " . $e->getMessage());
+            return ["success" => false, "message" => $e->getMessage()];
+        }
     }
 
     /**
