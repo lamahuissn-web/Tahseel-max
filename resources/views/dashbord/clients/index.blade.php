@@ -308,8 +308,186 @@
 <!-- SAS 4 Quick Panel Modal -->
 
 
+ 
 @stop
+
 @section('js')
 
 <script>
-    @endsection
+    var datatable;
+    var globalDataTableConfig = {
+        scrollX: true,
+        select: false,
+        dom: "<'row mb-2'" +
+            "<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l>" +
+            "<'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>" +
+            ">" +
+            "<'table-responsive'tr>" +
+            "<'row'" +
+            "<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i>" +
+            "<'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>" +
+            ">",
+        processing: true,
+        serverSide: true,
+        ajax: {
+            url: window.location.href,
+            type: 'GET',
+            data: function(d) {
+                d.name_search = $('#nameSearch').val();
+                d.other_fields_search = $('#otherFieldsSearch').val();
+                d.client_type_filter = $('#clientTypeFilter').val();
+                d.show_inactive_only = $('#showInactiveOnly').is(':checked') ? '1' : '0';
+            }
+        },
+        columns: [
+            { data: 'id', name: 'id' },
+            { data: 'name', name: 'name' },
+            { data: 'phone', name: 'phone' },
+            { data: 'user', name: 'user' },
+            { data: 'box_switch', name: 'box_switch' },
+            { data: 'client_type', name: 'client_type' },
+            { data: 'address1', name: 'address1' },
+            { data: 'subscription', name: 'subscription' },
+            { data: 'price', name: 'price' },
+            { data: 'notes', name: 'notes' },
+            { data: 'start_date', name: 'start_date' },
+            { data: 'remaining_amount', name: 'remaining_amount', orderable: true, searchable: false },
+            { data: 'status', name: 'status', orderable: false, searchable: false },
+            { data: 'radius_username', name: 'radius_username', orderable: false, searchable: false },
+            { data: 'action', name: 'action', orderable: false, searchable: false }
+        ],
+        order: [[0, 'desc']],
+        language: {
+            url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/ar.json'
+        }
+    };
+
+    $(document).ready(function() {
+        if ('{{ app()->getLocale() }}' != 'ar') {
+            delete globalDataTableConfig.language;
+        }
+
+        datatable = $('#table1').DataTable(globalDataTableConfig);
+
+        $('#nameSearch').on('keyup', function() {
+            datatable.ajax.reload();
+        });
+        $('#otherFieldsSearch').on('keyup', function() {
+            datatable.ajax.reload();
+        });
+        $('#clientTypeFilter').on('change', function() {
+            datatable.ajax.reload();
+        });
+        $('#showInactiveOnly').on('change', function() {
+            datatable.ajax.reload();
+        });
+
+        datatable.on('draw', function() {
+            var info = datatable.page.info();
+            $('#clientsCount').text(info.recordsDisplay || info.recordsTotal);
+        });
+    });
+
+    function showClientDetails(clientId) {
+        $('#clientDetailsModal').modal('show');
+        $('#clientDetailsContent').html($('#modalLoader').html());
+        $('#editClientBtn').hide();
+        $.ajax({
+            url: '{{ route("admin.clients.show", ["id" => "__ID__"]) }}'.replace('__ID__', clientId),
+            type: 'GET',
+            dataType: 'json',
+            success: function(res) {
+                if (res.html) {
+                    $('#clientDetailsContent').html(res.html);
+                } else {
+                    $('#clientDetailsContent').html('<div class="alert alert-info">' + res.message + '</div>');
+                }
+                $('#editClientBtn').attr('href', '{{ route("admin.clients.edit", ["id" => "__ID__"]) }}'.replace('__ID__', clientId)).show();
+            },
+            error: function() {
+                $('#clientDetailsContent').html('<div class="alert alert-danger text-center">Error loading details</div>');
+            }
+        });
+    }
+
+    function changeClientStatus(clientId, currentStatus) {
+        Swal.fire({
+            title: '{{ trans("clients.change_status") }}',
+            text: '{{ trans("clients.change_status_msg") }}',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33',
+            confirmButtonText: '{{ trans("clients.yes_change_status") }}',
+            cancelButtonText: '{{ trans("clients.cancel") }}',
+            showLoaderOnConfirm: true,
+            preConfirm: function() {
+                return $.ajax({
+                    url: '{{ route("admin.clients.change_status", ["id" => "__ID__"]) }}'.replace('__ID__', clientId),
+                    type: 'POST',
+                    data: { _token: '{{ csrf_token() }}' },
+                    dataType: 'json'
+                }).then(function(response) {
+                    if (!response.success) {
+                        throw new Error(response.message || 'Error updating status');
+                    }
+                    return response;
+                }).catch(function(error) {
+                    Swal.showValidationMessage(error.message || 'Error updating status');
+                });
+            },
+            allowOutsideClick: function() { return !Swal.isLoading(); }
+        }).then(function(result) {
+            if (result.isConfirmed && result.value) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Status updated',
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+                datatable.ajax.reload();
+            }
+        });
+    }
+
+    $(document).on('submit', '#ajaxPayInvoiceForm', function(e) {
+        e.preventDefault();
+        var form = $(this);
+        var submitBtn = $('#ajaxPaySubmitBtn');
+        submitBtn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+        $.ajax({
+            url: form.attr('action'),
+            method: 'POST',
+            data: form.serialize(),
+            dataType: 'json',
+            success: function(res) {
+                if (res.success) {
+                    $('#ajaxPayInvoiceModal').modal('hide');
+                    Swal.fire({ icon: 'success', title: res.message || 'Payment successful', timer: 1500, showConfirmButton: false });
+                    datatable.ajax.reload();
+                } else {
+                    $('#ajaxPayError').removeClass('d-none').text(res.message || 'Payment failed');
+                }
+            },
+            error: function(xhr) {
+                var msg = 'Payment failed';
+                try { var res = JSON.parse(xhr.responseText); if (res.message) msg = res.message; } catch(e) {}
+                $('#ajaxPayError').removeClass('d-none').text(msg);
+            },
+            complete: function() { submitBtn.prop('disabled', false).html('Pay'); }
+        });
+    });
+
+    $('#ajaxPayInvoiceModal').on('hidden.bs.modal', function() {
+        $('#ajaxPayInvoiceForm')[0].reset();
+        $('#ajaxPayError').addClass('d-none');
+    });
+</script>
+
+<script>
+    $(document).ready(function() {
+        $('.dataTables_filter input').css('text-align', 'right');
+    });
+</script>
+
+@stop
