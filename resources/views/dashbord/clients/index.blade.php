@@ -358,7 +358,7 @@
         ],
         order: [[0, 'desc']],
         language: {
-            url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/ar.json'
+            url: '{{ asset("assets/Arabic.json") }}'
         }
     };
 
