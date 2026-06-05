@@ -69,7 +69,7 @@ class AutoDisconnectOverdue extends Command
                 }
 
                 // 2. Disable RADIUS login
-                DB::table("radcheck")->updateOrInsert(
+                DB::connection("radius")->table("radcheck")->updateOrInsert(
                     ["username" => $username, "attribute" => "Auth-Type"],
                     ["op" => ":=", "value" => "Reject"]
                 );

@@ -10,7 +10,7 @@ class NasController extends Controller
 {
     public function index()
     {
-        $nasDevices = DB::table("nas")->orderBy("nasname")->get();
+        $nasDevices = DB::connection("radius")->table("nas")->orderBy("nasname")->get();
         return view("dashbord.nas.index", compact("nasDevices"));
     }
 
@@ -30,7 +30,7 @@ class NasController extends Controller
             "ports" => "nullable|integer",
         ]);
 
-        DB::table("nas")->insert([
+        DB::connection("radius")->table("nas")->insert([
             "nasname" => $request->nasname,
             "shortname" => $request->shortname ?: $request->nasname,
             "type" => $request->type ?: "other",
@@ -47,7 +47,7 @@ class NasController extends Controller
 
     public function edit($id)
     {
-        $nas = DB::table("nas")->where("id", $id)->firstOrFail();
+        $nas = DB::connection("radius")->table("nas")->where("id", $id)->firstOrFail();
         return view("dashbord.nas.form", compact("nas"));
     }
 
@@ -62,7 +62,7 @@ class NasController extends Controller
             "ports" => "nullable|integer",
         ]);
 
-        DB::table("nas")->where("id", $id)->update([
+        DB::connection("radius")->table("nas")->where("id", $id)->update([
             "nasname" => $request->nasname,
             "shortname" => $request->shortname ?: $request->nasname,
             "type" => $request->type ?: "other",
@@ -76,7 +76,7 @@ class NasController extends Controller
 
     public function destroy($id)
     {
-        DB::table("nas")->where("id", $id)->delete();
+        DB::connection("radius")->table("nas")->where("id", $id)->delete();
         return redirect()->route("admin.nas.index")->with("success", "تم حذف جهاز NAS بنجاح");
     }
 }

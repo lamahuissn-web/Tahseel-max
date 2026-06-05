@@ -39,13 +39,13 @@ class RadiusService
             }
 
             foreach ($checkEntries as $entry) {
-                DB::table("radcheck")->insert($entry);
+                DB::connection("radius")->table("radcheck")->insert($entry);
             }
 
             // radreply: speed limits
             $speed = $this->getSpeedForClient($client);
             if ($speed) {
-                DB::table("radreply")->insert([
+                DB::connection("radius")->table("radreply")->insert([
                     "username" => $username,
                     "attribute" => "Mikrotik-Rate-Limit",
                     "op" => ":=",
@@ -70,7 +70,7 @@ class RadiusService
             $username = $client->sas_username;
             if (!$username) return false;
 
-            DB::table("radcheck")
+            DB::connection("radius")->table("radcheck")
                 ->where("username", $username)
                 ->where("attribute", "Auth-Type")
                 ->delete();
@@ -92,14 +92,14 @@ class RadiusService
             $username = $client->sas_username;
             if (!$username) return false;
 
-            $exists = DB::table("radcheck")
+            $exists = DB::connection("radius")->table("radcheck")
                 ->where("username", $username)
                 ->where("attribute", "Auth-Type")
                 ->where("value", "Reject")
                 ->exists();
 
             if (!$exists) {
-                DB::table("radcheck")->insert([
+                DB::connection("radius")->table("radcheck")->insert([
                     "username" => $username,
                     "attribute" => "Auth-Type",
                     "op" => ":=",
@@ -126,9 +126,9 @@ class RadiusService
      */
     public function deleteRadiusUser(string $username): void
     {
-        DB::table("radcheck")->where("username", $username)->delete();
-        DB::table("radreply")->where("username", $username)->delete();
-        DB::table("radusergroup")->where("username", $username)->delete();
+        DB::connection("radius")->table("radcheck")->where("username", $username)->delete();
+        DB::connection("radius")->table("radreply")->where("username", $username)->delete();
+        DB::connection("radius")->table("radusergroup")->where("username", $username)->delete();
     }
 
     /**
@@ -136,7 +136,7 @@ class RadiusService
      */
     public function getActiveSessions(): array
     {
-        return DB::table("radacct")
+        return DB::connection("radius")->table("radacct")
             ->whereNull("acctstoptime")
             ->orderBy("acctstarttime", "desc")
             ->get()
@@ -148,7 +148,7 @@ class RadiusService
      */
     public function isOnline(string $username): bool
     {
-        return DB::table("radacct")
+        return DB::connection("radius")->table("radacct")
             ->where("username", $username)
             ->whereNull("acctstoptime")
             ->exists();
@@ -162,7 +162,7 @@ class RadiusService
         $month = $month ?? (int)date("m");
         $year = $year ?? (int)date("Y");
 
-        $sessions = DB::table("radacct")
+        $sessions = DB::connection("radius")->table("radacct")
             ->where("username", $username)
             ->whereYear("acctstarttime", $year)
             ->whereMonth("acctstarttime", $month)
@@ -193,7 +193,7 @@ class RadiusService
 
         for ($d = 1; $d <= $daysInMonth; $d++) {
             $date = sprintf("%d-%02d-%02d", $year, $month, $d);
-            $sessions = DB::table("radacct")
+            $sessions = DB::connection("radius")->table("radacct")
                 ->where("username", $username)
                 ->whereDate("acctstarttime", $date)
                 ->get();
@@ -234,7 +234,7 @@ class RadiusService
     {
         $online = $this->isOnline($username);
 
-        $lastSession = DB::table("radacct")
+        $lastSession = DB::connection("radius")->table("radacct")
             ->where("username", $username)
             ->orderBy("acctstarttime", "desc")
             ->first();
@@ -258,7 +258,7 @@ class RadiusService
     public function disconnectUser(string $username): bool
     {
         try {
-            $activeSessions = DB::table("radacct")
+            $activeSessions = DB::connection("radius")->table("radacct")
                 ->where("username", $username)
                 ->whereNull("acctstoptime")
                 ->get();
@@ -268,7 +268,7 @@ class RadiusService
             }
 
             foreach ($activeSessions as $session) {
-                DB::table("radacct")
+                DB::connection("radius")->table("radacct")
                     ->where("radacctid", $session->radacctid)
                     ->update([
                         "acctstoptime" => now(),
@@ -292,14 +292,14 @@ class RadiusService
         $username = $client->sas_username;
         if (!$username) return false;
 
-        DB::table("radreply")
+        DB::connection("radius")->table("radreply")
             ->where("username", $username)
             ->where("attribute", "Mikrotik-Rate-Limit")
             ->delete();
 
         $speed = $this->getSpeedForClient($client);
         if ($speed) {
-            DB::table("radreply")->insert([
+            DB::connection("radius")->table("radreply")->insert([
                 "username" => $username,
                 "attribute" => "Mikrotik-Rate-Limit",
                 "op" => ":=",
@@ -320,7 +320,7 @@ class RadiusService
     public function coaDisconnect(string $username): array
     {
         try {
-            $activeSession = DB::table("radacct")
+            $activeSession = DB::connection("radius")->table("radacct")
                 ->where("username", $username)
                 ->whereNull("acctstoptime")
                 ->first();
@@ -330,7 +330,7 @@ class RadiusService
             }
 
             $nasIp = $activeSession->nasipaddress;
-            $nas = DB::table("nas")->where("nasname", $nasIp)->first();
+            $nas = DB::connection("radius")->table("nas")->where("nasname", $nasIp)->first();
 
             if (!$nas) {
                 Log::warning("CoA: No NAS config for {$nasIp}");
@@ -351,7 +351,7 @@ class RadiusService
             $output = shell_exec($cmd);
 
             if (str_contains($output, "Disconnect-ACK")) {
-                DB::table("radacct")
+                DB::connection("radius")->table("radacct")
                     ->where("radacctid", $activeSession->radacctid)
                     ->update([
                         "acctstoptime" => now(),
@@ -381,7 +381,7 @@ class RadiusService
     public function coaChangeSpeed(string $username, string $speed): array
     {
         try {
-            $activeSession = DB::table("radacct")
+            $activeSession = DB::connection("radius")->table("radacct")
                 ->where("username", $username)
                 ->whereNull("acctstoptime")
                 ->first();
@@ -391,7 +391,7 @@ class RadiusService
             }
 
             $nasIp = $activeSession->nasipaddress;
-            $nas = DB::table("nas")->where("nasname", $nasIp)->first();
+            $nas = DB::connection("radius")->table("nas")->where("nasname", $nasIp)->first();
 
             if (!$nas) {
                 return ["success" => false, "message" => "ما في إعدادات NAS للـ {$nasIp}"];
@@ -414,12 +414,12 @@ Mikrotik-Rate-Limit = %s" | radclient %s:%d coa %s 2>&1',
 
             if (str_contains($output, "CoA-ACK")) {
                 // Update radreply for future sessions too
-                DB::table("radreply")
+                DB::connection("radius")->table("radreply")
                     ->where("username", $username)
                     ->where("attribute", "Mikrotik-Rate-Limit")
                     ->delete();
 
-                DB::table("radreply")->insert([
+                DB::connection("radius")->table("radreply")->insert([
                     "username" => $username,
                     "attribute" => "Mikrotik-Rate-Limit",
                     "op" => ":=",

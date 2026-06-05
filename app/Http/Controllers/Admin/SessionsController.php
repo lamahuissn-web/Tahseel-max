@@ -21,7 +21,7 @@ class SessionsController extends Controller
      */
     public function index()
     {
-        $sessions = DB::table("radacct")
+        $sessions = DB::connection("radius")->table("radacct")
             ->whereNull("acctstoptime")
             ->orderBy("acctstarttime", "desc")
             ->get();
@@ -34,7 +34,7 @@ class SessionsController extends Controller
             $totalUp += (int)$s->acctoutputoctets;
         }
 
-        $nasList = DB::table("nas")->orderBy("nasname")->get()->keyBy("nasname");
+        $nasList = DB::connection("radius")->table("nas")->orderBy("nasname")->get()->keyBy("nasname");
 
         return view("dashbord.sessions.index", compact(
             "sessions", "totalOnline", "totalDown", "totalUp", "nasList"
@@ -62,7 +62,7 @@ class SessionsController extends Controller
      */
     public function changeSpeedForm($username)
     {
-        $session = DB::table("radacct")
+        $session = DB::connection("radius")->table("radacct")
             ->where("username", $username)
             ->whereNull("acctstoptime")
             ->first();
@@ -100,13 +100,13 @@ class SessionsController extends Controller
      */
     public function refresh()
     {
-        $sessions = DB::table("radacct")
+        $sessions = DB::connection("radius")->table("radacct")
             ->whereNull("acctstoptime")
             ->orderBy("acctstarttime", "desc")
             ->get();
 
         $totalOnline = $sessions->count();
-        $nasList = DB::table("nas")->get()->keyBy("nasname");
+        $nasList = DB::connection("radius")->table("nas")->get()->keyBy("nasname");
 
         $html = view("dashbord.sessions.partials.table", compact("sessions", "nasList"))->render();
 
@@ -121,7 +121,7 @@ class SessionsController extends Controller
      */
     public function apiSessions()
     {
-        $sessions = DB::table("radacct")
+        $sessions = DB::connection("radius")->table("radacct")
             ->whereNull("acctstoptime")
             ->orderBy("acctstarttime", "desc")
             ->get()
