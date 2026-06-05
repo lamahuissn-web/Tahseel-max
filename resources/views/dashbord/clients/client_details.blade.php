@@ -72,3 +72,7 @@
 @section('content')
     @include('dashbord.clients._client_content')
 @endsection
+
+@section('js')
+    @include('dashbord.clients._radius_actions_js')
+@endsection

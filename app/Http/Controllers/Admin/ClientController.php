@@ -992,4 +992,91 @@ class ClientController extends Controller
         }
     }
 
+    public function toggleRadius(Request $request, string $id)
+    {
+        if (!$request->ajax()) {
+            abort(404);
+        }
+        $client = $this->ClientsRepository->getById($id);
+        if (!$client->sas_username) {
+            return response()->json(["success" => false, "message" => trans("clients.no_radius_username")]);
+        }
+        try {
+            $radius = app(\App\Services\Radius\RadiusService::class);
+            $isDisabled = \Illuminate\Support\Facades\DB::connection("radius")
+                ->table("radcheck")
+                ->where("username", $client->sas_username)
+                ->where("attribute", "Auth-Type")
+                ->where("value", "Reject")
+                ->exists();
+            if ($isDisabled) {
+                $radius->enableClient($client);
+                return response()->json(["success" => true, "message" => trans("clients.radius_enabled"), "status" => "enabled"]);
+            } else {
+                $radius->disableClient($client);
+                return response()->json(["success" => true, "message" => trans("clients.radius_disabled"), "status" => "disabled"]);
+            }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Toggle radius failed: ".$e->getMessage());
+            return response()->json(["success" => false, "message" => $e->getMessage()]);
+        }
+    }
+
+    public function changeRadiusSpeed(Request $request, string $id)
+    {
+        if (!$request->ajax()) {
+            abort(404);
+        }
+        $client = $this->ClientsRepository->getById($id);
+        if (!$client->sas_username) {
+            return response()->json(["success" => false, "message" => trans("clients.no_radius_username")]);
+        }
+        $speed = $request->input("speed");
+        if (!$speed) {
+            return response()->json(["success" => false, "message" => trans("clients.speed_required")]);
+        }
+        try {
+            \Illuminate\Support\Facades\DB::connection("radius")
+                ->table("radreply")
+                ->where("username", $client->sas_username)
+                ->where("attribute", "Mikrotik-Rate-Limit")
+                ->delete();
+            \Illuminate\Support\Facades\DB::connection("radius")
+                ->table("radreply")
+                ->insert([
+                    "username" => $client->sas_username,
+                    "attribute" => "Mikrotik-Rate-Limit",
+                    "op" => ":=",
+                    "value" => $speed,
+                ]);
+            return response()->json(["success" => true, "message" => trans("clients.speed_updated", ["speed" => $speed])]);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Change speed failed: ".$e->getMessage());
+            return response()->json(["success" => false, "message" => $e->getMessage()]);
+        }
+    }
+
+    public function scheduleRadiusStop(Request $request, string $id)
+    {
+        if (!$request->ajax()) {
+            abort(404);
+        }
+        $client = $this->ClientsRepository->getById($id);
+        if (!$client->sas_username) {
+            return response()->json(["success" => false, "message" => trans("clients.no_radius_username")]);
+        }
+        $stopDate = $request->input("stop_date");
+        if (!$stopDate) {
+            return response()->json(["success" => false, "message" => trans("clients.stop_date_required")]);
+        }
+        try {
+            $client->radius_stop_at = $stopDate;
+            $client->save();
+            return response()->json(["success" => true, "message" => trans("clients.stop_scheduled", ["date" => $stopDate])]);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Schedule stop failed: ".$e->getMessage());
+            return response()->json(["success" => false, "message" => $e->getMessage()]);
+        }
+    }
+
 }

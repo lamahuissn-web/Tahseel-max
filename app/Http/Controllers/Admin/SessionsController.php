@@ -16,12 +16,11 @@ class SessionsController extends Controller
         $this->radius = $radius;
     }
 
-    /**
-     * Show live active sessions.
-     */
     public function index()
     {
-        $sessions = DB::connection("radius")->table("radacct")
+        $radiusDb = DB::connection("radius");
+
+        $sessions = $radiusDb->table("radacct")
             ->whereNull("acctstoptime")
             ->orderBy("acctstarttime", "desc")
             ->get();
@@ -34,16 +33,22 @@ class SessionsController extends Controller
             $totalUp += (int)$s->acctoutputoctets;
         }
 
-        $nasList = DB::connection("radius")->table("nas")->orderBy("nasname")->get()->keyBy("nasname");
+        $disconnectedSessions = $radiusDb->table("radacct")
+            ->whereNotNull("acctstoptime")
+            ->where("acctstoptime", ">=", now()->subDays(7))
+            ->orderBy("acctstoptime", "desc")
+            ->get();
+
+        $totalDisconnected = $disconnectedSessions->count();
+
+        $nasList = $radiusDb->table("nas")->orderBy("nasname")->get()->keyBy("nasname");
 
         return view("dashbord.sessions.index", compact(
-            "sessions", "totalOnline", "totalDown", "totalUp", "nasList"
+            "sessions", "disconnectedSessions", "totalOnline", "totalDisconnected",
+            "totalDown", "totalUp", "nasList"
         ));
     }
 
-    /**
-     * Disconnect a user via CoA.
-     */
     public function disconnect($username)
     {
         $result = $this->radius->coaDisconnect($username);
@@ -57,9 +62,6 @@ class SessionsController extends Controller
             ->with("error", $result["message"]);
     }
 
-    /**
-     * Show change speed form.
-     */
     public function changeSpeedForm($username)
     {
         $session = DB::connection("radius")->table("radacct")
@@ -69,15 +71,12 @@ class SessionsController extends Controller
 
         if (!$session) {
             return redirect()->route("admin.sessions.index")
-                ->with("error", "المستخدم غير متصل");
+                ->with("error", "\u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645 \u063a\u064a\u0631 \u0645\u062a\u0635\u0644");
         }
 
         return view("dashbord.sessions.change-speed", compact("username", "session"));
     }
 
-    /**
-     * Change user speed via CoA.
-     */
     public function changeSpeed(Request $request, $username)
     {
         $request->validate([
@@ -95,30 +94,55 @@ class SessionsController extends Controller
             ->with("error", $result["message"]);
     }
 
-    /**
-     * Refresh sessions (AJAX).
-     */
-    public function refresh()
+    public function refresh(Request $request)
     {
-        $sessions = DB::connection("radius")->table("radacct")
-            ->whereNull("acctstoptime")
-            ->orderBy("acctstarttime", "desc")
+        $tab = $request->get("tab", "active");
+        $radiusDb = DB::connection("radius");
+
+        if ($tab === "active") {
+            $sessions = $radiusDb->table("radacct")
+                ->whereNull("acctstoptime")
+                ->orderBy("acctstarttime", "desc")
+                ->get();
+
+            $totalOnline = $sessions->count();
+            $totalDown = 0;
+            $totalUp = 0;
+            foreach ($sessions as $s) {
+                $totalDown += (int)$s->acctinputoctets;
+                $totalUp += (int)$s->acctoutputoctets;
+            }
+
+            $nasList = $radiusDb->table("nas")->get()->keyBy("nasname");
+
+            $html = view("dashbord.sessions.partials.table", compact("sessions", "nasList"))->render();
+
+            return response()->json([
+                "html" => $html,
+                "total" => $totalOnline,
+                "totalDown" => $totalDown,
+                "totalUp" => $totalUp,
+                "tab" => "active",
+            ]);
+        }
+
+        $disconnectedSessions = $radiusDb->table("radacct")
+            ->whereNotNull("acctstoptime")
+            ->where("acctstoptime", ">=", now()->subDays(7))
+            ->orderBy("acctstoptime", "desc")
             ->get();
 
-        $totalOnline = $sessions->count();
-        $nasList = DB::connection("radius")->table("nas")->get()->keyBy("nasname");
+        $nasList = $radiusDb->table("nas")->get()->keyBy("nasname");
 
-        $html = view("dashbord.sessions.partials.table", compact("sessions", "nasList"))->render();
+        $html = view("dashbord.sessions.partials.disconnected-table", compact("disconnectedSessions", "nasList"))->render();
 
         return response()->json([
             "html" => $html,
-            "total" => $totalOnline,
+            "total" => $disconnectedSessions->count(),
+            "tab" => "disconnected",
         ]);
     }
 
-    /**
-     * API: Get active sessions JSON.
-     */
     public function apiSessions()
     {
         $sessions = DB::connection("radius")->table("radacct")

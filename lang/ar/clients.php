@@ -99,7 +99,7 @@
   'total_paid' => 'اجمالى المبالغ المدفوعة',
   'total_unpaid' => 'اجمالى المبالغ الغير مدفوعة',
   'failed_to_create_invoice' => 'فشل فى انشاء الفاتورة',
-  'phone_invalid_format' => 'برجاء إدخال رقم هاتف صحيح مع كود الدولة (مثال: +20123456789)',
+  'phone_invalid_format' => 'برجاء إدخال رقم هاتف صحيح مع كود الدولة (مثال: +201****6789)',
   'invoices' => 'الفواتير',
   'change_status_msg' => 'هل تريد تغيير حالة الزبون؟',
   'due_date' => 'تاريخ الاستحقاق',
@@ -381,5 +381,32 @@
         'confirm_disconnect_msg' => 'رح ينفصل عن النت',
         'speed_changed' => 'تم تغيير السرعة بنجاح',
         'select_speed' => 'اختر السرعة',
+
+     
+        'radius_enabled' => '✅ تم تفعيل حساب PPPoE',
+        'radius_disabled' => '⛔ تم إيقاف حساب PPPoE',
+        'speed_required' => 'الرجاء إدخال السرعة',
+        'speed_updated' => 'تم تغيير السرعة إلى :speed',
+        'stop_date_required' => 'الرجاء اختيار تاريخ الإيقاف',
+        'stop_scheduled' => '✅ تم جدولة الإيقاف في تاريخ :date',
+        'toggle_radius' => 'تشغيل / إيقاف',
+        'change_speed' => 'تغيير السرعة',
+        'schedule_stop' => 'جدولة إيقاف',
+        'confirm_toggle_msg' => 'هل تريد تغيير حالة حساب PPPoE؟',
+        'enter_speed_msg' => 'أدخل السرعة مثال: 10M/10M',
+        'select_stop_date_msg' => 'اختر تاريخ إيقاف الخدمة',
+
+
+        // RADIUS Actions JS
+        'confirm_disconnect_text' => 'رح ينفصل عن النت',
+        'disconnect_failed' => 'فشل قطع الاتصال',
+        'toggle_failed' => 'فشل تغيير الحالة',
+        'speed_change_failed' => 'فشل تغيير السرعة',
+        'schedule_failed' => 'فشل جدولة الإيقاف',
+        'apply_speed' => 'تطبيق السرعة',
+        'new_speed' => 'السرعة الجديدة',
+        'speed_placeholder' => 'مثال: 20M/20M',
+        'schedule' => 'جدولة',
+        'confirm_toggle_text' => 'هل تريد تغيير حالة حساب PPPoE؟',
 
      );

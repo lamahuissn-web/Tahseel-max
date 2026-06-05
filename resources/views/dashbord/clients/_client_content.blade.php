@@ -180,7 +180,29 @@
                                     </div>
                                 </div>
                             </div>
+
+                    {{-- RADIUS Action Buttons --}}
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <div class="d-flex gap-2 flex-wrap">
+                                @if($isOnline)
+                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="radiusDisconnect({{ $client->id }})">
+                                    <i class="bi bi-plug"></i> {{ trans("clients.disconnect_user") }}
+                                </button>
+                                @endif
+                                <button type="button" class="btn btn-sm btn-outline-warning" onclick="radiusToggle({{ $client->id }})">
+                                    <i class="bi bi-toggle-off"></i> {{ trans("clients.toggle_radius") }}
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-info" onclick="radiusChangeSpeed({{ $client->id }})">
+                                    <i class="bi bi-speedometer2"></i> {{ trans("clients.change_speed") }}
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="radiusScheduleStop({{ $client->id }})">
+                                    <i class="bi bi-calendar-stop"></i> {{ trans("clients.schedule_stop") }}
+                                </button>
+                            </div>
                         </div>
+                    </div>
+
                     @else
                         <div class="text-center py-4 text-muted">
                             <i class="bi bi-wifi-off fs-1 d-block mb-2"></i>

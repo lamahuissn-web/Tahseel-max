@@ -242,6 +242,9 @@ Route::group(
             Route::post('settings/whatsapp/send-selected', [WhatsAppSettingsController::class, 'sendSelected'])->name('settings.whatsapp.send_selected');
             Route::post('/clients/{id}/whatsapp-reminder', [WhatsAppSettingsController::class, 'sendClientReminder'])->name('clients.whatsapp_reminder');
             Route::post('/clients/{id}/disconnect', [ClientController::class, 'disconnect'])->name('clients.disconnect');
+            Route::post('/clients/{id}/toggle-radius', [ClientController::class, 'toggleRadius'])->name('clients.toggle_radius');
+            Route::post('/clients/{id}/change-radius-speed', [ClientController::class, 'changeRadiusSpeed'])->name('clients.change_radius_speed');
+            Route::post('/clients/{id}/schedule-radius-stop', [ClientController::class, 'scheduleRadiusStop'])->name('clients.schedule_radius_stop');
 
             Route::get('/logs', [LogController::class, 'index'])->name('logs.index');
             Route::get('/logs/{id}', [LogController::class, 'show'])->name('logs.show');

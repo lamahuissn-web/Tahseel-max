@@ -309,6 +309,7 @@
 
 
  
+@include("dashbord.clients._radius_actions_js")
 @stop
 
 @section('js')
@@ -490,4 +491,5 @@
     });
 </script>
 
+@include("dashbord.clients._radius_actions_js")
 @stop
