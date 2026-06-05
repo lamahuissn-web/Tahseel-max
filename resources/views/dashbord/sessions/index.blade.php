@@ -164,11 +164,11 @@
     <div class="card shadow-sm">
         <div class="card-header bg-white py-3">
             <div class="session-tabs d-flex">
-                <button class="session-tab active" data-tab="active" onclick="switchTab("active")">
+                <button class="session-tab active" data-tab="active" onclick="switchTab('active')">
                     <i class="bi bi-wifi me-1"></i> متصلون الآن
                     <span class="badge bg-success ms-1" id="tabOnlineBadge">{{ $totalOnline }}</span>
                 </button>
-                <button class="session-tab" data-tab="disconnected" onclick="switchTab("disconnected")">
+                <button class="session-tab" data-tab="disconnected" onclick="switchTab('disconnected')">
                     <i class="bi bi-clock-history me-1"></i> جلسات منتهية
                     <span class="badge bg-secondary ms-1" id="tabDisconnectedBadge">{{ $totalDisconnected }}</span>
                 </button>
@@ -232,7 +232,7 @@ function refreshActiveSessions() {
     btn.disabled = true;
     btn.innerHTML = "<span class=\"spinner-border spinner-border-sm me-1\"></span>";
 
-    fetch("{{ route("admin.sessions.refresh") }}?tab=active")
+    fetch("{{ route('admin.sessions.refresh') }}?tab=active")
         .then(r => r.json())
         .then(data => {
             document.getElementById("sessionsTableContainer").innerHTML = data.html;
@@ -247,7 +247,7 @@ function refreshActiveSessions() {
 }
 
 function refreshDisconnectedSessions() {
-    fetch("{{ route("admin.sessions.refresh") }}?tab=disconnected")
+    fetch("{{ route('admin.sessions.refresh') }}?tab=disconnected")
         .then(r => r.json())
         .then(data => {
             document.getElementById("disconnectedSessionsTableContainer").innerHTML = data.html;

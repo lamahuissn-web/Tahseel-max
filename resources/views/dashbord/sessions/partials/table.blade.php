@@ -40,7 +40,7 @@
                 </td>
                 <td>
                     @php
-                        $uptime = $session->acctstarttime ? \Carbon\Carbon::parse($session->acctstarttime)->diffForHumans(null, true) : "-";
+                        $uptime = $session->acctstarttime ? \Carbon\Carbon::parse($session->acctstarttime)->diffForHumans(null, true) : '-';
                     @endphp
                     <span class="badge bg-success-subtle text-success-emphasis px-2 py-1">
                         <i class="bi bi-clock me-1"></i>{{ $uptime }}
@@ -54,16 +54,16 @@
                 </td>
                 <td>
                     <div class="btn-group btn-group-sm" role="group">
-                        <a href="{{ route("admin.sessions.change-speed", $session->username) }}"
+                        <a href="{{ route('admin.sessions.change-speed', $session->username) }}"
                            class="btn btn-outline-warning"
                            title="تغيير السرعة"
-                           onclick="return confirm("تغيير سرعة {{ $session->username }}؟")">
+                           onclick="return confirm('تغيير سرعة {{ $session->username }}؟')">
                             <i class="bi bi-speedometer2"></i>
                         </a>
-                        <a href="{{ route("admin.sessions.disconnect", $session->username) }}"
+                        <a href="{{ route('admin.sessions.disconnect', $session->username) }}"
                            class="btn btn-outline-danger"
                            title="قطع الاتصال"
-                           onclick="return confirm("متأكد من قطع {{ $session->username }}؟")">
+                           onclick="return confirm('متأكد من قطع {{ $session->username }}؟')">
                             <i class="bi bi-plug-fill"></i>
                         </a>
                     </div>
