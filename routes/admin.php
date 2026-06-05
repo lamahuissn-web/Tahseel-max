@@ -115,7 +115,7 @@ Route::group(
             Route::get('/client_paid_invoices/{id}', [ClientController::class, 'client_paid_invoices'])->name('client_paid_invoices');
             Route::get('/client_invoices/{id}', [ClientController::class, 'client_invoices'])->name('client_invoices');
             Route::post('/client_add_invoice/{id}', [ClientController::class, 'client_add_invoice'])->name('client_add_invoice');
-            Route::get('clients/change_status/{id}/{status}', [ClientController::class, 'change_status'])->name('clients.change_status');
+            Route::match(['get', 'post'], 'clients/change_status/{id}/{status}', [ClientController::class, 'change_status'])->name('clients.change_status');
             Route::get('/clients/details/{id}', [ClientController::class, 'getClientDetails'])->name('clients.details');
             Route::get('/clients/{id}/remaining-invoices', [ClientController::class, 'remainingInvoices'])->name('clients.remaining_invoices');
             Route::get('/clients/{id}/quick-panel', [ClientController::class, 'quickPanel'])->name('clients.quick_panel');

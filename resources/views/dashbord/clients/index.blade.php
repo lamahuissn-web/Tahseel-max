@@ -393,7 +393,7 @@
         $('#clientDetailsContent').html($('#modalLoader').html());
         $('#editClientBtn').hide();
         $.ajax({
-            url: '{{ route("admin.clients.show", ["client" => "__ID__"]) }}'.replace('__ID__', clientId).replace('__STATUS__', currentStatus),
+            url: '{{ route("admin.clients.details", ["id" => "__ID__"]) }}'.replace('__ID__', clientId),
             type: 'GET',
             dataType: 'json',
             success: function(res) {
@@ -423,7 +423,7 @@
             showLoaderOnConfirm: true,
             preConfirm: function() {
                 return $.ajax({
-                    url: '{{ route("admin.clients.change_status", ["id" => "__ID__", "status" => "__STATUS__"]) }}'.replace('__ID__', clientId).replace('__STATUS__', currentStatus),
+                    url: '{{ route("admin.clients.change_status", ["id" => "__ID__", "status" => "__STATUS__"]) }}'.replace('__ID__', clientId),
                     type: 'POST',
                     data: { _token: '{{ csrf_token() }}' },
                     dataType: 'json'

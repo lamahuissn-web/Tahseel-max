@@ -403,6 +403,7 @@ class ClientController extends Controller
     public function client_paid_invoices($id)
     {
         $data['all_data'] = $this->ClientsRepository->getById($id);
+        $data['client'] = $data['all_data'];
         $data['unpaid_data'] = Invoice::with(['client', 'employee', 'subscription'])
             ->where('client_id', $id)
             ->where('status', 'unpaid')
@@ -413,6 +414,8 @@ class ClientController extends Controller
             ->get();
         $data['total_unpaid'] = $data['unpaid_data']->sum('amount');
         $data['total_paid'] = $data['paid_data']->sum('paid_amount');
+        $data['unpaidInvoices'] = $data['unpaid_data'];
+        $data['totalUnpaid'] = $data['total_unpaid'];
         // dd($data);
         return view($this->admin_view . '.invoices.invoices', $data);
     }
@@ -420,6 +423,7 @@ class ClientController extends Controller
     public function client_invoices($id)
     {
         $data['all_data'] = $this->ClientsRepository->getById($id);
+        $data['client'] = $data['all_data'];
         $data['unpaid_data'] = Invoice::where('client_id', $id)
             ->where('status', 'unpaid')
             ->get();
@@ -433,6 +437,8 @@ class ClientController extends Controller
 
         $data['total_unpaid'] = $data['unpaid_data']->sum('amount');
         $data['total_paid'] = $data['paid_data']->sum('paid_amount');
+        $data['unpaidInvoices'] = $data['unpaid_data'];
+        $data['totalUnpaid'] = $data['total_unpaid'];
         // dd($data);
         return view($this->admin_view . '.add_invoice.add_invoice', $data);
     }
@@ -911,7 +917,8 @@ class ClientController extends Controller
 
         $totalUnpaid = $unpaidInvoices->sum('remaining_amount') ?? 0;
 
-        return view($this->admin_view . '.details_modal', compact('client', 'radiusInfo', 'unpaidInvoices', 'totalUnpaid'))->render();
+        $html = view($this->admin_view . '.details_modal', compact('client', 'radiusInfo', 'unpaidInvoices', 'totalUnpaid'))->render();
+        return response()->json(['html' => $html]);
     }
 
     public function remainingInvoices($id)

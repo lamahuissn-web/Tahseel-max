@@ -84,7 +84,7 @@
   'amount' => 'المبلغ',
   'remaining_amount' => 'المبلغ المتبقى',
   'enshaa_date' => 'تاريخ الانشاء',
-  'invoice_created_successfully' => 'invoice_created_successfully',
+  'invoice_created_successfully' => 'تم إنشاء الفاتورة بنجاح',
   'invoice_type' => 'نوع الفاتورة',
   'service' => 'خدمة',
   'subscription_t' => 'اشتراك',
