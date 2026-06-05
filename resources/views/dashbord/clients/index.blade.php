@@ -185,7 +185,7 @@
         'clients.start_date',
         'clients.remaining_amount',
         'clients.status',
-        'clients.sas4_column',
+        'clients.radius_status',
         'clients.action',
         ];
 
@@ -606,16 +606,10 @@
                     responsivePriority: 3
                 },
                 {
-                    data: 'sas4_status',
-                    className: 'text-center all sas4-status-trigger',
+                    data: 'radius_username',
+                    className: 'text-center',
                     orderable: false,
                     responsivePriority: 1,
-                    render: function(data, type, row) {
-                        if (type === 'display' && row.sas_username) {
-                            return '<span class="cursor-pointer sas4-status-cell" onclick="showSas4QuickPanel(' + row.id + ')" title="View SAS 4 Details">' + data + '</span>';
-                        }
-                        return data;
-                    }
                 },
                 {
                     data: 'action',
@@ -773,7 +767,7 @@
         if (!usernames.length) return;
 
         $.ajax({
-            url: '{{ route('admin.sas4.online_status') }}',
+            url: '#',
             type: 'POST',
             data: { usernames: usernames },
             dataType: 'json',
@@ -897,7 +891,7 @@
         container.html('<div class="skeleton-loader py-2"><div class="skeleton skeleton-text mb-2" style="width: 100%;"></div><div class="skeleton skeleton-text mb-2" style="width: 90%;"></div><div class="skeleton skeleton-text mb-2" style="width: 85%;"></div><div class="skeleton skeleton-text mb-2" style="width: 95%;"></div><div class="skeleton skeleton-text" style="width: 80%;"></div></div>');
 
         $.ajax({
-            url: '{{ route('admin.clients.sas4_daily_traffic', ['id' => '__ID__']) }}'.replace('__ID__', clientId) + '?month=' + month + '&year=' + year,
+            url: '#',
             type: 'GET',
             dataType: 'json',
             success: function(res) {
@@ -967,7 +961,7 @@
 
     function loadSas4Info(clientId) {
         $.ajax({
-            url: '{{ route('admin.clients.sas4_info', ['id' => '__ID__']) }}'.replace('__ID__', clientId),
+            url: '#',
             type: 'GET',
             dataType: 'json',
             success: function(res) {
@@ -1096,7 +1090,7 @@
 
     function loadSas4Profiles(clientId) {
         $.ajax({
-            url: '{{ route('admin.sas4.profiles') }}',
+            url: '#',
             type: 'GET',
             dataType: 'json',
             success: function(res) {
@@ -1133,7 +1127,7 @@
         content.fadeOut(100);
 
         $.ajax({
-            url: '{{ route('admin.clients.sas4_traffic', ['id' => '__ID__']) }}'.replace('__ID__', clientId),
+            url: '#',
             type: 'GET',
             dataType: 'json',
             success: function(res) {
@@ -1252,7 +1246,7 @@
         $('#sas4QuickPanelContent').html($('#sas4QuickPanelLoader'));
 
         $.ajax({
-            url: '{{ route('admin.clients.sas4_traffic', ['id' => '__ID__']) }}'.replace('__ID__', clientId),
+            url: '#',
             type: 'GET',
             dataType: 'json',
             success: function(res) {
@@ -1433,7 +1427,7 @@
 
     function loadSas4ProfilesForQuickPanel(clientId) {
         $.ajax({
-            url: '{{ route('admin.sas4.profiles') }}',
+            url: '#',
             type: 'GET',
             dataType: 'json',
             success: function(res) {
@@ -1472,7 +1466,7 @@
         var year = $('#sas4QuickYear').val();
         container.html('<div class="skeleton-loader py-2"><div class="skeleton skeleton-text mb-2" style="width: 100%;"></div><div class="skeleton skeleton-text mb-2" style="width: 90%;"></div><div class="skeleton skeleton-text mb-2" style="width: 85%;"></div><div class="skeleton skeleton-text mb-2" style="width: 95%;"></div><div class="skeleton skeleton-text" style="width: 80%;"></div></div>');
         $.ajax({
-            url: '{{ route('admin.clients.sas4_daily_traffic', ['id' => '__ID__']) }}'.replace('__ID__', clientId) + '?month=' + month + '&year=' + year,
+            url: '#',
             type: 'GET',
             dataType: 'json',
             success: function(res) {
@@ -1581,7 +1575,7 @@
                     }
                 }
 
-                return fetch('{{ route('admin.clients.sas4_control', ['id' => '__ID__']) }}'.replace('__ID__', clientId), {
+                return fetch('#', {
                     method: 'POST',
                     headers: {
                         'X-Requested-With': 'XMLHttpRequest',
