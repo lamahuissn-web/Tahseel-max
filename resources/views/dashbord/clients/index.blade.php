@@ -393,7 +393,7 @@
         $('#clientDetailsContent').html($('#modalLoader').html());
         $('#editClientBtn').hide();
         $.ajax({
-            url: '{{ route("admin.clients.show", ["id" => "__ID__"]) }}'.replace('__ID__', clientId),
+            url: '{{ route("admin.clients.show", ["client" => "__ID__"]) }}'.replace('__ID__', clientId).replace('__STATUS__', currentStatus),
             type: 'GET',
             dataType: 'json',
             success: function(res) {
@@ -402,7 +402,7 @@
                 } else {
                     $('#clientDetailsContent').html('<div class="alert alert-info">' + res.message + '</div>');
                 }
-                $('#editClientBtn').attr('href', '{{ route("admin.clients.edit", ["id" => "__ID__"]) }}'.replace('__ID__', clientId)).show();
+                $('#editClientBtn').attr('href', '{{ route("admin.clients.edit", ["client" => "__ID__"]) }}'.replace('__ID__', clientId)).show();
             },
             error: function() {
                 $('#clientDetailsContent').html('<div class="alert alert-danger text-center">Error loading details</div>');
@@ -423,7 +423,7 @@
             showLoaderOnConfirm: true,
             preConfirm: function() {
                 return $.ajax({
-                    url: '{{ route("admin.clients.change_status", ["id" => "__ID__"]) }}'.replace('__ID__', clientId),
+                    url: '{{ route("admin.clients.change_status", ["id" => "__ID__", "status" => "__STATUS__"]) }}'.replace('__ID__', clientId).replace('__STATUS__', currentStatus),
                     type: 'POST',
                     data: { _token: '{{ csrf_token() }}' },
                     dataType: 'json'
