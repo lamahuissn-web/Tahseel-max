@@ -1,34 +1,40 @@
-<table class="table table-hover align-middle mb-0" id="disconnectedSessionsTable">
-    <thead class="table-dark">
+<table class="table s-table" id="disconnectedSessionsTable">
+    <thead>
         <tr>
-            <th>#</th>
+            <th style="width:40px;">#</th>
             <th>اسم المستخدم</th>
             <th>IP</th>
             <th>الراوتر (NAS)</th>
             <th>المدة</th>
             <th>وقت الانتهاء</th>
-            <th>التحميل 📥</th>
-            <th>الرفع 📤</th>
-            <th>سبب القطع</th>
+            <th>التحميل</th>
+            <th>الرفع</th>
+            <th>السبب</th>
         </tr>
     </thead>
     <tbody>
         @forelse($disconnectedSessions as $session)
             <tr>
-                <td>{{ $loop->iteration }}</td>
+                <td><span class="text-muted fw-bold" style="font-size:0.8rem;">{{ $loop->iteration }}</span></td>
                 <td>
-                    <strong>{{ $session->username }}</strong>
-                    <br>
-                    <small class="text-muted">{{ $session->acctsessionid }}</small>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="s-dot offline"></span>
+                        <div>
+                            <span class="user-name">{{ $session->username }}</span>
+                            <span class="user-sid">{{ $session->acctsessionid }}</span>
+                        </div>
+                    </div>
                 </td>
-                <td><code>{{ $session->framedipaddress }}</code></td>
+                <td><span class="s-ip">{{ $session->framedipaddress }}</span></td>
                 <td>
                     @if(isset($nasList[$session->nasipaddress]))
-                        <span class="badge bg-info">{{ $nasList[$session->nasipaddress]->shortname }}</span>
-                        <br>
-                        <small class="text-muted">{{ $session->nasipaddress }}</small>
+                        <span class="badge-session nas">
+                            <i class="fas fa-network-wired"></i>
+                            {{ $nasList[$session->nasipaddress]->shortname }}
+                        </span>
+                        <span class="s-nas-ip">{{ $session->nasipaddress }}</span>
                     @else
-                        <span class="badge bg-secondary">{{ $session->nasipaddress }}</span>
+                        <span class="s-ip">{{ $session->nasipaddress }}</span>
                     @endif
                 </td>
                 <td>
@@ -36,58 +42,55 @@
                         @php
                             $duration = \Carbon\Carbon::parse($session->acctstarttime)->diffInMinutes($session->acctstoptime);
                         @endphp
-                        <span class="badge bg-secondary">
-                            <i class="bi bi-clock me-1"></i>{{ floor($duration / 60) }}h {{ $duration % 60 }}m
+                        <span class="badge-session duration">
+                            <i class="fas fa-clock"></i>{{ floor($duration / 60) }}h {{ $duration % 60 }}m
                         </span>
                     @elseif($session->acctsessiontime)
-                        <span class="badge bg-secondary">
-                            <i class="bi bi-clock me-1"></i>{{ floor($session->acctsessiontime / 3600) }}h {{ floor(($session->acctsessiontime % 3600) / 60) }}m
+                        <span class="badge-session duration">
+                            <i class="fas fa-clock"></i>{{ floor($session->acctsessiontime / 3600) }}h {{ floor(($session->acctsessiontime % 3600) / 60) }}m
                         </span>
                     @else
-                        <span class="text-muted">-</span>
+                        <span class="text-muted small">-</span>
                     @endif
                 </td>
                 <td>
                     @if($session->acctstoptime)
                         <span class="text-muted small">
-                            <i class="bi bi-calendar-check me-1"></i>
+                            <i class="fas fa-calendar-alt me-1"></i>
                             {{ \Carbon\Carbon::parse($session->acctstoptime)->format('Y-m-d H:i') }}
                         </span>
                         <br>
-                        <span class="badge bg-light text-muted">
+                        <span class="badge bg-light text-muted" style="font-size:0.7rem;">
                             {{ \Carbon\Carbon::parse($session->acctstoptime)->diffForHumans() }}
                         </span>
                     @else
-                        <span class="text-muted">-</span>
+                        <span class="text-muted small">-</span>
                     @endif
                 </td>
-                <td class="text-nowrap">
-                    <span class="text-success small">{{ formatBytes($session->acctinputoctets ?? 0) }}</span>
-                </td>
-                <td class="text-nowrap">
-                    <span class="text-warning small">{{ formatBytes($session->acctoutputoctets ?? 0) }}</span>
-                </td>
+                <td class="traffic-down"><span class="traffic-val">{{ formatBytes($session->acctinputoctets ?? 0) }}</span></td>
+                <td class="traffic-up"><span class="traffic-val">{{ formatBytes($session->acctoutputoctets ?? 0) }}</span></td>
                 <td>
                     @php
                         $cause = $session->acctterminatecause ?? 'Unknown';
-                        $causeBadge = match (true) {
-                            str_contains($cause, 'Admin') => 'bg-danger',
-                            str_contains($cause, 'User-Request') => 'bg-warning text-dark',
-                            str_contains($cause, 'Lost-Carrier') => 'bg-secondary',
-                            str_contains($cause, 'Idle-Timeout') => 'bg-info',
-                            default => 'bg-secondary',
+                        $badgeClass = match (true) {
+                            str_contains($cause, 'Admin') => 'cause-admin',
+                            str_contains($cause, 'User-Request') => 'cause-user',
+                            str_contains($cause, 'Lost-Carrier') => 'cause-carrier',
+                            str_contains($cause, 'Idle-Timeout') => 'cause-idle',
+                            default => 'cause-other',
                         };
                     @endphp
-                    <span class="badge {{ $causeBadge }}">
+                    <span class="badge-session {{ $badgeClass }}">
                         {{ $cause }}
                     </span>
                 </td>
             </tr>
         @empty
             <tr>
-                <td colspan="9" class="text-center py-4 text-muted">
-                    <i class="bi bi-emoji-neutral fs-3 d-block mb-2"></i>
-                    لا توجد جلسات منتهية في آخر 7 أيام
+                <td colspan="9" class="s-empty">
+                    <i class="fas fa-history"></i>
+                    <h6>لا توجد جلسات منتهية</h6>
+                    <p>خلال آخر 7 أيام</p>
                 </td>
             </tr>
         @endforelse
