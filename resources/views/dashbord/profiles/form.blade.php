@@ -1,8 +1,7 @@
-
 @extends('dashbord.layouts.master')
 @section('content')
 <form action="{{ isset($name) ? route('admin.profiles.update', $name) : route('admin.profiles.store') }}" method="POST">
-    {{ csrf_field() }}
+    @csrf
     @if(isset($name)) @method('PUT') @endif
 
     <div class="card shadow-sm">

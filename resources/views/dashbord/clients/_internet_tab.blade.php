@@ -40,17 +40,11 @@
         GROUP BY DATE(acctstarttime) ORDER BY day DESC LIMIT 3
     ", [$client->sas_username]);
 
-    // Get sessions for most recent day
-    $recentDaySessions = [];
-    if (!empty($dailyTraffic)) {
-        $latestDay = $dailyTraffic[0]->day;
-        $recentDaySessions = \DB::connection('radius')->select("
-            SELECT acctstarttime, acctstoptime, acctinputoctets, acctoutputoctets,
-                   acctsessiontime, acctterminatecause, framedipaddress
-            FROM radacct WHERE username = ? AND DATE(acctstarttime) = ?
-            ORDER BY acctstarttime DESC LIMIT 5
-        ", [$client->sas_username, $latestDay]);
-    }
+    // Get current speed
+    $currentSpeed = \DB::connection('radius')->table('radreply')
+        ->where('username', $client->sas_username)
+        ->where('attribute', 'Mikrotik-Rate-Limit')
+        ->value('value') ?? ($client->subscription->name ?? '—');
 @endphp
 
 {{-- Overview Card --}}
@@ -61,12 +55,11 @@
         </h6>
     </div>
     <div class="card-body">
-        {{-- Connection status --}}
         <div class="row align-items-center mb-3">
             <div class="col-md-6">
                 <span class="badge fs-6 px-3 py-2 {{ $isOnline ? 'bg-success' : 'bg-secondary' }}">
                     <span class="online-dot {{ $isOnline ? 'online' : 'offline' }}"></span>
-                    {{ $isOnline ? '🟢 متصل' : '🔴 غير متصل' }}
+                    {{ $isOnline ? ' متصل' : ' غير متصل' }}
                     @if($liveData) <small class="ms-2 opacity-75">(من CHR مباشرة)</small> @endif
                 </span>
             </div>
@@ -74,8 +67,6 @@
                 <span class="text-muted"><i class="bi bi-person"></i> {{ $client->sas_username }}</span>
             </div>
         </div>
-
-        {{-- Connection details grid --}}
         <div class="row g-3">
             <div class="col-6 col-md-3">
                 <small class="text-muted d-block"><i class="bi bi-globe"></i> IP</small>
@@ -136,8 +127,8 @@
         <div class="card shadow-sm border-0">
             <div class="card-body text-center">
                 <i class="bi bi-arrow-down-up fs-1 text-warning"></i>
-                <h5 class="mt-2 mb-0 fw-bold">📥 {{ formatBytesHelper($dlMonth) }}</h5>
-                <small class="text-muted">📤 {{ formatBytesHelper($ulMonth) }}</small>
+                <h5 class="mt-2 mb-0 fw-bold">{{ formatBytesHelper($dlMonth) }}</h5>
+                <small class="text-muted">{{ formatBytesHelper($ulMonth) }}</small>
             </div>
         </div>
     </div>
@@ -157,8 +148,8 @@
                 <thead class="table-light small">
                     <tr>
                         <th>Session</th>
-                        <th>📥 تحميل</th>
-                        <th>📤 رفع</th>
+                        <th> تحميل</th>
+                        <th> رفع</th>
                         <th>IP</th>
                         <th>المدة</th>
                         <th></th>
@@ -173,9 +164,7 @@
                         <td><code class="small">{{ $session->framedipaddress }}</code></td>
                         <td>@php $h = floor($session->acctsessiontime / 3600); $m = floor(($session->acctsessiontime % 3600) / 60); @endphp {{ $h }}h {{ $m }}m</td>
                         <td>
-                            <button class="btn btn-sm btn-outline-danger px-2 py-0" onclick="radiusDisconnect({{ $client->id }})" title="قطع">
-                                🔌
-                            </button>
+                            <button class="btn btn-sm btn-outline-danger px-2 py-0" onclick="radiusDisconnect({{ $client->id }})" title="قطع">🔌</button>
                         </td>
                     </tr>
                     @endforeach
@@ -206,7 +195,6 @@
                                 <span class="badge bg-success-soft text-success me-1">{{ formatBytesHelper($day->download) }}</span>
                                 <span class="badge bg-info-soft text-info me-1">{{ formatBytesHelper($day->upload) }}</span>
                                 <span class="badge bg-secondary">{{ $day->sessions }} جلسات</span>
-                                <span class="badge bg-primary">{{ gmdate('H\h', $day->total_seconds) }}</span>
                             </span>
                         </div>
                     </button>
@@ -223,14 +211,8 @@
                     <div class="accordion-body p-2 small">
                         @foreach($daySessions as $s)
                         <div class="d-flex justify-content-between align-items-center py-1 border-bottom border-light">
-                            <div>
-                                {{ date('H:i', strtotime($s->acctstarttime)) }}
-                                @if($s->acctstoptime) → {{ date('H:i', strtotime($s->acctstoptime)) }} @else <span class="text-success">(ONLINE)</span> @endif
-                            </div>
-                            <div>
-                                📥 {{ formatBytesHelper($s->acctoutputoctets) }}
-                                📤 {{ formatBytesHelper($s->acctinputoctets) }}
-                            </div>
+                            <div>{{ date('H:i', strtotime($s->acctstarttime)) }}@if($s->acctstoptime) → {{ date('H:i', strtotime($s->acctstoptime)) }} @else <span class="text-success">(ONLINE)</span> @endif</div>
+                            <div> {{ formatBytesHelper($s->acctoutputoctets) }} {{ formatBytesHelper($s->acctinputoctets) }}</div>
                             <div class="text-muted">{{ $s->framedipaddress }}</div>
                         </div>
                         @endforeach
@@ -251,28 +233,30 @@
         </h6>
     </div>
     <div class="card-body">
-        <div class="d-flex gap-2 flex-wrap">
-            @if($isOnline)
-            <button type="button" class="btn btn-outline-danger btn-sm" onclick="radiusDisconnect({{ $client->id }})">
-                🔌 قطع
-            </button>
-            @endif
-            <button type="button" class="btn btn-outline-warning btn-sm" onclick="radiusToggle({{ $client->id }})">
-                ⏸️ {{ $client->is_active ? 'تعطيل' : 'تفعيل' }}
-            </button>
-            <div class="btn-group">
-                <button class="btn btn-outline-info btn-sm dropdown-toggle" data-bs-toggle="dropdown">
-                    ⚡ تغيير السرعة
-                </button>
-                <ul class="dropdown-menu">
-                    @foreach([['name'=>'5M/5M'],['name'=>'10M/10M'],['name'=>'20M/20M'],['name'=>'50M/50M']] as $profile)
-                    <li><a class="dropdown-item" href="#" onclick="radiusChangeSpeed({{ $client->id }}, '{{ $profile['name'] }}')">{{ $profile['name'] }}</a></li>
-                    @endforeach
-                </ul>
+        <div class="row g-2">
+            <div class="col-12 mb-1">
+                <small class="text-muted">السرعة الحالية: <strong><span class="text-primary">{{ $currentSpeed }}</span></strong></small>
             </div>
-            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="radiusScheduleStop({{ $client->id }})">
-                📅 جدولة إيقاف
-            </button>
+            @if($isOnline)
+            <div class="col-6">
+                <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="radiusDisconnect({{ $client->id }})">🔌 قطع</button>
+            </div>
+            @endif
+            <div class="col-6">
+                <button type="button" class="btn btn-outline-warning btn-sm w-100" onclick="radiusToggle({{ $client->id }})">⏸️ {{ $client->is_active ? 'تعطيل' : 'تفعيل' }}</button>
+            </div>
+            <div class="col-6">
+                <button type="button" class="btn btn-outline-primary btn-sm w-100" onclick="radiusChangeSpeed({{ $client->id }}, '10M/10M')">⚡ 10M</button>
+            </div>
+            <div class="col-6">
+                <button type="button" class="btn btn-outline-info btn-sm w-100" onclick="radiusChangeSpeed({{ $client->id }}, '20M/20M')">⚡ 20M</button>
+            </div>
+            <div class="col-6">
+                <button type="button" class="btn btn-outline-success btn-sm w-100" onclick="radiusChangeSpeed({{ $client->id }}, '50M/50M')">⚡ 50M</button>
+            </div>
+            <div class="col-6">
+                <button type="button" class="btn btn-outline-secondary btn-sm w-100" onclick="radiusScheduleStop({{ $client->id }})">📅 جدولة إيقاف</button>
+            </div>
         </div>
     </div>
 </div>

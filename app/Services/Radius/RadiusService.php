@@ -341,7 +341,7 @@ class RadiusService
             $port = 3799;
 
             $cmd = sprintf(
-                'echo "User-Name = %s" | radclient %s:%d disconnect %s 2>&1',
+                'echo "User-Name = %s" | radclient -P udp %s:%d disconnect %s 2>&1',
                 escapeshellarg($username),
                 escapeshellarg($nasIp),
                 $port,
@@ -402,7 +402,7 @@ class RadiusService
 
             $cmd = sprintf(
                 'echo "User-Name = %s
-Mikrotik-Rate-Limit = %s" | radclient %s:%d coa %s 2>&1',
+Mikrotik-Rate-Limit = %s" | radclient -P udp %s:%d coa %s 2>&1',
                 escapeshellarg($username),
                 escapeshellarg($speed),
                 escapeshellarg($nasIp),

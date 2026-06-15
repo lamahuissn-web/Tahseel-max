@@ -113,12 +113,12 @@ class ProfileController extends Controller
             ->where('radius_profile', $name)
             ->first();
 
-        $allSubscriptions = DB::table('tbl_subscriptions')
+        $subscriptions = DB::table('tbl_subscriptions')
             ->select('id', 'name', 'price')
             ->get();
 
         return view('dashbord.profiles.form', compact(
-            'name', 'checks', 'replies', 'subscription', 'allSubscriptions'
+            'name', 'checks', 'replies', 'subscription', 'subscriptions'
         ));
     }
 

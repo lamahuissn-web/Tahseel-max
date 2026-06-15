@@ -1,4 +1,3 @@
-
 @extends('dashbord.layouts.master')
 @section('content')
 <div class="card shadow-sm mb-4">
