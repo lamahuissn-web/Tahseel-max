@@ -48,7 +48,7 @@
             <div class="card mb-6 mb-xl-9">
                 <div class="card-body pt-9 pb-0">
 
-                    @include('dashbord.clients.client_details')
+                    @include('dashbord.clients._client_content')
                     @include('dashbord.clients.client_nav')
 
                 </div>

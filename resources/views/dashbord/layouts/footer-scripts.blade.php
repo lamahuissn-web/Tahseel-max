@@ -77,9 +77,10 @@
     }
 </script>
 
+@yield('js')
 <script>
     $(document).ready(function() {
-        if ($('#table_10').length) {
+        if ($('#table_10').length && !$.fn.dataTable.isDataTable('#table_10')) {
             $('#table_10').DataTable({
                 processing: true,
                 serverSide: false,
@@ -110,16 +111,13 @@
     });
 </script>
 
-@yield('js')
 
 <script>
     if ('serviceWorker' in navigator) {
-        window.addEventListener('load', function() {
-            navigator.serviceWorker.register('/sw.js').then(function(registration) {
-                console.log('ServiceWorker registration successful with scope: ', registration.scope);
-            }, function(err) {
-                console.log('ServiceWorker registration failed: ', err);
-            });
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            for (let registration of registrations) {
+                registration.unregister();
+            }
         });
     }
 </script>

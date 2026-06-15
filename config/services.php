@@ -31,4 +31,11 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    "routeros" => [
+        "host" => env("ROUTEROS_HOST", "192.168.0.51"),
+        "username" => env("ROUTEROS_USERNAME", "admin"),
+        "password" => env("ROUTEROS_PASSWORD", ""),
+        "port" => env("ROUTEROS_PORT", 8728),
+    ],
+
 ];

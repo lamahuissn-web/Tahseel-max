@@ -47,6 +47,7 @@ class Kernel extends ConsoleKernel
 
         $schedule->command('telegram:send-backup')->everyMinute();
         $schedule->command(SendOverdueReminders::class)->dailyAt('08:00');
+        $schedule->command(\App\Console\Commands\AutoDisconnectOverdue::class, ["--days=15"])->dailyAt("09:00");
 
         try {
             $autoEnabled = AppConfig::where('key', 'whatsapp_auto_enabled')->value('value');

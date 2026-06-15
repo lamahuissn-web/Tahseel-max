@@ -291,53 +291,37 @@
                         @enderror
                     </div>
 
-                    <!-- SAS 4 Account Section -->
+                    <!-- RADIUS Account Section -->
                     <div class="col-md-12 mt-4">
-                        <div class="card border-primary">
-                            <div class="card-header bg-primary text-white">
-                                <h6 class="mb-0"><i class="bi bi-wifi"></i> {{ trans('clients.sas4_account') }}</h6>
+                        <div class="card border-info">
+                            <div class="card-header bg-info text-white">
+                                <h6 class="mb-0"><i class="bi bi-wifi"></i> {{ trans('clients.radius_account') }}</h6>
                             </div>
                             <div class="card-body">
-                                <div class="d-flex gap-3 mb-3">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="radio" name="sas4_mode" id="sas4_mode_link" value="link" checked>
-                                        <label class="form-check-label" for="sas4_mode_link">{{ trans('clients.sas4_link_existing') }}</label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="radio" name="sas4_mode" id="sas4_mode_create" value="create">
-                                        <label class="form-check-label" for="sas4_mode_create">{{ trans('clients.sas4_create_new') }}</label>
-                                    </div>
-                                </div>
-
-                                <!-- Link Existing -->
-                                <div id="sas4_link_section">
-                                    <label for="sas4_search" class="form-label">{{ trans('clients.sas4_search_user') }}</label>
-                                    <input type="text" class="form-control" id="sas4_search" placeholder="{{ trans('clients.sas4_search_placeholder') }}" autocomplete="off">
-                                    <input type="hidden" name="sas_username" id="sas_username">
-                                    <div id="sas4_search_results" class="list-group mt-2" style="max-height: 200px; overflow-y: auto; display: none;"></div>
-                                    <div id="sas4_selected_user" class="mt-2" style="display: none;">
-                                        <span class="badge bg-success fs-6" id="sas4_selected_badge"></span>
-                                        <button type="button" class="btn btn-sm btn-outline-danger ms-2" onclick="clearSas4Selection()">{{ trans('clients.sas4_remove') }}</button>
-                                    </div>
-                                </div>
-
-                                <!-- Create New -->
-                                <div id="sas4_create_section" style="display: none;">
-                                    <div class="row g-3">
-                                        <div class="col-md-4">
-                                            <label for="sas4_new_username" class="form-label">{{ trans('clients.sas4_username') }}</label>
-                                            <input type="text" class="form-control" name="sas4_new_username" id="sas4_new_username">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label for="radius_username" class="form-label">{{ trans('clients.radius_username') }}</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text"><i class="bi bi-person-badge"></i></span>
+                                            <input type="text" class="form-control" name="radius_username" id="radius_username"
+                                                value="{{ old('radius_username') }}" placeholder="اختياري - اتركه فارغاً إذا ما بدك PPPoE">
                                         </div>
-                                        <div class="col-md-4">
-                                            <label for="sas4_new_password" class="form-label">{{ trans('clients.sas4_password') }}</label>
-                                            <input type="text" class="form-control" name="sas4_new_password" id="sas4_new_password">
+                                        @error('radius_username')
+                                            <span class="invalid-feedback d-block" role="alert">{{ $message }}</span>
+                                        @enderror
+                                        <small class="text-muted">اسم المستخدم للـ PPPoE (اتركه فارغ إذا ما بدك خدمة إنترنت)</small>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="radius_password" class="form-label">{{ trans('clients.radius_password') }}</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                                            <input type="text" class="form-control" name="radius_password" id="radius_password"
+                                                value="{{ old('radius_password') }}" placeholder="يولّد أوتوماتيك إذا فاضي">
                                         </div>
-                                        <div class="col-md-4">
-                                            <label for="sas4_new_profile" class="form-label">{{ trans('clients.sas4_profile') }}</label>
-                                            <select class="form-select" name="sas4_new_profile" id="sas4_new_profile">
-                                                <option value="">{{ trans('clients.select') }}</option>
-                                            </select>
-                                        </div>
+                                        @error('radius_password')
+                                            <span class="invalid-feedback d-block" role="alert">{{ $message }}</span>
+                                        @enderror
+                                        <small class="text-muted">كلمة سر PPPoE (اتركه فاضي ليولّد تلقائياً)</small>
                                     </div>
                                 </div>
                             </div>
@@ -431,84 +415,5 @@
     {!! JsValidator::formRequest('App\Http\Requests\Admin\clients\SaveRequests', '#store_form1') !!}
 
     <script>
-        // SAS 4 mode toggle
-        document.querySelectorAll('input[name="sas4_mode"]').forEach(function(radio) {
-            radio.addEventListener('change', function() {
-                document.getElementById('sas4_link_section').style.display = this.value === 'link' ? 'block' : 'none';
-                document.getElementById('sas4_create_section').style.display = this.value === 'create' ? 'block' : 'none';
-            });
-        });
-
-        // SAS 4 search with debounce
-        var searchTimeout;
-        document.getElementById('sas4_search').addEventListener('input', function() {
-            clearTimeout(searchTimeout);
-            var query = this.value.trim();
-            if (query.length < 2) {
-                document.getElementById('sas4_search_results').style.display = 'none';
-                return;
-            }
-            searchTimeout = setTimeout(function() {
-                $.ajax({
-                    url: '{{ route('admin.sas4.search_users') }}',
-                    type: 'GET',
-                    data: { q: query },
-                    dataType: 'json',
-                    success: function(res) {
-                        var $results = $('#sas4_search_results');
-                        $results.empty();
-                        if (res.data && res.data.length > 0) {
-                            res.data.forEach(function(user) {
-                                var profileName = (user.profile_details && user.profile_details.name) || '';
-                                var profileBadge = profileName ? ' <span class="badge bg-secondary">' + profileName + '</span>' : '';
-                                $results.append(
-                                    '<a href="#" class="list-group-item list-group-item-action sas4-user-item" ' +
-                                    'data-username="' + user.username + '" ' +
-                                    'data-name="' + (user.firstname || '') + '">' +
-                                    '<strong>' + user.username + '</strong> — ' + (user.firstname || '') + profileBadge +
-                                    '</a>'
-                                );
-                            });
-                            $results.show();
-                        } else {
-                            $results.html('<div class="list-group-item text-muted">{{ trans('clients.sas4_no_results') }}</div>').show();
-                        }
-                    }
-                });
-            }, 300);
-        });
-
-        $(document).on('click', '.sas4-user-item', function(e) {
-            e.preventDefault();
-            var username = $(this).data('username');
-            var name = $(this).data('name');
-            $('#sas_username').val(username);
-            $('#sas4_selected_badge').text(username + ' — ' + name);
-            $('#sas4_selected_user').show();
-            $('#sas4_search_results').hide();
-            $('#sas4_search').val('').prop('disabled', true);
-        });
-
-        function clearSas4Selection() {
-            $('#sas_username').val('');
-            $('#sas4_selected_user').hide();
-            $('#sas4_search').val('').prop('disabled', false);
-        }
-
-        // Load SAS 4 profiles
-        $.ajax({
-            url: '{{ route('admin.sas4.profiles') }}',
-            type: 'GET',
-            dataType: 'json',
-            success: function(res) {
-                var $select = $('#sas4_new_profile');
-                if (res.data) {
-                    res.data.forEach(function(profile) {
-                        $select.append('<option value="' + profile.id + '">' + profile.name + '</option>');
-                    });
-                }
-            }
-        });
-    </script>
 
 @endsection
