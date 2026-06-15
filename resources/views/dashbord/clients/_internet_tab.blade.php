@@ -1,6 +1,6 @@
 {{-- Internet Tab — RADIUS Live Data View --}}
 @php
-    function formatBytes($bytes) {
+    function formatBytesHelper($bytes) {
         $bytes = max($bytes, 0);
         if ($bytes > 1073741824) return round($bytes/1073741824, 2) . ' GB';
         if ($bytes > 1048576) return round($bytes/1048576, 2) . ' MB';
@@ -85,8 +85,8 @@
             <div class="traffic-stat-card card bg-primary bg-opacity-10 border-0">
                 <div class="card-body py-3">
                     <small class="stat-label d-block">{{ trans('clients.traffic_today') }}</small>
-                    <div class="stat-value text-primary">{{ formatBytes($totalToday) }}</div>
-                    <small class="stat-sub">📥 {{ formatBytes($dlToday) }} / 📤 {{ formatBytes($ulToday) }}</small>
+                    <div class="stat-value text-primary">{{ formatBytesHelper($totalToday) }}</div>
+                    <small class="stat-sub">📥 {{ formatBytesHelper($dlToday) }} / 📤 {{ formatBytesHelper($ulToday) }}</small>
                 </div>
             </div>
         </div>
@@ -94,8 +94,8 @@
             <div class="traffic-stat-card card bg-success bg-opacity-10 border-0">
                 <div class="card-body py-3">
                     <small class="stat-label d-block">{{ trans('clients.traffic_month') }}</small>
-                    <div class="stat-value text-success">{{ formatBytes($totalMonth) }}</div>
-                    <small class="stat-sub">📥 {{ formatBytes($dlMonth) }} / 📤 {{ formatBytes($ulMonth) }}</small>
+                    <div class="stat-value text-success">{{ formatBytesHelper($totalMonth) }}</div>
+                    <small class="stat-sub">📥 {{ formatBytesHelper($dlMonth) }} / 📤 {{ formatBytesHelper($ulMonth) }}</small>
                 </div>
             </div>
         </div>
@@ -136,8 +136,8 @@
                             <td>{{ $session->radacctid }}</td>
                             <td>{{ $session->acctstarttime }}</td>
                             <td>{{ $session->framedipaddress }}</td>
-                            <td>{{ formatBytes($session->acctoutputoctets) }}</td>
-                            <td>{{ formatBytes($session->acctinputoctets) }}</td>
+                            <td>{{ formatBytesHelper($session->acctoutputoctets) }}</td>
+                            <td>{{ formatBytesHelper($session->acctinputoctets) }}</td>
                             <td>
                                 @php $h = floor($session->acctsessiontime / 3600); $m = floor(($session->acctsessiontime % 3600) / 60); @endphp
                                 {{ $h }}h {{ $m }}m

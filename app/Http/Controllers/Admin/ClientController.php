@@ -20,8 +20,8 @@ use App\Notifications\InvoicePaidNotification;
 use App\Services\ClientService;
 use App\Services\CompanyService;
 use App\Services\ProjectsService;
-use AppServicesRadiusRadiusService;
-use AppServicesRadiusRouterOSService;
+use App\Services\Radius\RadiusService;
+use App\Services\Radius\RouterOSService;
 use App\Traits\ImageProcessing;
 use App\Traits\ValidationMessage;
 use Carbon\Carbon;
@@ -1088,7 +1088,7 @@ class ClientController extends Controller
      */
     public function internetTab(Request $request, string $id)
     {
-        $client = $this->basicRepository->findById($id);
+        $client = $this->ClientsRepository->getById($id);
 
         if (!$client->sas_username) {
             return response()->json([
