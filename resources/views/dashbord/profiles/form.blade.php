@@ -2,7 +2,7 @@
 @extends('dashbord.layouts.master')
 @section('content')
 <form action="{{ isset($name) ? route('admin.profiles.update', $name) : route('admin.profiles.store') }}" method="POST">
-    @csrf
+    {{ csrf_field() }}
     @if(isset($name)) @method('PUT') @endif
 
     <div class="card shadow-sm">
@@ -30,7 +30,7 @@
                 <label class="form-label">الخطة المرتبطة (اختياري)</label>
                 <select name="subscription_id" class="form-select">
                     <option value="">— بدون خطة —</option>
-                    @foreach($allSubscriptions as $sub)
+                    @foreach($subscriptions as $sub)
                     <option value="{{ $sub->id }}" {{ (isset($subscription) && $subscription->id == $sub->id) ? 'selected' : '' }}>
                         {{ $sub->name }} (${{ $sub->price }})
                     </option>
