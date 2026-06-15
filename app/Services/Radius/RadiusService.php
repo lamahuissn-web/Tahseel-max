@@ -471,4 +471,88 @@ Mikrotik-Rate-Limit = %s" | radclient %s:%d coa %s 2>&1',
         $chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         return substr(str_shuffle($chars), 0, $length);
     }
+
+    /**
+     * Get today's traffic for a specific user (download/upload from radacct)
+     */
+    public function getTodayTraffic(string $username): array
+    {
+        $row = DB::connection("radius")
+            ->table("radacct")
+            ->selectRaw("COALESCE(SUM(acctinputoctets), 0) as upload, COALESCE(SUM(acctoutputoctets), 0) as download, COUNT(*) as sessions")
+            ->where("username", $username)
+            ->whereDate("acctstarttime", now())
+            ->first();
+
+        $upload = (int)($row->upload ?? 0);
+        $download = (int)($row->download ?? 0);
+
+        return [
+            "upload_bytes"   => $upload,
+            "download_bytes" => $download,
+            "total_bytes"    => $upload + $download,
+            "sessions"       => (int)($row->sessions ?? 0),
+        ];
+    }
+
+    /**
+     * Get all active (unfinished) sessions for a specific user
+     */
+    public function getActiveUserSessions(string $username): array
+    {
+        return DB::connection("radius")
+            ->table("radacct")
+            ->select([
+                "radacctid", "acctstarttime", "acctinputoctets", "acctoutputoctets",
+                "framedipaddress", "callingstationid", "acctsessiontime", "nasipaddress"
+            ])
+            ->where("username", $username)
+            ->whereNull("acctstoptime")
+            ->orderBy("acctstarttime", "desc")
+            ->get()
+            ->toArray();
+    }
+
+    /**
+     * Get daily traffic breakdown for a specific month
+     */
+    public function getDailyTrafficForMonth(string $username, int $month, int $year): array
+    {
+        return DB::connection("radius")
+            ->table("radacct")
+            ->selectRaw("
+                DATE(acctstarttime) as date,
+                COUNT(*) as sessions,
+                COALESCE(SUM(acctinputoctets), 0) as upload,
+                COALESCE(SUM(acctoutputoctets), 0) as download,
+                COALESCE(SUM(acctsessiontime), 0) as total_seconds
+            ")
+            ->where("username", $username)
+            ->whereMonth("acctstarttime", $month)
+            ->whereYear("acctstarttime", $year)
+            ->groupBy("date")
+            ->orderBy("date", "desc")
+            ->get()
+            ->toArray();
+    }
+
+    /**
+     * Get individual sessions for a specific date
+     */
+    public function getDailySessions(string $username, string $date): array
+    {
+        return DB::connection("radius")
+            ->table("radacct")
+            ->select([
+                "radacctid", "acctstarttime", "acctstoptime",
+                "acctinputoctets", "acctoutputoctets",
+                "framedipaddress", "callingstationid",
+                "acctsessiontime", "acctterminatecause"
+            ])
+            ->where("username", $username)
+            ->whereDate("acctstarttime", $date)
+            ->orderBy("acctstarttime", "desc")
+            ->get()
+            ->toArray();
+    }
 }

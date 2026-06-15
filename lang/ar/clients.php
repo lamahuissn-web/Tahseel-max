@@ -409,4 +409,13 @@
         'schedule' => 'جدولة',
         'confirm_toggle_text' => 'هل تريد تغيير حالة حساب PPPoE؟',
 
+        "invoices_tab" => "الفواتير",
+        "internet_tab" => "الإنترنت",
+        "traffic_today" => "استهلاك اليوم",
+        "radius_actions" => "إجراءات RADIUS",
+        "start_time" => "بداية الجلسة",
+        "plan" => "الباقة",
+        "disconnect_user" => "قطع الاتصال",
+        "duration" => "المدة",
+        "active" => "نشطة",
      );

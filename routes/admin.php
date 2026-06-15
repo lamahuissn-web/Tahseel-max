@@ -245,6 +245,7 @@ Route::group(
             Route::post('/clients/{id}/toggle-radius', [ClientController::class, 'toggleRadius'])->name('clients.toggle_radius');
             Route::post('/clients/{id}/change-radius-speed', [ClientController::class, 'changeRadiusSpeed'])->name('clients.change_radius_speed');
             Route::post('/clients/{id}/schedule-radius-stop', [ClientController::class, 'scheduleRadiusStop'])->name('clients.schedule_radius_stop');
+            Route::get("/clients/{id}/internet-tab", [App\Http\Controllers\Admin\ClientController::class, "internetTab"])->name("clients.internet_tab");
 
             Route::get('/logs', [LogController::class, 'index'])->name('logs.index');
             Route::get('/logs/{id}', [LogController::class, 'show'])->name('logs.show');

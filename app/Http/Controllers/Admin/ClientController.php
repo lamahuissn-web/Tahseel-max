@@ -1,5 +1,6 @@
 <?php
 
+
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
@@ -19,6 +20,8 @@ use App\Notifications\InvoicePaidNotification;
 use App\Services\ClientService;
 use App\Services\CompanyService;
 use App\Services\ProjectsService;
+use AppServicesRadiusRadiusService;
+use AppServicesRadiusRouterOSService;
 use App\Traits\ImageProcessing;
 use App\Traits\ValidationMessage;
 use Carbon\Carbon;
@@ -1079,4 +1082,46 @@ class ClientController extends Controller
         }
     }
 
+
+    /**
+     * Load Internet Tab content via AJAX
+     */
+    public function internetTab(Request $request, string $id)
+    {
+        $client = $this->basicRepository->findById($id);
+
+        if (!$client->sas_username) {
+            return response()->json([
+                'html' => '<div class="text-center py-5 text-muted"><i class="bi bi-wifi-off fs-1 d-block mb-2"></i><p>' . trans('clients.no_radius_username') . '</p></div>'
+            ]);
+        }
+
+        $username = $client->sas_username;
+        $radiusService = app(RadiusService::class);
+
+        $isOnline = $radiusService->isOnline($username);
+        $activeSessions = $radiusService->getActiveUserSessions($username);
+        $todayTraffic = $radiusService->getTodayTraffic($username);
+        $monthlyTraffic = $radiusService->getTraffic($username);
+        $clientInfo = $radiusService->getClientInfo($username);
+
+        // Try MikroTik API for live data
+        $liveData = null;
+        try {
+            $routerosService = app(RouterOSService::class);
+            if ($routerosService->connect()) {
+                $liveData = $routerosService->getPppUser($username);
+                $routerosService->disconnect();
+            }
+        } catch (\Exception $e) {
+            Log::warning('RouterOS API fallback failed: ' . $e->getMessage());
+        }
+
+        $html = view('dashbord.clients._internet_tab', compact(
+            'client', 'username', 'isOnline', 'activeSessions',
+            'todayTraffic', 'monthlyTraffic', 'clientInfo', 'liveData'
+        ))->render();
+
+        return response()->json(['html' => $html]);
+    }
 }
