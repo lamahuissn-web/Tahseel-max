@@ -90,6 +90,128 @@
     <div class="row">
         {{-- Left Column: Session Info + Invoices --}}
         <div class="col-lg-8">
+            {{-- Online Session Card --}}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <h6 class="card-title mb-0 fw-bold">
+                        <i class="bi bi-wifi text-success"></i>
+                        {{ trans('clients.session_info') }}
+                    </h6>
+                </div>
+                <div class="card-body">
+                    @if($client->sas_username)
+                        @php
+                            $radius = app(\App\Services\Radius\RadiusService::class);
+                            $isOnline = $radius->isOnline($client->sas_username);
+                            $clientInfo = $radius->getClientInfo($client->sas_username);
+                            $traffic = $radius->getTraffic($client->sas_username);
+                        @endphp
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="session-detail-card {{ $isOnline ? '' : 'offline' }}">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <span class="online-dot {{ $isOnline ? 'online' : 'offline' }}"></span>
+                                        <strong>{{ $isOnline ? trans('clients.connected') : trans('clients.disconnected') }}</strong>
+                                    </div>
+                                    <div class="session-detail-item">
+                                        <span class="session-detail-label">{{ trans('clients.radius_username') }}</span>
+                                        <span class="session-detail-value">{{ $client->sas_username }}</span>
+                                    </div>
+                                    @if($isOnline && isset($clientInfo['last_session']))
+                                    <div class="session-detail-item">
+                                        <span class="session-detail-label">{{ trans('clients.ip_address') }}</span>
+                                        <span class="session-detail-value">{{ $clientInfo['last_session']['framed_ip'] ?? '—' }}</span>
+                                    </div>
+                                    <div class="session-detail-item">
+                                        <span class="session-detail-label">{{ trans('clients.nas') }}</span>
+                                        <span class="session-detail-value">{{ $clientInfo['last_session']['nas'] ?? '—' }}</span>
+                                    </div>
+                                    <div class="session-detail-item">
+                                        <span class="session-detail-label">{{ trans('clients.session_time') }}</span>
+                                        <span class="session-detail-value">
+                                            @php
+                                                $seconds = $clientInfo['last_session']['session_time'] ?? 0;
+                                                $hours = floor($seconds / 3600);
+                                                $minutes = floor(($seconds % 3600) / 60);
+                                            @endphp
+                                            {{ $hours }}h {{ $minutes }}m
+                                        </span>
+                                    </div>
+                                    <div class="session-detail-item">
+                                        <span class="session-detail-label">{{ trans('clients.last_login') }}</span>
+                                        <span class="session-detail-value">{{ $clientInfo['last_login'] ?? '—' }}</span>
+                                    </div>
+                                    @endif
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="session-detail-card">
+                                    <strong class="mb-2 d-block">{{ trans('clients.traffic_month') }}</strong>
+                                    <div class="session-detail-item">
+                                        <span class="session-detail-label">{{ trans('clients.download') }}</span>
+                                        <span class="session-detail-value text-primary">
+                                            @php
+                                                $dl = $traffic['download_bytes'] ?? 0;
+                                                echo $dl > 1073741824 ? round($dl/1073741824, 2).' GB' : ($dl > 1048576 ? round($dl/1048576, 2).' MB' : round($dl/1024, 2).' KB');
+                                            @endphp
+                                        </span>
+                                    </div>
+                                    <div class="session-detail-item">
+                                        <span class="session-detail-label">{{ trans('clients.upload') }}</span>
+                                        <span class="session-detail-value text-success">
+                                            @php
+                                                $ul = $traffic['upload_bytes'] ?? 0;
+                                                echo $ul > 1073741824 ? round($ul/1073741824, 2).' GB' : ($ul > 1048576 ? round($ul/1048576, 2).' MB' : round($ul/1024, 2).' KB');
+                                            @endphp
+                                        </span>
+                                    </div>
+                                    <div class="session-detail-item">
+                                        <span class="session-detail-label">{{ trans('clients.total') }}</span>
+                                        <span class="session-detail-value fw-bold">
+                                            @php
+                                                $total = $traffic['total_bytes'] ?? 0;
+                                                echo $total > 1073741824 ? round($total/1073741824, 2).' GB' : ($total > 1048576 ? round($total/1048576, 2).' MB' : round($total/1024, 2).' KB');
+                                            @endphp
+                                        </span>
+                                    </div>
+                                    <div class="session-detail-item">
+                                        <span class="session-detail-label">{{ trans('clients.sessions_count') }}</span>
+                                        <span class="session-detail-value">{{ $traffic['sessions'] ?? 0 }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                    {{-- RADIUS Action Buttons --}}
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <div class="d-flex gap-2 flex-wrap">
+                                @if($isOnline)
+                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="radiusDisconnect({{ $client->id }})">
+                                    <i class="bi bi-plug"></i> {{ trans("clients.disconnect_user") }}
+                                </button>
+                                @endif
+                                <button type="button" class="btn btn-sm btn-outline-warning" onclick="radiusToggle({{ $client->id }})">
+                                    <i class="bi bi-toggle-off"></i> {{ trans("clients.toggle_radius") }}
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-info" onclick="radiusChangeSpeed({{ $client->id }})">
+                                    <i class="bi bi-speedometer2"></i> {{ trans("clients.change_speed") }}
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="radiusScheduleStop({{ $client->id }})">
+                                    <i class="bi bi-calendar-stop"></i> {{ trans("clients.schedule_stop") }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    @else
+                        <div class="text-center py-4 text-muted">
+                            <i class="bi bi-wifi-off fs-1 d-block mb-2"></i>
+                            <p>{{ trans('clients.no_radius_username') }}</p>
+                        </div>
+                    @endif
+                </div>
+            </div>
+
             {{-- Unpaid Invoices Card --}}
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-light d-flex justify-content-between align-items-center">

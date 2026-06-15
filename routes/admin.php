@@ -246,6 +246,15 @@ Route::group(
             Route::post('/clients/{id}/change-radius-speed', [ClientController::class, 'changeRadiusSpeed'])->name('clients.change_radius_speed');
             Route::post('/clients/{id}/schedule-radius-stop', [ClientController::class, 'scheduleRadiusStop'])->name('clients.schedule_radius_stop');
             Route::get("/clients/{id}/internet-tab", [App\Http\Controllers\Admin\ClientController::class, "internetTab"])->name("clients.internet_tab");
+            Route::post('/clients/{id}/apply-profile', [App\Http\Controllers\Admin\ProfileController::class, 'applyToUser'])->name('clients.apply_profile');
+
+            // RADIUS Profile Management
+            Route::get('/profiles', [App\Http\Controllers\Admin\ProfileController::class, 'index'])->name('profiles.index');
+            Route::get('/profiles/create', [App\Http\Controllers\Admin\ProfileController::class, 'create'])->name('profiles.create');
+            Route::post('/profiles', [App\Http\Controllers\Admin\ProfileController::class, 'store'])->name('profiles.store');
+            Route::get('/profiles/{name}/edit', [App\Http\Controllers\Admin\ProfileController::class, 'edit'])->name('profiles.edit');
+            Route::put('/profiles/{name}', [App\Http\Controllers\Admin\ProfileController::class, 'update'])->name('profiles.update');
+            Route::delete('/profiles/{name}', [App\Http\Controllers\Admin\ProfileController::class, 'destroy'])->name('profiles.destroy');
 
             Route::get('/logs', [LogController::class, 'index'])->name('logs.index');
             Route::get('/logs/{id}', [LogController::class, 'show'])->name('logs.show');
