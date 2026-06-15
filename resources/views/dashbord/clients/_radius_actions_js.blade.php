@@ -94,33 +94,25 @@ function radiusToggle(clientId) {
     });
 }
 
-function radiusChangeSpeed(clientId) {
+function radiusChangeSpeed(clientId, speed) {
+    if (!speed) return;
     Swal.fire({
-        title: '{{ trans("clients.change_speed") }}',
-        input: 'text',
-        inputLabel: '{{ trans("clients.new_speed") }}',
-        inputValue: '10M/10M',
-        inputPlaceholder: 'e.g. 20M/20M, 50M/10M',
+        title: 'تأكيد تغيير السرعة',
+        text: 'هل تريد تغيير السرعة إلى ' + speed + '؟',
+        icon: 'question',
         showCancelButton: true,
         confirmButtonColor: '#0d6efd',
         cancelButtonColor: '#6c757d',
-        confirmButtonText: '{{ trans("clients.apply_speed") }}',
-        cancelButtonText: '{{ trans("clients.cancel") }}',
-        inputValidator: function(value) {
-            if (!value) return '{{ trans("clients.speed_required") }}';
-        }
+        confirmButtonText: 'نعم، تغيير',
+        cancelButtonText: 'إلغاء'
     }).then((result) => {
         if (result.isConfirmed) {
-            var btn = $('button[onclick*="radiusChangeSpeed(' + clientId + ')"]');
-            var original = btn.html();
-            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
-
             $.ajax({
                 url: '/' + getLocalePrefix() + '/admin/clients/' + clientId + '/change-radius-speed',
                 type: 'POST',
                 data: {
                     _token: '{{ csrf_token() }}',
-                    speed: result.value
+                    speed: speed
                 },
                 success: function(res) {
                     Swal.fire({
@@ -139,9 +131,6 @@ function radiusChangeSpeed(clientId) {
                         timer: 3000,
                         showConfirmButton: false
                     });
-                },
-                complete: function() {
-                    btn.prop('disabled', false).html(original);
                 }
             });
         }

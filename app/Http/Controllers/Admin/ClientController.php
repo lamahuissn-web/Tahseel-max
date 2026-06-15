@@ -22,6 +22,7 @@ use App\Services\CompanyService;
 use App\Services\ProjectsService;
 use App\Services\Radius\RadiusService;
 use App\Services\Radius\RouterOSService;
+use App\Services\Radius\ProfileService;
 use App\Traits\ImageProcessing;
 use App\Traits\ValidationMessage;
 use Carbon\Carbon;
@@ -251,6 +252,22 @@ class ClientController extends Controller
         try {
             $client = $this->clientService->store($request);
             $this->handleSas4Operations($client, $request);
+
+            // Sync RADIUS profile if subscription changed
+            try {
+                if ($client->sas_username && $client->subscription_id) {
+                    $oldSubId = $oldClientData['subscription_id'] ?? null;
+                    if ($oldSubId != $client->subscription_id) {
+                        app(ProfileService::class)->updateClientOnPlanChange(
+                            $client->sas_username,
+                            $client->subscription_id
+                        );
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::warning('RADIUS profile sync failed: ' . $e->getMessage());
+            }
+
             $notificationMessage = sprintf(
                 'تم إنشاء عميل جديد: %s - النوع: %s - السعر: %s %s - تم الإنشاء بواسطة %s',
                 $client->name,
@@ -325,6 +342,22 @@ class ClientController extends Controller
             $this->clientService->update($request, $id);
             $client = $this->ClientsRepository->getById($id);
             $this->handleSas4Operations($client, $request);
+
+            // Sync RADIUS profile if subscription changed
+            try {
+                if ($client->sas_username && $client->subscription_id) {
+                    $oldSubId = $oldClientData['subscription_id'] ?? null;
+                    if ($oldSubId != $client->subscription_id) {
+                        app(ProfileService::class)->updateClientOnPlanChange(
+                            $client->sas_username,
+                            $client->subscription_id
+                        );
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::warning('RADIUS profile sync failed: ' . $e->getMessage());
+            }
+
             $notificationMessage = sprintf(
                 'تم تحديث بيانات العميل: %s - تم التحديث بواسطة %s',
                 $client->name,

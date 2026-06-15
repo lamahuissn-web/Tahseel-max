@@ -102,4 +102,31 @@ class ProfileService
             ->where('sas_username', $username)
             ->value('radius_profile');
     }
+    /**
+     * Auto-update RADIUS profile when a client's subscription changes
+     * Reads radius_profile + radius_speed from the new subscription
+     * Updates radusergroup, radreply, and sends CoA
+     */
+    public function updateClientOnPlanChange(string $username, int $newSubscriptionId): bool
+    {
+        // Get the subscription's RADIUS profile settings
+        $subscription = DB::table('tbl_subscriptions')->find($newSubscriptionId);
+        if (!$subscription || empty($subscription->radius_profile)) {
+            // No RADIUS profile linked to this subscription — remove old one
+            DB::connection('radius')
+                ->table('radusergroup')
+                ->where('username', $username)
+                ->delete();
+            DB::connection('radius')
+                ->table('radreply')
+                ->where('username', $username)
+                ->where('attribute', 'Mikrotik-Rate-Limit')
+                ->delete();
+            return true;
+        }
+
+        // Apply the new profile
+        return $this->applyProfile($username, $subscription->radius_profile);
+    }
 }
+

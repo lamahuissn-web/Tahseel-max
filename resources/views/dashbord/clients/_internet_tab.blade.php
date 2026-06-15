@@ -31,7 +31,7 @@
     $sessionStart = $clientInfo['last_session']['acctstarttime'] ?? ($activeSessions[0]->acctstarttime ?? null);
 
     // Get daily traffic for last 3 days
-    $dailyTraffic = \DB::connection('radius')->select("
+    $dailyTraffic = DB::connection('radius')->select("
         SELECT DATE(acctstarttime) as day, COUNT(*) as sessions,
                COALESCE(SUM(acctinputoctets),0) as upload,
                COALESCE(SUM(acctoutputoctets),0) as download,
@@ -41,7 +41,7 @@
     ", [$client->sas_username]);
 
     // Get current speed
-    $currentSpeed = \DB::connection('radius')->table('radreply')
+    $currentSpeed = DB::connection('radius')->table('radreply')
         ->where('username', $client->sas_username)
         ->where('attribute', 'Mikrotik-Rate-Limit')
         ->value('value') ?? ($client->subscription->name ?? '—');
@@ -164,7 +164,7 @@
                         <td><code class="small">{{ $session->framedipaddress }}</code></td>
                         <td>@php $h = floor($session->acctsessiontime / 3600); $m = floor(($session->acctsessiontime % 3600) / 60); @endphp {{ $h }}h {{ $m }}m</td>
                         <td>
-                            <button class="btn btn-sm btn-outline-danger px-2 py-0" onclick="radiusDisconnect({{ $client->id }})" title="قطع">🔌</button>
+                            <button class="btn btn-sm btn-outline-danger px-2 py-0" onclick="radiusDisconnect({{ $client->id }})" title="قطع"><i class="bi bi-plug"></i></button>
                         </td>
                     </tr>
                     @endforeach
@@ -200,7 +200,7 @@
                     </button>
                 </h2>
                 @php
-                    $daySessions = \DB::connection('radius')->select("
+                    $daySessions = DB::connection('radius')->select("
                         SELECT acctstarttime, acctstoptime, acctinputoctets, acctoutputoctets,
                                acctsessiontime, acctterminatecause, framedipaddress
                         FROM radacct WHERE username = ? AND DATE(acctstarttime) = ?
@@ -234,28 +234,40 @@
     </div>
     <div class="card-body">
         <div class="row g-2">
-            <div class="col-12 mb-1">
-                <small class="text-muted">السرعة الحالية: <strong><span class="text-primary">{{ $currentSpeed }}</span></strong></small>
+            @php
+            $radiusDb = DB::connection('radius');
+            $profileList = $radiusDb->table('radgroupreply')
+                ->where('attribute', 'Mikrotik-Rate-Limit')
+                ->select('groupname', 'value')
+                ->get();
+            $curSpeed = $radiusDb->table('radreply')
+                ->where('username', $client->sas_username)
+                ->where('attribute', 'Mikrotik-Rate-Limit')
+                ->value('value');
+            @endphp
+            <div class="col-6">
+                <small class="text-muted d-block">السرعة الحالية</small>
+                <strong class="text-primary">{{ $curSpeed ?? $client->subscription->name ?? '—' }}</strong>
+            </div>
+            <div class="col-6">
+                <small class="text-muted d-block">تغيير السرعة</small>
+                <select class="form-select form-select-sm" onchange="if(this.value) radiusChangeSpeed({{ $client->id }}, this.value); this.value='';">
+                    <option value="">— اختر Profile —</option>
+                    @foreach($profileList as $p)
+                    <option value="{{ $p->value }}">{{ $p->groupname }} ({{ $p->value }})</option>
+                    @endforeach
+                </select>
             </div>
             @if($isOnline)
-            <div class="col-6">
-                <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="radiusDisconnect({{ $client->id }})">🔌 قطع</button>
+            <div class="col-6 mt-2">
+                <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="radiusDisconnect({{ $client->id }})"><i class="bi bi-plug"></i> قطع</button>
             </div>
             @endif
-            <div class="col-6">
-                <button type="button" class="btn btn-outline-warning btn-sm w-100" onclick="radiusToggle({{ $client->id }})">⏸️ {{ $client->is_active ? 'تعطيل' : 'تفعيل' }}</button>
+            <div class="col-6 mt-2">
+                <button type="button" class="btn btn-outline-warning btn-sm w-100" onclick="radiusToggle({{ $client->id }})"><i class="bi bi-toggle-off"></i> {{ $client->is_active ? 'تعطيل' : 'تفعيل' }}</button>
             </div>
             <div class="col-6">
-                <button type="button" class="btn btn-outline-primary btn-sm w-100" onclick="radiusChangeSpeed({{ $client->id }}, '10M/10M')">⚡ 10M</button>
-            </div>
-            <div class="col-6">
-                <button type="button" class="btn btn-outline-info btn-sm w-100" onclick="radiusChangeSpeed({{ $client->id }}, '20M/20M')">⚡ 20M</button>
-            </div>
-            <div class="col-6">
-                <button type="button" class="btn btn-outline-success btn-sm w-100" onclick="radiusChangeSpeed({{ $client->id }}, '50M/50M')">⚡ 50M</button>
-            </div>
-            <div class="col-6">
-                <button type="button" class="btn btn-outline-secondary btn-sm w-100" onclick="radiusScheduleStop({{ $client->id }})">📅 جدولة إيقاف</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm w-100" onclick="radiusScheduleStop({{ $client->id }})"><i class="bi bi-calendar-stop"></i> جدولة إيقاف</button>
             </div>
         </div>
     </div>
