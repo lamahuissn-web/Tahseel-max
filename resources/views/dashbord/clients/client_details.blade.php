@@ -35,6 +35,62 @@
 @endsection
 
 @section('content')
+<!-- Client Basic Info Card -->
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-3 col-6">
+                <small class="text-muted d-block">رقم الهاتف</small>
+                <span class="fw-bold">{{ $client->phone ?? '—' }}</span>
+            </div>
+            <div class="col-md-3 col-6">
+                <small class="text-muted d-block">نوع الزبون</small>
+                <span class="badge bg-info">{{ $client->client_type ?? '—' }}</span>
+            </div>
+            <div class="col-md-3 col-6">
+                <small class="text-muted d-block">RADIUS (SAS)</small>
+                <span class="fw-bold">{{ $client->sas_username ?? '—' }}</span>
+            </div>
+            <div class="col-md-3 col-6">
+                <small class="text-muted d-block">الحالة</small>
+                @if($client->is_active)
+                    <span class="badge bg-success">🟢 نشط</span>
+                @else
+                    <span class="badge bg-secondary">🔴 غير نشط</span>
+                @endif
+            </div>
+            <div class="col-md-3 col-6">
+                <small class="text-muted d-block">الباقة</small>
+                <span class="fw-bold">{{ $client->subscription->name ?? '—' }}</span>
+            </div>
+            <div class="col-md-3 col-6">
+                <small class="text-muted d-block">السعر</small>
+                <span class="fw-bold">\${{ number_format($client->price, 2) }}</span>
+            </div>
+            <div class="col-md-3 col-6">
+                <small class="text-muted d-block">المبلغ المتبقي</small>
+                <span class="fw-bold {{ ($client->remaining_amount_total ?? 0) > 0 ? 'text-danger' : 'text-success' }}">
+                    \${{ number_format($client->remaining_amount_total ?? 0, 2) }}
+                </span>
+            </div>
+            <div class="col-md-3 col-6">
+                <small class="text-muted d-block">تاريخ البداية</small>
+                <span class="fw-bold">{{ $client->start_date ?? ($client->subscription_date ?? '—') }}</span>
+            </div>
+            <div class="col-12">
+                <small class="text-muted d-block">العنوان</small>
+                <span>{{ $client->address1 ?? '—' }}{{ $client->address2 ? ' - ' . $client->address2 : '' }}</span>
+            </div>
+            @if($client->notes)
+            <div class="col-12">
+                <small class="text-muted d-block">ملاحظات</small>
+                <span class="text-muted">{{ $client->notes }}</span>
+            </div>
+            @endif
+        </div>
+    </div>
+</div>
+
 <ul class="nav nav-tabs mb-4" id="clientTabs" role="tablist">
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="invoices-tab" data-bs-toggle="tab" data-bs-target="#invoicesTabPane"
