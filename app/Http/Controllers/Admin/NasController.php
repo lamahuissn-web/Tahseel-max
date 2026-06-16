@@ -15,8 +15,6 @@ class NasController extends Controller
         $statuses = [];
         foreach ($nasDevices as $nas) {
             $ip = $nas->nasname;
-
-            // TCP ping on port 22 (SSH) - 2s timeout
             $online = false;
             $conn = @fsockopen($ip, 22, $errno, $errstr, 2);
             if ($conn) {
@@ -24,7 +22,6 @@ class NasController extends Controller
                 fclose($conn);
             }
 
-            // Active sessions count
             $activeSessions = DB::connection("radius")->table("radacct")
                 ->where("nasipaddress", $ip)
                 ->whereNull("acctstoptime")
@@ -48,11 +45,23 @@ class NasController extends Controller
     {
         $request->validate([
             "nasname" => "required|ip",
-            "shortname" => "nullable|string|max:32",
+            "shortname" => "nullable|string|max:100",
             "secret" => "required|string|min:6",
             "type" => "required|string",
             "description" => "nullable|string|max:200",
             "ports" => "nullable|integer",
+            "coa_port" => "nullable|integer",
+            "http_port" => "nullable|integer",
+            "ssh_port" => "nullable|integer",
+            "community" => "nullable|string|max:100",
+            "pool_name" => "nullable|string|max:100",
+            "mikrotik_version" => "nullable|string|max:50",
+            "site" => "nullable|string|max:50",
+            "ssh_username" => "nullable|string|max:50",
+            "ssh_password" => "nullable|string|max:255",
+            "enabled" => "nullable|boolean",
+            "ip_accounting" => "nullable|boolean",
+            "ping_monitor" => "nullable|boolean",
         ]);
 
         DB::connection("radius")->table("nas")->insert([
@@ -62,6 +71,18 @@ class NasController extends Controller
             "secret" => $request->secret,
             "description" => $request->description ?: "MikroTik Router",
             "ports" => $request->ports ?: 0,
+            "coa_port" => $request->coa_port ?? 3799,
+            "http_port" => $request->http_port ?? 80,
+            "ssh_port" => $request->ssh_port ?? 22,
+            "community" => $request->community,
+            "pool_name" => $request->pool_name,
+            "mikrotik_version" => $request->mikrotik_version,
+            "site" => $request->site,
+            "ssh_username" => $request->ssh_username,
+            "ssh_password" => $request->ssh_password,
+            "enabled" => $request->boolean("enabled", true),
+            "ip_accounting" => $request->boolean("ip_accounting", false),
+            "ping_monitor" => $request->boolean("ping_monitor", true),
         ]);
 
         return redirect()->route("admin.nas.index")->with("success", "تم إضافة جهاز NAS بنجاح");
@@ -70,7 +91,6 @@ class NasController extends Controller
     public function edit($id)
     {
         $nas = DB::connection("radius")->table("nas")->where("id", $id)->first();
-
         if (!$nas) {
             abort(404, "جهاز NAS غير موجود");
         }
@@ -81,11 +101,23 @@ class NasController extends Controller
     {
         $request->validate([
             "nasname" => "required|ip",
-            "shortname" => "nullable|string|max:32",
+            "shortname" => "nullable|string|max:100",
             "secret" => "required|string|min:6",
             "type" => "required|string",
             "description" => "nullable|string|max:200",
             "ports" => "nullable|integer",
+            "coa_port" => "nullable|integer",
+            "http_port" => "nullable|integer",
+            "ssh_port" => "nullable|integer",
+            "community" => "nullable|string|max:100",
+            "pool_name" => "nullable|string|max:100",
+            "mikrotik_version" => "nullable|string|max:50",
+            "site" => "nullable|string|max:50",
+            "ssh_username" => "nullable|string|max:50",
+            "ssh_password" => "nullable|string|max:255",
+            "enabled" => "nullable|boolean",
+            "ip_accounting" => "nullable|boolean",
+            "ping_monitor" => "nullable|boolean",
         ]);
 
         DB::connection("radius")->table("nas")->where("id", $id)->update([
@@ -95,6 +127,18 @@ class NasController extends Controller
             "secret" => $request->secret,
             "description" => $request->description ?: "MikroTik Router",
             "ports" => $request->ports ?: 0,
+            "coa_port" => $request->coa_port ?? 3799,
+            "http_port" => $request->http_port ?? 80,
+            "ssh_port" => $request->ssh_port ?? 22,
+            "community" => $request->community,
+            "pool_name" => $request->pool_name,
+            "mikrotik_version" => $request->mikrotik_version,
+            "site" => $request->site,
+            "ssh_username" => $request->ssh_username,
+            "ssh_password" => $request->ssh_password,
+            "enabled" => $request->boolean("enabled", true),
+            "ip_accounting" => $request->boolean("ip_accounting", false),
+            "ping_monitor" => $request->boolean("ping_monitor", true),
         ]);
 
         return redirect()->route("admin.nas.index")->with("success", "تم تحديث جهاز NAS بنجاح");
