@@ -348,7 +348,9 @@
                         <th>IP Address</th>
                         <th>الاسم المختصر</th>
                         <th>النوع</th>
-                        <th>Secret</th>
+                        <th>RTT</th>
+                        <th>Packet Loss</th>
+                        <th>OMS</th>
                         <th>الجلسات</th>
                         <th>الوصف</th>
                         <th style="width:90px;">إجراءات</th>
@@ -356,7 +358,7 @@
                 </thead>
                 <tbody>
                     @foreach($nasDevices as $nas)
-                        @php $s = $statuses[$nas->id] ?? ["online" => false, "active_sessions" => 0]; @endphp
+                        @php $s = $statuses[$nas->id] ?? ["online" => false, "active_sessions" => 0, "rtt" => 0, "packet_loss" => 100, "oms" => "offline"]; @endphp
                         <tr>
                             <td>
                                 <span class="nas-status {{ $s["online"] ? "online" : "offline" }}">
@@ -367,6 +369,33 @@
                             <td><span class="nas-ip">{{ $nas->nasname }}</span></td>
                             <td><strong>{{ $nas->shortname }}</strong></td>
                             <td><span class="type-tag">{{ $nas->type }}</span></td>
+                            <td>
+                                @if($s["online"])
+                                    <span class="fw-bold {{ $s["rtt"] < 80 ? "text-success" : ($s["rtt"] < 200 ? "text-warning" : "text-danger") }}">{{ $s["rtt"] }}ms</span>
+                                @else
+                                    <span class="text-muted">—</span>
+                                @endif
+                            </td>
+                            <td>
+                                @if($s["online"])
+                                    <span class="fw-bold {{ $s["packet_loss"] == 0 ? "text-success" : ($s["packet_loss"] < 5 ? "text-warning" : "text-danger") }}">{{ $s["packet_loss"] }}%</span>
+                                @else
+                                    <span class="text-muted">100%</span>
+                                @endif
+                            </td>
+                            <td>
+                                @if($s["oms"] == "excellent")
+                                    <span class="badge bg-success">ممتاز</span>
+                                @elseif($s["oms"] == "good")
+                                    <span class="badge bg-primary">جيد</span>
+                                @elseif($s["oms"] == "fair")
+                                    <span class="badge bg-warning">ضعيف</span>
+                                @elseif($s["oms"] == "poor")
+                                    <span class="badge bg-danger">سيء</span>
+                                @else
+                                    <span class="badge bg-secondary">غير متصل</span>
+                                @endif
+                            </td>
                             <td><span class="nas-secret" title="انقر لعرض كامل">••••••••</span></td>
                             <td>
                                 <span class="session-badge {{ $s["active_sessions"] > 0 ? "has-sessions" : "" }}">
