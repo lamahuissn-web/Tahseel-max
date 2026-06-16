@@ -192,7 +192,7 @@
                 <div class="d-flex align-items-center gap-3">
                     <span class="badge fs-5 px-3 py-2 {{ $isOnline ? 'bg-success' : 'bg-secondary' }}">
                         <i class="bi {{ $isOnline ? 'bi-wifi' : 'bi-wifi-off' }}"></i>
-                        {{ $isOnline ? '\u0645\u062A\u0635\u0644' : '\u063A\u064A\u0631 \u0645\u062A\u0635\u0644' }}
+                        {{ $isOnline ? 'متصل' : 'غير متصل' }}
                     </span>
                     <span style="direction: ltr;" class="fw-bold">{{ $client->sas_username }}</span>
                     @if($currentSpeed)
@@ -208,19 +208,19 @@
         <div class="row g-2 mb-3">
             <div class="col-4">
                 <div class="card border-0 shadow-sm text-center py-3">
-                    <small class="text-muted">{{ '\u0627\u0633\u062A\u0647\u0644\u0627\u0643 \u0627\u0644\u064A\u0648\u0645' }}</small>
+                    <small class="text-muted">{{ 'استهلاك اليوم' }}</small>
                     <strong class="text-primary fs-5">{{ fmtBytes($dlToday + $ulToday) }}</strong>
                 </div>
             </div>
             <div class="col-4">
                 <div class="card border-0 shadow-sm text-center py-3">
-                    <small class="text-muted">{{ '\u062A\u062D\u0645\u064A\u0644' }}</small>
+                    <small class="text-muted">{{ 'تحميل' }}</small>
                     <strong class="text-success fs-5">{{ fmtBytes($dlToday) }}</strong>
                 </div>
             </div>
             <div class="col-4">
                 <div class="card border-0 shadow-sm text-center py-3">
-                    <small class="text-muted">{{ '\u0631\u0641\u0639' }}</small>
+                    <small class="text-muted">{{ 'رفع' }}</small>
                     <strong class="text-info fs-5">{{ fmtBytes($ulToday) }}</strong>
                 </div>
             </div>
@@ -230,7 +230,7 @@
         @if($client->radius_stop_at)
         <div class="alert alert-danger py-2 mb-3 small">
             <i class="bi bi-calendar-x"></i>
-            {{ '\u0645\u062C\u062F\u0648\u0644 \u0644\u0644\u0625\u064A\u0642\u0627\u0641 \u0628\u062A\u0627\u0631\u064A\u062E: <strong>' . $client->radius_stop_at . '</strong>' }}
+            {{ 'مجدول للإيقاف بتاريخ: <strong>' . $client->radius_stop_at . '</strong>' }}
         </div>
         @endif
 
@@ -238,7 +238,7 @@
         @if(count($activeSessions) > 0)
         <div class="card border-0 shadow-sm mb-3">
             <div class="card-header bg-light py-2 d-flex justify-content-between align-items-center">
-                <h6 class="mb-0 fw-bold small"><i class="bi bi-wifi text-success"></i> {{ '\u0627\u0644\u062C\u0644\u0633\u0627\u062A \u0627\u0644\u0646\u0634\u0637\u0629' }} ({{ count($activeSessions) }})</h6>
+                <h6 class="mb-0 fw-bold small"><i class="bi bi-wifi text-success"></i> {{ 'الجلسات النشطة' }} ({{ count($activeSessions) }})</h6>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -246,11 +246,11 @@
                         <thead class="table-light">
                             <tr>
                                 <th>#</th>
-                                <th>{{ '\u0648\u0642\u062A \u0627\u0644\u0628\u062F\u0621' }}</th>
+                                <th>{{ 'وقت البدء' }}</th>
                                 <th>IP</th>
-                                <th>{{ '\u0627\u0644\u0645\u062F\u0629' }}</th>
-                                <th>{{ '\u062A\u062D\u0645\u064A\u0644' }}</th>
-                                <th>{{ '\u0631\u0641\u0639' }}</th>
+                                <th>{{ 'المدة' }}</th>
+                                <th>{{ 'تحميل' }}</th>
+                                <th>{{ 'رفع' }}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -276,19 +276,19 @@
         @if(count($recentSessions) > 0)
         <div class="card border-0 shadow-sm mb-3">
             <div class="card-header bg-light py-2">
-                <h6 class="mb-0 fw-bold small"><i class="bi bi-clock-history text-muted"></i> {{ '\u0622\u062E\u0631 5 \u062C\u0644\u0633\u0627\u062A \u0645\u0646\u062A\u0647\u064A\u0629' }}</h6>
+                <h6 class="mb-0 fw-bold small"><i class="bi bi-clock-history text-muted"></i> {{ 'آخر 5 جلسات منتهية' }}</h6>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-hover mb-0 small">
                         <thead class="table-light">
                             <tr>
-                                <th>{{ '\u0627\u0646\u062A\u0647\u062A' }}</th>
+                                <th>{{ 'انتهت' }}</th>
                                 <th>IP</th>
-                                <th>{{ '\u0627\u0644\u0645\u062F\u0629' }}</th>
-                                <th>{{ '\u062A\u062D\u0645\u064A\u0644' }}</th>
-                                <th>{{ '\u0631\u0641\u0639' }}</th>
-                                <th>{{ '\u0627\u0644\u0633\u0628\u0628' }}</th>
+                                <th>{{ 'المدة' }}</th>
+                                <th>{{ 'تحميل' }}</th>
+                                <th>{{ 'رفع' }}</th>
+                                <th>{{ 'السبب' }}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -317,31 +317,31 @@
         {{-- Quick Actions --}}
         <div class="card border-0 shadow-sm mb-3">
             <div class="card-header bg-light py-2">
-                <h6 class="mb-0 fw-bold small"><i class="bi bi-lightning text-warning"></i> {{ '\u0625\u062C\u0631\u0627\u0621\u0627\u062A \u0633\u0631\u064A\u0639\u0629' }}</h6>
+                <h6 class="mb-0 fw-bold small"><i class="bi bi-lightning text-warning"></i> {{ 'إجراءات سريعة' }}</h6>
             </div>
             <div class="card-body">
                 <div class="row g-2">
                     @if($isOnline)
                     <div class="col-6">
                         <button class="btn btn-outline-danger btn-sm w-100" onclick="radiusDisconnect({{ $client->id }})">
-                            <i class="bi bi-plug"></i> {{ '\u0642\u0637\u0639 \u0627\u0644\u0627\u062A\u0635\u0627\u0644' }}
+                            <i class="bi bi-plug"></i> {{ 'قطع الاتصال' }}
                         </button>
                     </div>
                     @endif
                     <div class="col-6">
                         <button class="btn btn-outline-warning btn-sm w-100" onclick="radiusToggle({{ $client->id }})">
-                            <i class="bi bi-toggle-off"></i> {{ $client->is_active ? '\u062A\u0639\u0637\u064A\u0644' : '\u062A\u0641\u0639\u064A\u0644' }}
+                            <i class="bi bi-toggle-off"></i> {{ $client->is_active ? 'تعطيل' : 'تفعيل' }}
                         </button>
                     </div>
                     <div class="col-6">
                         <button class="btn btn-outline-secondary btn-sm w-100" onclick="radiusScheduleStop({{ $client->id }}, '{{ $client->radius_stop_at ?? '' }}')">
-                            <i class="bi bi-calendar-stop"></i> {{ $client->radius_stop_at ? '\u062A\u0639\u062F\u064A\u0644 \u0627\u0644\u062C\u062F\u0648\u0644\u0629' : '\u062C\u062F\u0648\u0644\u0629 \u0625\u064A\u0642\u0627\u0641' }}
+                            <i class="bi bi-calendar-stop"></i> {{ $client->radius_stop_at ? 'تعديل الجدولة' : 'جدولة إيقاف' }}
                         </button>
                     </div>
                     @if($client->radius_stop_at)
                     <div class="col-6">
                         <button class="btn btn-outline-danger btn-sm w-100" onclick="radiusClearSchedule({{ $client->id }})">
-                            <i class="bi bi-x-circle"></i> {{ '\u0625\u0644\u063A\u0627\u0621 \u0627\u0644\u062C\u062F\u0648\u0644\u0629' }}
+                            <i class="bi bi-x-circle"></i> {{ 'إلغاء الجدولة' }}
                         </button>
                     </div>
                     @endif
@@ -353,24 +353,24 @@
         @if(isset($radiusInfo['last_session']))
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-light py-2">
-                <h6 class="mb-0 fw-bold small"><i class="bi bi-clock-history text-info"></i> {{ '\u0622\u062E\u0631 \u062C\u0644\u0633\u0629' }}</h6>
+                <h6 class="mb-0 fw-bold small"><i class="bi bi-clock-history text-info"></i> {{ 'آخر جلسة' }}</h6>
             </div>
             <div class="card-body">
                 <div class="row g-3">
                     <div class="col-md-6">
                         <table class="table table-sm table-borderless mb-0">
                             <tr><td class="text-muted">IP</td><td class="fw-bold" style="direction:ltr;">{{ $radiusInfo['last_session']['framed_ip'] ?? '—' }}</td></tr>
-                            <tr><td class="text-muted">{{ '\u0627\u0644\u0631\u0627\u0648\u062A\u0631' }}</td><td class="fw-bold" style="direction:ltr;">{{ $radiusInfo['last_session']['nas'] ?? '—' }}</td></tr>
-                            <tr><td class="text-muted">{{ '\u0627\u0644\u0645\u062F\u0629' }}</td><td class="fw-bold">@php $sec = $radiusInfo['last_session']['session_time'] ?? 0; $h = floor($sec/3600); $m = floor(($sec%3600)/60); @endphp {{ $h }}h {{ $m }}m</td></tr>
-                            <tr><td class="text-muted">{{ '\u0622\u062E\u0631 \u062F\u062E\u0648\u0644' }}</td><td>{{ $radiusInfo['last_login'] ?? '—' }}</td></tr>
+                            <tr><td class="text-muted">{{ 'الراوتر' }}</td><td class="fw-bold" style="direction:ltr;">{{ $radiusInfo['last_session']['nas'] ?? '—' }}</td></tr>
+                            <tr><td class="text-muted">{{ 'المدة' }}</td><td class="fw-bold">@php $sec = $radiusInfo['last_session']['session_time'] ?? 0; $h = floor($sec/3600); $m = floor(($sec%3600)/60); @endphp {{ $h }}h {{ $m }}m</td></tr>
+                            <tr><td class="text-muted">{{ 'آخر دخول' }}</td><td>{{ $radiusInfo['last_login'] ?? '—' }}</td></tr>
                         </table>
                     </div>
                     <div class="col-md-6">
-                        <h6 class="fw-bold small">{{ '\u0627\u0633\u062A\u0647\u0644\u0627\u0643 \u0627\u0644\u0634\u0647\u0631' }}</h6>
+                        <h6 class="fw-bold small">{{ 'استهلاك الشهر' }}</h6>
                         <table class="table table-sm table-borderless mb-0">
-                            <tr><td class="text-muted">{{ '\u062A\u062D\u0645\u064A\u0644' }}</td><td class="fw-bold text-primary" style="direction:ltr;">{{ fmtBytes($radiusInfo['traffic']['download_bytes'] ?? 0) }}</td></tr>
-                            <tr><td class="text-muted">{{ '\u0631\u0641\u0639' }}</td><td class="fw-bold text-success" style="direction:ltr;">{{ fmtBytes($radiusInfo['traffic']['upload_bytes'] ?? 0) }}</td></tr>
-                            <tr><td class="text-muted">{{ '\u0627\u0644\u0625\u062C\u0645\u0627\u0644\u064A' }}</td><td class="fw-bold" style="direction:ltr;">{{ fmtBytes($radiusInfo['traffic']['total_bytes'] ?? 0) }}</td></tr>
+                            <tr><td class="text-muted">{{ 'تحميل' }}</td><td class="fw-bold text-primary" style="direction:ltr;">{{ fmtBytes($radiusInfo['traffic']['download_bytes'] ?? 0) }}</td></tr>
+                            <tr><td class="text-muted">{{ 'رفع' }}</td><td class="fw-bold text-success" style="direction:ltr;">{{ fmtBytes($radiusInfo['traffic']['upload_bytes'] ?? 0) }}</td></tr>
+                            <tr><td class="text-muted">{{ 'الإجمالي' }}</td><td class="fw-bold" style="direction:ltr;">{{ fmtBytes($radiusInfo['traffic']['total_bytes'] ?? 0) }}</td></tr>
                         </table>
                     </div>
                 </div>
