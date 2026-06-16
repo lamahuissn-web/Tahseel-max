@@ -137,11 +137,26 @@ function radiusChangeSpeed(clientId, speed) {
     });
 }
 
-function radiusScheduleStop(clientId) {
+function radiusScheduleStop(clientId, currentStopDate) {
     var today = new Date().toISOString().split('T')[0];
+    var in3Days = new Date(Date.now() + 3*24*60*60*1000).toISOString().split('T')[0];
+    var in7Days = new Date(Date.now() + 7*24*60*60*1000).toISOString().split('T')[0];
+    var in14Days = new Date(Date.now() + 14*24*60*60*1000).toISOString().split('T')[0];
+    
+    var currentHtml = '';
+    if (currentStopDate) {
+        currentHtml = '<div class="alert alert-info mb-3">📅 الإيقاف المجدول حالياً: <strong>' + currentStopDate + '</strong></div>';
+    }
+    
     Swal.fire({
         title: '{{ trans("clients.schedule_stop") }}',
-        html: '<input type="date" id="stopDateInput" class="form-control" min="' + today + '">',
+        html: currentHtml + 
+            '<div class="d-flex gap-2 mb-3 flex-wrap justify-content-center">' +
+            '<button type="button" class="btn btn-outline-danger btn-sm" onclick="document.getElementById(\'stopDateInput\').value=\'' + in3Days + '\'">+3 أيام</button>' +
+            '<button type="button" class="btn btn-outline-warning btn-sm" onclick="document.getElementById(\'stopDateInput\').value=\'' + in7Days + '\'">+ أسبوع</button>' +
+            '<button type="button" class="btn btn-outline-info btn-sm" onclick="document.getElementById(\'stopDateInput\').value=\'' + in14Days + '\'">+ أسبوعين</button>' +
+            '</div>' +
+            '<input type="date" id="stopDateInput" class="form-control" min="' + today + '">',
         showCancelButton: true,
         confirmButtonColor: '#6c757d',
         cancelButtonColor: '#dc3545',
@@ -157,10 +172,6 @@ function radiusScheduleStop(clientId) {
         }
     }).then((result) => {
         if (result.isConfirmed) {
-            var btn = $('button[onclick*="radiusScheduleStop(' + clientId + ')"]');
-            var original = btn.html();
-            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
-
             $.ajax({
                 url: '/' + getLocalePrefix() + '/admin/clients/' + clientId + '/schedule-radius-stop',
                 type: 'POST',
@@ -185,9 +196,37 @@ function radiusScheduleStop(clientId) {
                         timer: 3000,
                         showConfirmButton: false
                     });
+                }
+            });
+        }
+    });
+}
+
+function radiusClearSchedule(clientId) {
+    Swal.fire({
+        title: 'إلغاء جدولة الإيقاف',
+        text: 'هل تريد إلغاء جدولة إيقاف الإنترنت لهذا الزبون؟',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، إلغاء',
+        cancelButtonText: 'تراجع'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            $.ajax({
+                url: '/' + getLocalePrefix() + '/admin/clients/' + clientId + '/schedule-radius-stop',
+                type: 'POST',
+                data: {
+                    _token: '{{ csrf_token() }}',
+                    stop_date: ''
                 },
-                complete: function() {
-                    btn.prop('disabled', false).html(original);
+                success: function(res) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'تم إلغاء الجدولة',
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+                    if (res.success) setTimeout(function() { location.reload(); }, 1500);
                 }
             });
         }

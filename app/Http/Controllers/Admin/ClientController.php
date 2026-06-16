@@ -1102,8 +1102,11 @@ class ClientController extends Controller
             return response()->json(["success" => false, "message" => trans("clients.no_radius_username")]);
         }
         $stopDate = $request->input("stop_date");
+        // Empty stop_date = clear the schedule
         if (!$stopDate) {
-            return response()->json(["success" => false, "message" => trans("clients.stop_date_required")]);
+            $client->radius_stop_at = null;
+            $client->save();
+            return response()->json(["success" => true, "message" => "\u062a\u0645 \u0625\u0644\u063a\u0627\u0621 \u062c\u062f\u0648\u0644\u0629 \u0627\u0644\u0625\u064a\u0642\u0627\u0641"]);
         }
         try {
             $client->radius_stop_at = $stopDate;

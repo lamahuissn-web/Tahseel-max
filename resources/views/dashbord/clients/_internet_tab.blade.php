@@ -267,7 +267,20 @@
                 <button type="button" class="btn btn-outline-warning btn-sm w-100" onclick="radiusToggle({{ $client->id }})"><i class="bi bi-toggle-off"></i> {{ $client->is_active ? 'تعطيل' : 'تفعيل' }}</button>
             </div>
             <div class="col-6">
-                <button type="button" class="btn btn-outline-secondary btn-sm w-100" onclick="radiusScheduleStop({{ $client->id }})"><i class="bi bi-calendar-stop"></i> جدولة إيقاف</button>
+                @php($stopDate = $client->radius_stop_at ?? null)
+            @if($stopDate)
+            <div class="col-12 mb-1">
+                <small class="text-muted d-block">مجدول للإيقاف بتاريخ: <strong class="text-danger">{{ $stopDate }}</strong></small>
+            </div>
+            @endif
+            <div class="col-6">
+                <button type="button" class="btn btn-outline-secondary btn-sm w-100" onclick="radiusScheduleStop({{ $client->id }}, '{{ $stopDate ?? '' }}')"><i class="bi bi-calendar-stop"></i> @if($stopDate) تعديل الجدولة @else جدولة إيقاف @endif</button>
+            </div>
+            @if($stopDate)
+            <div class="col-6">
+                <button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="radiusClearSchedule({{ $client->id }})"><i class="bi bi-x-circle"></i> إلغاء الجدولة</button>
+            </div>
+            @endif
             </div>
         </div>
     </div>

@@ -225,6 +225,7 @@ Route::group(
             Route::get("sessions", [\App\Http\Controllers\Admin\SessionsController::class, "index"])->name("sessions.index");
             Route::get("sessions/refresh", [\App\Http\Controllers\Admin\SessionsController::class, "refresh"])->name("sessions.refresh");
             Route::get("sessions/router-health", [App\Http\Controllers\Admin\SessionsController::class, "routerHealth"])->name("sessions.router_health");
+            Route::get("scheduled-stops", [App\Http\Controllers\Admin\ScheduledStopController::class, "index"])->name("scheduled_stops.index");
             Route::get("sessions/disconnect/{username}", [\App\Http\Controllers\Admin\SessionsController::class, "disconnect"])->name("sessions.disconnect");
             Route::get("sessions/change-speed/{username}", [\App\Http\Controllers\Admin\SessionsController::class, "changeSpeedForm"])->name("sessions.change-speed");
             Route::post("sessions/change-speed/{username}", [\App\Http\Controllers\Admin\SessionsController::class, "changeSpeed"])->name("sessions.change-speed.post");
