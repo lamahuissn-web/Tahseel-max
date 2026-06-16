@@ -24,16 +24,16 @@
     <div class="col-md-4">
         <div class="card shadow-sm border-0">
             <div class="card-body text-center py-3">
-                <i class="bi bi-link-45deg fs-2" style="color:#f97316;"></i>
+                <i class="bi bi-layers fs-2" style="color:#0052cc;"></i>
                 <strong class="fs-4 d-block">{{ count($profiles) }}</strong>
-                <small class="text-muted">خطط متصلة</small>
+                <small class="text-muted">إجمالي الباقات</small>
             </div>
         </div>
     </div>
     <div class="col-md-4">
         <div class="card shadow-sm border-0">
             <div class="card-body text-center py-3">
-                <i class="bi bi-person-badge fs-2 text-success"></i>
+                <i class="bi bi-people fs-2 text-success"></i>
                 <strong class="fs-4 d-block">{{ $totalUsers }}</strong>
                 <small class="text-muted">المستخدمين</small>
             </div>
@@ -42,9 +42,9 @@
     <div class="col-md-4">
         <div class="card shadow-sm border-0">
             <div class="card-body text-center py-3">
-                <i class="bi bi-layers fs-2 text-primary"></i>
+                <i class="bi bi-link-45deg fs-2" style="color:#f97316;"></i>
                 <strong class="fs-4 d-block">{{ $totalSubs }}</strong>
-                <small class="text-muted">إجمالي الخطط</small>
+                <small class="text-muted">خطط مرتبطة</small>
             </div>
         </div>
     </div>
@@ -56,11 +56,11 @@
             <thead class="table-light">
                 <tr>
                     <th>اسم الباقة</th>
-                    <th>السعرة</th>
-                    <th>ترانسم (Sim-Use)</th>
-                    <th>الخطة المدفوعة</th>
+                    <th>السرعة</th>
+                    <th>تزامن (Sim-Use)</th>
+                    <th>الخطة المرتبطة</th>
                     <th>المستخدمين</th>
-                    <th class="text-end">الإجراءات</th>
+                    <th class="text-end" style="width:90px;">الإجراءات</th>
                 </tr>
             </thead>
             <tbody>
@@ -74,25 +74,25 @@
                         ->where('groupname', $profile)->count();
                 @endphp
                 <tr>
-                    <td><span class="badge rounded-pill bg-primary px-3 py-2">{{ $profile }}</span></td>
-                    <td><span class="badge rounded-pill bg-danger px-3 py-2">{{ $speed }}</span></td>
-                    <td>{{ $sim }}</td>
+                    <td><span class="badge bg-primary bg-opacity-10 text-primary rounded px-3 py-2 fs-6">{{ $profile }}</span></td>
+                    <td><span class="badge" style="background:#fdf2f8;color:#be185d;border:1px solid #fbcfe8;">{{ $speed }}</span></td>
+                    <td class="fw-medium">{{ $sim }}</td>
                     <td>
                         @if($sub)
-                            <span>{{ $sub->name }}</span>
-                            <small class="text-muted">(\${{ number_format($sub->price, 2) }})</small>
+                            <span class="fw-bold">{{ $sub->name }}</span>
+                            <small class="text-muted">(\\${{ number_format($sub->price, 2) }})</small>
                         @else
                             <span class="text-muted small">—</span>
                         @endif
                     </td>
-                    <td>{{ $userCount }}</td>
+                    <td class="fw-bold">{{ $userCount }}</td>
                     <td class="text-end">
-                        <a href="{{ route('admin.profiles.edit', $profile) }}" class="btn btn-sm btn-outline-primary">
-                            <i class="bi bi-pencil"></i>
+                        <a href="{{ route('admin.profiles.edit', $profile) }}" class="btn btn-sm btn-link text-secondary p-1" title="تعديل">
+                            <i class="bi bi-pencil fs-5"></i>
                         </a>
                         <form action="{{ route('admin.profiles.destroy', $profile) }}" method="POST" class="d-inline" onsubmit="return confirm('حذف {{ $profile }}؟')">
                             @csrf @method('DELETE')
-                            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                            <button class="btn btn-sm btn-link text-secondary p-1" title="حذف"><i class="bi bi-trash fs-5"></i></button>
                         </form>
                     </td>
                 </tr>
