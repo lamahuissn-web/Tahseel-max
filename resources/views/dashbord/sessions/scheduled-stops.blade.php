@@ -38,7 +38,7 @@
                     <tr class="{{ $isOverdue ? 'table-danger' : ($daysLeft <= 3 && $daysLeft >= 0 ? 'table-warning' : '') }}">
                         <td>{{ $client->id }}</td>
                         <td class="fw-bold">
-                            <a href="{{ route('admin.clients.details', $client->id) }}">{{ $client->name }}</a>
+                            <a href="{{ route('admin.clients.show', $client->id) }}">{{ $client->name }}</a>
                         </td>
                         <td><code>{{ $client->sas_username ?? '—' }}</code></td>
                         <td dir="ltr">{{ $client->phone ?? '—' }}</td>
@@ -61,7 +61,7 @@
                             @endif
                         </td>
                         <td>
-                            <a href="{{ route('admin.clients.details', $client->id) }}" class="btn btn-sm btn-outline-primary">
+                            <a href="{{ route('admin.clients.show', $client->id) }}" class="btn btn-sm btn-outline-primary">
                                 <i class="bi bi-eye"></i>
                             </a>
                         </td>
