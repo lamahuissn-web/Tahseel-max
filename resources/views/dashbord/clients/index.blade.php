@@ -424,7 +424,7 @@
             showLoaderOnConfirm: true,
             preConfirm: function() {
                 return $.ajax({
-                    url: '{{ route("admin.clients.change_status", ["id" => "__ID__", "status" => "__STATUS__"]) }}'.replace('__ID__', clientId),
+                    url: '{{ route("admin.clients.change_status", ["id" => "__ID__", "status" => "__STATUS__"]) }}'.replace('__ID__', clientId).replace('__STATUS__', currentStatus),
                     type: 'POST',
                     data: { _token: '{{ csrf_token() }}' },
                     dataType: 'json'
