@@ -186,10 +186,10 @@
         align-items: center;
         justify-content: center;
     }
-    .fa-sync-alt.fa-spin-hover:hover {
-        animation: fa-spin 1.5s infinite linear;
+    .fa-sync-alt.bi-spin-hover:hover {
+        animation: bi-spin 1.5s infinite linear;
     }
-    @keyframes fa-spin {
+    @keyframes bi-spin {
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
     }
@@ -207,7 +207,7 @@
     <div class="s-header d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
         <div>
             <h4 class="mb-1 fw-bold text-white d-flex align-items-center gap-2">
-                <i class="fas fa-calendar-times text-danger"></i>
+                <i class="bi bi-calendar-x text-danger"></i>
                 <span>جدولة إيقاف الإنترنت</span>
             </h4>
             <p class="mb-0 text-white-50 small">
@@ -216,7 +216,7 @@
         </div>
         <div class="d-flex align-items-center gap-2">
             <span class="badge bg-white bg-opacity-10 text-white border border-white border-opacity-10 px-3 py-2 rounded-3 small">
-                <i class="fas fa-sync-alt fa-spin-hover me-1"></i>
+                <i class="bi bi-arrow-clockwise bi-spin-hover me-1"></i>
                 آخر تحديث: {{ now()->format('Y-m-d H:i') }}
             </span>
         </div>
@@ -230,7 +230,7 @@
                     <span class="s-stat-value text-primary">{{ $totalScheduled }}</span>
                 </div>
                 <div class="s-stat-icon bg-primary bg-opacity-10 text-primary">
-                    <i class="fas fa-clipboard-list"></i>
+                    <i class="bi bi-list-check"></i>
                 </div>
             </div>
         </div>
@@ -241,7 +241,7 @@
                     <span class="s-stat-value text-warning">{{ $upcoming }}</span>
                 </div>
                 <div class="s-stat-icon bg-warning bg-opacity-10 text-warning">
-                    <i class="fas fa-calendar-day"></i>
+                    <i class="bi bi-calendar-event"></i>
                 </div>
             </div>
         </div>
@@ -252,7 +252,7 @@
                     <span class="s-stat-value text-danger">{{ $overdue }}</span>
                 </div>
                 <div class="s-stat-icon bg-danger bg-opacity-10 text-danger">
-                    <i class="fas fa-exclamation-triangle"></i>
+                    <i class="bi bi-exclamation-triangle"></i>
                 </div>
             </div>
         </div>
@@ -263,7 +263,7 @@
                     <span class="s-stat-value text-success">{{ $activeClientsCount }}</span>
                 </div>
                 <div class="s-stat-icon bg-success bg-opacity-10 text-success">
-                    <i class="fas fa-wifi"></i>
+                    <i class="bi bi-wifi"></i>
                 </div>
             </div>
         </div>
@@ -299,7 +299,7 @@
                         <td>
                             <div class="d-flex align-items-center gap-2">
                                 <div class="client-avatar">
-                                    <i class="fas fa-user small"></i>
+                                    <i class="bi bi-person small"></i>
                                 </div>
                                 <a href="{{ route('admin.clients.show', $client->id) }}" class="fw-bold text-decoration-none hover-primary">
                                     {{ $client->name }}
@@ -316,7 +316,7 @@
                         <td dir="ltr" class="text-start">
                             @if($client->phone)
                                 <a href="tel:{{ $client->phone }}" class="text-decoration-none">
-                                    <i class="fas fa-phone-alt text-muted me-1 small"></i>
+                                    <i class="bi bi-telephone text-muted me-1 small"></i>
                                     {{ $client->phone }}
                                 </a>
                             @else
@@ -325,28 +325,28 @@
                         </td>
                         <td>
                             <span>
-                                <i class="fas fa-network-wired text-muted me-1 small"></i>
+                                <i class="bi bi-hdd-network text-muted me-1 small"></i>
                                 {{ $client->plan_name ?? '—' }}
                             </span>
                         </td>
                         <td class="fw-bold">
-                            <i class="far fa-calendar-alt text-muted me-1"></i>
+                            <i class="bi bi-calendar3 text-muted me-1"></i>
                             {{ $client->radius_stop_at }}
                         </td>
                         <td>
                             @if($isOverdue)
                                 <span class="badge badge-soft-danger rounded-pill px-2 py-1">
-                                    <i class="fas fa-exclamation-triangle me-1"></i>
+                                    <i class="bi bi-exclamation-triangle me-1"></i>
                                     متأخر {{ abs($daysLeft) }} يوم
                                 </span>
                             @elseif($daysLeft == 0)
                                 <span class="badge badge-soft-danger rounded-pill px-2 py-1">
-                                    <i class="fas fa-hourglass-half me-1"></i>
+                                    <i class="bi bi-hourglass-split me-1"></i>
                                     اليوم
                                 </span>
                             @else
                                 <span class="badge badge-soft-warning rounded-pill px-2 py-1">
-                                    <i class="fas fa-clock me-1"></i>
+                                    <i class="bi bi-clock me-1"></i>
                                     {{ $daysLeft }} أيام
                                 </span>
                             @endif
@@ -354,30 +354,30 @@
                         <td class="text-center">
                             @if($client->is_active)
                                 <span class="badge badge-soft-success rounded-pill px-2 py-1">
-                                    <i class="fas fa-circle status-dot me-1"></i> نشط
+                                    <i class="bi bi-circle-fill status-dot me-1"></i> نشط
                                 </span>
                             @else
                                 <span class="badge badge-soft-secondary rounded-pill px-2 py-1">
-                                    <i class="fas fa-circle status-dot me-1"></i> موقوف
+                                    <i class="bi bi-circle-fill status-dot me-1"></i> موقوف
                                 </span>
                             @endif
                         </td>
                         <td class="text-center">
                             <div class="d-flex gap-1 justify-content-center">
                                 <button type="button" class="btn btn-sm quick-action-btn" onclick="handleQuickExtend({{ $client->id }}, 3, '{{ addslashes($client->name) }}')" title="تمديد 3 أيام">
-                                    <i class="fas fa-plus me-1 text-success"></i> 3 أيام
+                                    <i class="bi bi-plus-lg me-1 text-success"></i> 3 أيام
                                 </button>
                                 <button type="button" class="btn btn-sm quick-action-btn" onclick="handleQuickExtend({{ $client->id }}, 7, '{{ addslashes($client->name) }}')" title="تمديد أسبوع">
-                                    <i class="fas fa-plus me-1 text-success"></i> أسبوع
+                                    <i class="bi bi-plus-lg me-1 text-success"></i> أسبوع
                                 </button>
                                 <button type="button" class="btn btn-sm quick-action-btn" onclick="handleQuickExtend({{ $client->id }}, 14, '{{ addslashes($client->name) }}')" title="تمديد أسبوعين">
-                                    <i class="fas fa-plus me-1 text-success"></i> أسبوعين
+                                    <i class="bi bi-plus-lg me-1 text-success"></i> أسبوعين
                                 </button>
                             </div>
                         </td>
                         <td class="text-end">
                             <a href="{{ route('admin.clients.show', $client->id) }}" class="btn btn-sm btn-action-view" title="عرض التفاصيل">
-                                <i class="fas fa-eye me-1 text-primary"></i> عرض
+                                <i class="bi bi-eye me-1 text-primary"></i> عرض
                             </a>
                         </td>
                     </tr>
@@ -389,14 +389,14 @@
     @else
     <div class="text-center py-5 px-4 bg-white border rounded-3 shadow-sm my-4">
         <div class="mb-3 text-success">
-            <i class="fas fa-calendar-check fa-3x"></i>
+            <i class="bi bi-calendar-check fa-3x"></i>
         </div>
         <h5 class="fw-bold mb-2">لا يوجد زبائن لديهم جدولة إيقاف حالياً</h5>
         <p class="text-muted small mb-4 mx-auto" style="max-width: 480px;">
             جميع حسابات الزبائن تعمل بشكل اعتيادي ولا يوجد أي إيقاف مجدول في الوقت الحالي.
         </p>
         <div class="d-inline-flex align-items-center gap-2 bg-light px-3 py-2 rounded-pill small border">
-            <i class="fas fa-info-circle text-info"></i>
+            <i class="bi bi-info-circle text-info"></i>
             <span>يمكنك جدولة إيقاف الإنترنت من: <strong>صفحة تفاصيل الزبون ← 🌐 الإنترنت ← 📅 جدولة إيقاف</strong></span>
         </div>
     </div>
