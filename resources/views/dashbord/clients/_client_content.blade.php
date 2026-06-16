@@ -90,6 +90,96 @@
     <div class="row">
         {{-- Left Column: Session Info + Invoices --}}
         <div class="col-lg-8">
+            {{-- Active Sessions Card --}}
+            @if($client->sas_username)
+            @php
+                $radiusSvc = app(\App\Services\Radius\RadiusService::class);
+                $activeSessions = $radiusSvc->getActiveUserSessions($client->sas_username);
+                $todayTraffic = $radiusSvc->getTodayTraffic($client->sas_username);
+                $isOnline = $radiusSvc->isOnline($client->sas_username);
+            @endphp
+            <div class="card shadow-sm mb-4 border-0">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h6 class="card-title mb-0 fw-bold">
+                        <i class="bi bi-wifi text-success"></i> الجلسات النشطة
+                    </h6>
+                    <div>
+                        <span class="badge {{ $isOnline ? 'bg-success' : 'bg-secondary' }} fs-6 px-3 py-1">
+                            <i class="bi bi-circle-fill" style="font-size:0.5rem;"></i>
+                            {{ $isOnline ? 'متصل' : 'غير متصل' }}
+                        </span>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    @if(count($activeSessions) > 0)
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0 small">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>#</th>
+                                    <th>IP</th>
+                                    <th>المدة</th>
+                                    <th>تحميل</th>
+                                    <th>رفع</th>
+                                    <th>وقت البدء</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($activeSessions as $s)
+                                @php
+                                    $h = floor(($s->acctsessiontime ?? 0) / 3600);
+                                    $m = floor((($s->acctsessiontime ?? 0) % 3600) / 60);
+                                @endphp
+                                <tr>
+                                    <td class="fw-bold">#{{ $s->radacctid }}</td>
+                                    <td><code>{{ $s->framedipaddress ?? '—' }}</code></td>
+                                    <td>{{ $h }}h {{ $m }}m</td>
+                                    <td>{{ formatBytes($s->acctoutputoctets ?? 0) }}</td>
+                                    <td>{{ formatBytes($s->acctinputoctets ?? 0) }}</td>
+                                    <td class="small text-muted">{{ $s->acctstarttime ? date('Y-m-d H:i', strtotime($s->acctstarttime)) : '—' }}</td>
+                                </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                    @else
+                    <div class="text-center py-3 text-muted small">
+                        <i class="bi bi-wifi-off d-block mb-1 fs-4"></i>
+                        <p class="mb-0">لا توجد جلسات نشطة حالياً</p>
+                        <small>آخر تحديث: {{ now()->format('H:i') }}</small>
+                    </div>
+                    @endif
+                </div>
+            </div>
+
+            {{-- Today Traffic Mini Stats --}}
+            @php
+                $dlToday = $todayTraffic['download_bytes'] ?? 0;
+                $ulToday = $todayTraffic['upload_bytes'] ?? 0;
+                $totalToday = $dlToday + $ulToday;
+            @endphp
+            <div class="row g-2 mb-4">
+                <div class="col-4">
+                    <div class="card shadow-sm border-0 text-center py-2">
+                        <small class="text-muted">استهلاك اليوم</small>
+                        <strong class="text-primary">{{ formatBytes($totalToday) }}</strong>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="card shadow-sm border-0 text-center py-2">
+                        <small class="text-muted">تحميل</small>
+                        <strong class="text-success">{{ formatBytes($dlToday) }}</strong>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="card shadow-sm border-0 text-center py-2">
+                        <small class="text-muted">رفع</small>
+                        <strong class="text-info">{{ formatBytes($ulToday) }}</strong>
+                    </div>
+                </div>
+            </div>
+            @endif
+
             {{-- Unpaid Invoices Card --}}
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-light d-flex justify-content-between align-items-center">
