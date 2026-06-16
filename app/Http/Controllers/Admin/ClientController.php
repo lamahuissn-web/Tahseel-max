@@ -438,26 +438,11 @@ class ClientController extends Controller
     /***********************************************/
     public function client_paid_invoices($id)
     {
-        $data['all_data'] = $this->ClientsRepository->getById($id);
-        $data['client'] = $data['all_data'];
-        $data['unpaid_data'] = Invoice::with(['client', 'employee', 'subscription'])
-            ->where('client_id', $id)
-            ->where('status', 'unpaid')
-            ->get();
-        $data['paid_data'] = Invoice::with(['client', 'employee', 'subscription'])
-            ->where('client_id', $id)
-            ->whereIn('status', ['paid', 'partial'])
-            ->get();
-        $data['total_unpaid'] = $data['unpaid_data']->sum('amount');
-        $data['total_paid'] = $data['paid_data']->sum('paid_amount');
-        $data['unpaidInvoices'] = $data['unpaid_data'];
-        $data['totalUnpaid'] = $data['total_unpaid'];
-        // dd($data);
-        return view($this->admin_view . '.invoices.invoices', $data);
-    }
-    /***********************************************/
-    public function client_invoices($id)
-    {
+        $data['all_data'] = $this->ClientsRepository->ge
+
+... [OUTPUT TRUNCATED - 881 chars omitted out of 50881 total] ...
+
+ {
         $data['all_data'] = $this->ClientsRepository->getById($id);
         $data['client'] = $data['all_data'];
         $data['unpaid_data'] = Invoice::where('client_id', $id)
@@ -704,10 +689,10 @@ class ClientController extends Controller
                     $radius = app(\App\Services\Radius\RadiusService::class);
                     if ($newStatus == '0') {
                         try {
-                            $radius->coaDisconnect($client->sas_username);
-                            \Log::info("RADIUS disconnected {$client->sas_username} (status became inactive)");
+                            $radius->disableClient($client);
+                            \Log::info("RADIUS disabled {$client->sas_username} (status became inactive)");
                         } catch (\Exception $e) {
-                            \Log::warning("RADIUS disconnect failed for {$client->sas_username}: " . $e->getMessage());
+                            \Log::warning("RADIUS disable failed for {$client->sas_username}: " . $e->getMessage());
                         }
                     } else {
                         try {
