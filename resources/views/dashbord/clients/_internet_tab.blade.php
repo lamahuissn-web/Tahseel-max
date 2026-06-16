@@ -147,22 +147,38 @@
             <table class="table table-hover mb-0">
                 <thead class="table-light small">
                     <tr>
-                        <th>Session</th>
-                        <th> تحميل</th>
-                        <th> رفع</th>
-                        <th>IP</th>
+                        <th>#</th>
+                        <th>وقت البدء</th>
                         <th>المدة</th>
+                        <th>IP</th>
+                        <th>تحميل</th>
+                        <th>رفع</th>
+                        <th>الحالة</th>
                         <th></th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach($activeSessions as $session)
+                    @php
+                        $h = floor(($session->acctsessiontime ?? 0) / 3600);
+                        $m = floor((($session->acctsessiontime ?? 0) % 3600) / 60);
+                        $startTime = $session->acctstarttime ?? null;
+                        $isZeroTraffic = ($session->acctoutputoctets ?? 0) == 0 && ($session->acctinputoctets ?? 0) == 0;
+                    @endphp
                     <tr>
-                        <td>#{{ $session->radacctid }}</td>
-                        <td>{{ formatBytesHelper($session->acctoutputoctets) }}</td>
-                        <td>{{ formatBytesHelper($session->acctinputoctets) }}</td>
-                        <td><code class="small">{{ $session->framedipaddress }}</code></td>
-                        <td>@php $h = floor($session->acctsessiontime / 3600); $m = floor(($session->acctsessiontime % 3600) / 60); @endphp {{ $h }}h {{ $m }}m</td>
+                        <td class="fw-bold">#{{ $session->radacctid }}</td>
+                        <td>
+                            <span class="small">{{ $startTime ? date('Y-m-d H:i', strtotime($startTime)) : '—' }}</span>
+                        </td>
+                        <td><span class="badge bg-light text-dark">{{ $h }}h {{ $m }}m</span></td>
+                        <td><code class="small">{{ $session->framedipaddress ?? '—' }}</code></td>
+                        <td class="{{ $isZeroTraffic ? 'text-muted' : 'text-success' }}">{{ formatBytesHelper($session->acctoutputoctets ?? 0) }}</td>
+                        <td class="{{ $isZeroTraffic ? 'text-muted' : 'text-info' }}">{{ formatBytesHelper($session->acctinputoctets ?? 0) }}</td>
+                        <td>
+                            <span class="badge bg-success">
+                                <i class="bi bi-circle-fill" style="font-size:0.4rem;"></i> متصل
+                            </span>
+                        </td>
                         <td>
                             <button class="btn btn-sm btn-outline-danger px-2 py-0" onclick="radiusDisconnect({{ $client->id }})" title="قطع"><i class="bi bi-plug"></i></button>
                         </td>
