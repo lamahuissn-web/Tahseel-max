@@ -13,11 +13,10 @@
 </div>
 
 @php
-    $totalUsers = 0; $totalSubs = 0; $speeds = [];
+    $totalUsers = 0; $totalSubs = 0;
     foreach($profiles as $p) {
         $totalUsers += DB::connection('radius')->table('radusergroup')->where('groupname', $p)->count();
         if(isset($subscriptions[$p])) $totalSubs++;
-        $speeds[] = $groupSpeeds[$p]->value ?? '—';
     }
 @endphp
 
@@ -25,27 +24,27 @@
     <div class="col-md-4">
         <div class="card shadow-sm border-0">
             <div class="card-body text-center py-3">
-                <i class="bi bi-layers text-primary fs-2 d-block mb-1"></i>
-                <strong class="fs-4">{{ count($profiles) }}</strong>
-                <small class="text-muted d-block">إجمالي الباقات</small>
+                <i class="bi bi-link-45deg fs-2" style="color:#f97316;"></i>
+                <strong class="fs-4 d-block">{{ count($profiles) }}</strong>
+                <small class="text-muted">خطط متصلة</small>
             </div>
         </div>
     </div>
     <div class="col-md-4">
         <div class="card shadow-sm border-0">
             <div class="card-body text-center py-3">
-                <i class="bi bi-people text-success fs-2 d-block mb-1"></i>
-                <strong class="fs-4">{{ $totalUsers }}</strong>
-                <small class="text-muted d-block">المستخدمين</small>
+                <i class="bi bi-person-badge fs-2 text-success"></i>
+                <strong class="fs-4 d-block">{{ $totalUsers }}</strong>
+                <small class="text-muted">المستخدمين</small>
             </div>
         </div>
     </div>
     <div class="col-md-4">
         <div class="card shadow-sm border-0">
             <div class="card-body text-center py-3">
-                <i class="bi bi-link-45deg text-warning fs-2 d-block mb-1"></i>
-                <strong class="fs-4">{{ $totalSubs }}</strong>
-                <small class="text-muted d-block">خطط مرتبطة</small>
+                <i class="bi bi-layers fs-2 text-primary"></i>
+                <strong class="fs-4 d-block">{{ $totalSubs }}</strong>
+                <small class="text-muted">إجمالي الخطط</small>
             </div>
         </div>
     </div>
@@ -57,9 +56,9 @@
             <thead class="table-light">
                 <tr>
                     <th>اسم الباقة</th>
-                    <th>السرعة</th>
-                    <th>تزامن (Sim-Use)</th>
-                    <th>الخطة المرتبطة</th>
+                    <th>السعرة</th>
+                    <th>ترانسم (Sim-Use)</th>
+                    <th>الخطة المدفوعة</th>
                     <th>المستخدمين</th>
                     <th class="text-end">الإجراءات</th>
                 </tr>
@@ -75,11 +74,9 @@
                         ->where('groupname', $profile)->count();
                 @endphp
                 <tr>
-                    <td class="fw-bold">
-                        <span class="badge bg-primary bg-opacity-10 text-primary px-3 py-2 fs-6">{{ $profile }}</span>
-                    </td>
-                    <td><code>{{ $speed }}</code></td>
-                    <td><span class="badge bg-light text-dark">{{ $sim }}</span></td>
+                    <td><span class="badge rounded-pill bg-primary px-3 py-2">{{ $profile }}</span></td>
+                    <td><span class="badge rounded-pill bg-danger px-3 py-2">{{ $speed }}</span></td>
+                    <td>{{ $sim }}</td>
                     <td>
                         @if($sub)
                             <span>{{ $sub->name }}</span>
