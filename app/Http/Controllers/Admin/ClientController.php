@@ -699,6 +699,26 @@ class ClientController extends Controller
 
                 $this->ClientsRepository->update($id, $data);
                 
+                // RADIUS: قطع/تفعيل حسب الحالة الجديدة
+                if ($client->sas_username) {
+                    $radius = app(\App\Services\Radius\RadiusService::class);
+                    if ($newStatus == '0') {
+                        try {
+                            $radius->coaDisconnect($client->sas_username);
+                            \Log::info("RADIUS disconnected {$client->sas_username} (status became inactive)");
+                        } catch (\Exception $e) {
+                            \Log::warning("RADIUS disconnect failed for {$client->sas_username}: " . $e->getMessage());
+                        }
+                    } else {
+                        try {
+                            $radius->enableClient($client);
+                            \Log::info("RADIUS enabled {$client->sas_username} (status became active)");
+                        } catch (\Exception $e) {
+                            \Log::warning("RADIUS enable failed for {$client->sas_username}: " . $e->getMessage());
+                        }
+                    }
+                }
+                
                 // إذا كان الطلب AJAX، أعد JSON response
                 if (request()->ajax() || request()->wantsJson()) {
                     return response()->json([
