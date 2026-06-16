@@ -21,6 +21,12 @@
                         <span class="s-dot offline"></span>
                         <div>
                             <span class="user-name">{{ $session->username }}</span>
+                            @if(isset($clients[$session->username]))
+                                <br>
+                                <small class="text-muted" style="font-size:0.75rem;">
+                                    <i class="bi bi-person"></i> {{ $clients[$session->username] }}
+                                </small>
+                            @endif
                             <span class="user-sid">{{ $session->acctsessionid }}</span>
                         </div>
                     </div>

@@ -7,6 +7,7 @@ use App\Services\Radius\RadiusService;
 use App\Services\Radius\RouterOSService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Models\Clients;
 
 class SessionsController extends Controller
 {
@@ -42,6 +43,11 @@ class SessionsController extends Controller
 
         $totalDisconnected = $disconnectedSessions->count();
 
+        // Build client name lookup from sas_username
+        $clients = Clients::whereNotNull('sas_username')
+            ->where('sas_username', '!=', '')
+            ->pluck('name', 'sas_username');
+
         $nasList = $radiusDb->table("nas")->orderBy("nasname")->get()->keyBy("nasname");
 
         // Live RouterOS stats from CHR
@@ -58,7 +64,7 @@ class SessionsController extends Controller
 
         return view("dashbord.sessions.index", compact(
             "sessions", "disconnectedSessions", "totalOnline", "totalDisconnected",
-            "totalDown", "totalUp", "nasList", "routerStats"
+            "totalDown", "totalUp", "nasList", "routerStats", "clients"
         ));
     }
 
@@ -126,9 +132,14 @@ class SessionsController extends Controller
                 $totalUp += (int)$s->acctoutputoctets;
             }
 
-            $nasList = $radiusDb->table("nas")->get()->keyBy("nasname");
+            // Build client name lookup
+            $clients = Clients::whereNotNull('sas_username')
+                ->where('sas_username', '!=', '')
+                ->pluck('name', 'sas_username');
 
-            $html = view("dashbord.sessions.partials.table", compact("sessions", "nasList"))->render();
+            $nasList = $radiusDb->table('nas')->get()->keyBy('nasname');
+
+            $html = view('dashbord.sessions.partials.table', compact('sessions', 'nasList', 'clients'))->render();
 
             return response()->json([
                 "html" => $html,
@@ -145,9 +156,14 @@ class SessionsController extends Controller
             ->orderBy("acctstoptime", "desc")
             ->get();
 
-        $nasList = $radiusDb->table("nas")->get()->keyBy("nasname");
+        // Build client name lookup
+        $clients = Clients::whereNotNull('sas_username')
+            ->where('sas_username', '!=', '')
+            ->pluck('name', 'sas_username');
 
-        $html = view("dashbord.sessions.partials.disconnected-table", compact("disconnectedSessions", "nasList"))->render();
+        $nasList = $radiusDb->table('nas')->get()->keyBy('nasname');
+
+        $html = view('dashbord.sessions.partials.disconnected-table', compact('disconnectedSessions', 'nasList', 'clients'))->render();
 
         return response()->json([
             "html" => $html,
