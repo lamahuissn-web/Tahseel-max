@@ -147,21 +147,6 @@
         color: #2563eb !important;
         text-decoration: underline !important;
     }
-    .quick-action-btn {
-        font-size: 0.75rem !important;
-        padding: 0.3rem 0.6rem !important;
-        border-radius: 6px;
-        font-weight: 600;
-        transition: all 0.2s ease;
-        border: 1px solid #cbd5e1;
-        color: #475569;
-        background-color: #ffffff;
-    }
-    .quick-action-btn:hover {
-        background-color: #10b981;
-        border-color: #10b981;
-        color: #ffffff;
-    }
     .btn-action-view {
         color: #0f172a;
         background-color: #f1f5f9;
@@ -283,7 +268,7 @@
                         <th>تاريخ الإيقاف</th>
                         <th>المتبقي</th>
                         <th class="text-center">الحالة</th>
-                        <th class="text-center" style="width: 250px;">تمديد سريع</th>
+
                         <th class="text-end" style="width: 100px;">العمليات</th>
                     </tr>
                 </thead>
@@ -362,19 +347,7 @@
                                 </span>
                             @endif
                         </td>
-                        <td class="text-center">
-                            <div class="d-flex gap-1 justify-content-center">
-                                <button type="button" class="btn btn-sm quick-action-btn" onclick="handleQuickExtend({{ $client->id }}, 3, '{{ addslashes($client->name) }}')" title="تمديد 3 أيام">
-                                    <i class="bi bi-plus-lg me-1 text-success"></i> 3 أيام
-                                </button>
-                                <button type="button" class="btn btn-sm quick-action-btn" onclick="handleQuickExtend({{ $client->id }}, 7, '{{ addslashes($client->name) }}')" title="تمديد أسبوع">
-                                    <i class="bi bi-plus-lg me-1 text-success"></i> أسبوع
-                                </button>
-                                <button type="button" class="btn btn-sm quick-action-btn" onclick="handleQuickExtend({{ $client->id }}, 14, '{{ addslashes($client->name) }}')" title="تمديد أسبوعين">
-                                    <i class="bi bi-plus-lg me-1 text-success"></i> أسبوعين
-                                </button>
-                            </div>
-                        </td>
+
                         <td class="text-end">
                             <a href="{{ route('admin.clients.show', $client->id) }}" class="btn btn-sm btn-action-view" title="عرض التفاصيل">
                                 <i class="bi bi-eye me-1 text-primary"></i> عرض
@@ -403,20 +376,7 @@
     @endif
 </div>
 
-<form id="quick-extend-form" action="" method="POST" style="display: none;">
-    @csrf
-    <input type="hidden" name="days" id="extend-days-input">
-</form>
 
-<script>
-function handleQuickExtend(clientId, days, clientName) {
-    let daysText = days === 3 ? '3 أيام' : (days === 7 ? 'أسبوع' : 'أسبوعين');
-    if (confirm('هل أنت متأكد من تمديد إيقاف الإنترنت للزبون "' + clientName + '" بمقدار ' + daysText + '؟')) {
-        let form = document.getElementById('quick-extend-form');
-        form.action = '/ar/admin/scheduled-stops/' + clientId + '/extend';
-        document.getElementById('extend-days-input').value = days;
-        form.submit();
-    }
-}
-</script>
+
+
 @endsection
