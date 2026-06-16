@@ -437,10 +437,6 @@ class ClientController extends Controller
     }
     /***********************************************/
     public function client_paid_invoices($id)
-    {
-        $data['all_data'] = $this->ClientsRepository->ge
-
-... [OUTPUT TRUNCATED - 881 chars omitted out of 50881 total] ...
 
  {
         $data['all_data'] = $this->ClientsRepository->getById($id);
