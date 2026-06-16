@@ -44,9 +44,21 @@ class SessionsController extends Controller
 
         $nasList = $radiusDb->table("nas")->orderBy("nasname")->get()->keyBy("nasname");
 
+        // Live RouterOS stats from CHR
+        $routerStats = null;
+        try {
+            $routeros = app(RouterOSService::class);
+            if ($routeros->connect()) {
+                $routerStats = $routeros->getRouterStats();
+                $routeros->disconnect();
+            }
+        } catch (\Exception $e) {
+            // CHR might be unreachable, ignore
+        }
+
         return view("dashbord.sessions.index", compact(
             "sessions", "disconnectedSessions", "totalOnline", "totalDisconnected",
-            "totalDown", "totalUp", "nasList"
+            "totalDown", "totalUp", "nasList", "routerStats"
         ));
     }
 
@@ -141,6 +153,25 @@ class SessionsController extends Controller
             "html" => $html,
             "total" => $disconnectedSessions->count(),
             "tab" => "disconnected",
+        ]);
+    }
+
+    public function routerHealth()
+    {
+        $stats = null;
+        try {
+            $routeros = app(RouterOSService::class);
+            if ($routeros->connect()) {
+                $stats = $routeros->getRouterStats();
+                $routeros->disconnect();
+            }
+        } catch (\Exception $e) {
+            return response()->json(["success" => false, "message" => $e->getMessage()]);
+        }
+
+        return response()->json([
+            "success" => true,
+            "stats" => $stats,
         ]);
     }
 

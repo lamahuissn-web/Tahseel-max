@@ -166,7 +166,56 @@
         </div>
     </div>
 
-    <div class="s-stats">
+        {{-- Router Live Health --}}
+    @if($routerStats)
+    <div class="row g-3 mb-4" id="routerHealth">
+        <div class="col-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-body py-3">
+                    <div class="row align-items-center g-3">
+                        <div class="col-auto">
+                            <span class="badge bg-dark fs-6 px-3 py-2"><i class="bi bi-router text-warning"></i> CHR (192.168.0.51)</span>
+                        </div>
+                        <div class="col">
+                            <div class="row g-2 text-center">
+                                <div class="col-3 col-md">
+                                    <small class="text-muted d-block">CPU</small>
+                                    <strong class="text-primary">{{ $routerStats['cpu'] }}</strong>
+                                </div>
+                                <div class="col-3 col-md">
+                                    <small class="text-muted d-block">RAM حر</small>
+                                    <strong class="text-success">{{ $routerStats['free_memory'] }}</strong>
+                                </div>
+                                <div class="col-3 col-md">
+                                    <small class="text-muted d-block">HDD حر</small>
+                                    <strong class="text-info">{{ $routerStats['free_hdd'] }}</strong>
+                                </div>
+                                <div class="col-3 col-md">
+                                    <small class="text-muted d-block">PPPoE</small>
+                                    <strong class="text-warning">{{ $routerStats['ppp_active'] }}</strong>
+                                </div>
+                                <div class="col-3 col-md">
+                                    <small class="text-muted d-block">Hotspot</small>
+                                    <strong class="text-secondary">{{ $routerStats['hotspot_active'] }}</strong>
+                                </div>
+                                <div class="col-3 col-md">
+                                    <small class="text-muted d-block">الإجمالي</small>
+                                    <strong class="fw-bold">{{ $routerStats['total_active'] }}</strong>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <small class="text-muted"><i class="bi bi-lightning-fill text-warning me-1"></i>Live</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
+
+
+<div class="s-stats">
         <div class="s-stat-card d-flex justify-content-between align-items-center">
             <div>
                 <div class="s-stat-label"><i class="fas fa-wifi me-1"></i>متصل الآن</div>
