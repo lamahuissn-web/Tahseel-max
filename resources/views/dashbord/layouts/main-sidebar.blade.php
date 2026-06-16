@@ -213,7 +213,20 @@ use Illuminate\Support\Facades\Route; ?>
                     </a>
                 </div>
 
-                {{-- NAS (Routers) Management --}}
+
+                                {{-- RADIUS Management Section --}}
+                <hr class="sidebar-section-divider">
+                <div class="menu-item">
+                    <div class="menu-content sidebar-section-title" style="padding: 0.75rem 1rem 0.5rem; margin-top: 0.5rem;">
+                        <span class="sidebar-section-icon">
+                            <i class="bi bi-shield-check fs-3" style="color: #0d6efd;"></i>
+                        </span>
+                        <span class="fw-bold text-uppercase fs-6" style="color: #0d6efd;">
+                            إدارة RADIUS
+                        </span>
+                    </div>
+                </div>
+
                 <div class="menu-item">
                     <a class="menu-link sidebar-menu-link {{ request()->routeIs("admin.nas.*") ? "active" : "" }}"
                         href="{{ route("admin.nas.index") }}">
@@ -224,7 +237,35 @@ use Illuminate\Support\Facades\Route; ?>
                     </a>
                 </div>
 
-{{-- ISP Sessions --}}                <div class="menu-item">                    <a class="menu-link sidebar-menu-link {{ request()->routeIs("admin.sessions.*") ? "active" : "" }}"                        href="{{ route("admin.sessions.index") }}">                        <span class="sidebar-menu-icon">                            <i class="bi bi-activity text-info fs-4"></i>                        </span>                        <span class="menu-title">الجلسات</span>                    </a>                </div>                <div class="menu-item">                    <a class="menu-link sidebar-menu-link {{ request()->routeIs("admin.scheduled_stops.*") ? "active" : "" }}"                        href="{{ route("admin.scheduled_stops.index") }}">                        <span class="sidebar-menu-icon">                            <i class="bi bi-calendar-stop text-danger fs-4"></i>                        </span>                        <span class="menu-title">جدولة الإيقاف</span>                    </a>                </div>                <div class="menu-item">                    <a class="menu-link sidebar-menu-link {{ request()->routeIs("admin.profiles.*") ? "active" : "" }}"                        href="{{ route("admin.profiles.index") }}">                        <span class="sidebar-menu-icon">                            <i class="bi bi-speedometer2 text-warning fs-4"></i>                        </span>                        <span class="menu-title">باقات السرعة</span>                    </a>                </div>
+                <div class="menu-item">
+                    <a class="menu-link sidebar-menu-link {{ request()->routeIs("admin.sessions.*") ? "active" : "" }}"
+                        href="{{ route("admin.sessions.index") }}">
+                        <span class="sidebar-menu-icon">
+                            <i class="bi bi-activity text-info fs-4"></i>
+                        </span>
+                        <span class="menu-title">الجلسات</span>
+                    </a>
+                </div>
+
+                <div class="menu-item">
+                    <a class="menu-link sidebar-menu-link {{ request()->routeIs("admin.scheduled_stops.*") ? "active" : "" }}"
+                        href="{{ route("admin.scheduled_stops.index") }}">
+                        <span class="sidebar-menu-icon">
+                            <i class="bi bi-calendar-stop text-danger fs-4"></i>
+                        </span>
+                        <span class="menu-title">جدولة الإيقاف</span>
+                    </a>
+                </div>
+
+                <div class="menu-item">
+                    <a class="menu-link sidebar-menu-link {{ request()->routeIs("admin.profiles.*") ? "active" : "" }}"
+                        href="{{ route("admin.profiles.index") }}">
+                        <span class="sidebar-menu-icon">
+                            <i class="bi bi-speedometer2 text-warning fs-4"></i>
+                        </span>
+                        <span class="menu-title">باقات السرعة</span>
+                    </a>
+                </div>
                 {{-- User & Employees Management Section --}}
                 @canany(['list_roles', 'list_users', 'view_employees'])
                 <hr class="sidebar-section-divider">
