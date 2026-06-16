@@ -178,90 +178,120 @@
 
     {{-- Session Tab --}}
     @if($client->sas_username)
+    @php
+        $isOnline = $radiusInfo['online'] ?? false;
+        $dlToday = $todayTraffic['download_bytes'] ?? 0;
+        $ulToday = $todayTraffic['upload_bytes'] ?? 0;
+        function fmtBytes($b) { $b = max($b,0); return $b > 1073741824 ? round($b/1073741824,2).' GB' : ($b > 1048576 ? round($b/1048576,2).' MB' : ($b > 1024 ? round($b/1024,2).' KB' : $b.' B')); }
+    @endphp
     <div class="tab-pane fade" id="tabSession" role="tabpanel">
-        @php
-            $isOnline = $radiusInfo['online'] ?? false;
-        @endphp
-        <div class="card border-0 shadow-sm">
+
+        {{-- Online Status --}}
+        <div class="card border-0 shadow-sm mb-3">
             <div class="card-body">
-                <div class="d-flex align-items-center gap-3 mb-4">
+                <div class="d-flex align-items-center gap-3">
                     <span class="badge fs-5 px-3 py-2 {{ $isOnline ? 'bg-success' : 'bg-secondary' }}">
                         <i class="bi {{ $isOnline ? 'bi-wifi' : 'bi-wifi-off' }}"></i>
                         {{ $isOnline ? trans('clients.online') : trans('clients.offline') }}
                     </span>
-                    <span style="direction: ltr;">{{ $client->sas_username }}</span>
+                    <span style="direction: ltr;" class="fw-bold">{{ $client->sas_username }}</span>
                 </div>
-
-                @if($isOnline && isset($radiusInfo['last_session']))
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <table class="table table-sm table-borderless">
-                            <tr>
-                                <td class="text-muted">{{ trans('clients.ip_address') }}</td>
-                                <td class="fw-bold" style="direction: ltr;">{{ $radiusInfo['last_session']['framed_ip'] ?? '—' }}</td>
-                            </tr>
-                            <tr>
-                                <td class="text-muted">{{ trans('clients.nas_device') }}</td>
-                                <td class="fw-bold" style="direction: ltr;">{{ $radiusInfo['last_session']['nas'] ?? '—' }}</td>
-                            </tr>
-                            <tr>
-                                <td class="text-muted">{{ trans('clients.session_time') }}</td>
-                                <td class="fw-bold">
-                                    @php
-                                        $seconds = $radiusInfo['last_session']['session_time'] ?? 0;
-                                        $hours = floor($seconds / 3600);
-                                        $minutes = floor(($seconds % 3600) / 60);
-                                    @endphp
-                                    {{ $hours }}h {{ $minutes }}m
-                                </td>
-                            </tr>
-                            <tr>
-                                <td class="text-muted">{{ trans('clients.last_login') }}</td>
-                                <td>{{ $radiusInfo['last_login'] ?? '—' }}</td>
-                            </tr>
-                        </table>
-                    </div>
-                    <div class="col-md-6">
-                        <h6 class="fw-bold">{{ trans('clients.traffic_month') }}</h6>
-                        <table class="table table-sm table-borderless">
-                            <tr>
-                                <td class="text-muted">{{ trans('clients.download') }}</td>
-                                <td class="fw-bold text-primary" style="direction: ltr;">
-                                    @php
-                                        $dl = $radiusInfo['traffic']['download_bytes'] ?? 0;
-                                        echo $dl > 1073741824 ? round($dl/1073741824, 2).' GB' : ($dl > 1048576 ? round($dl/1048576, 2).' MB' : round($dl/1024, 2).' KB');
-                                    @endphp
-                                </td>
-                            </tr>
-                            <tr>
-                                <td class="text-muted">{{ trans('clients.upload') }}</td>
-                                <td class="fw-bold text-success" style="direction: ltr;">
-                                    @php
-                                        $ul = $radiusInfo['traffic']['upload_bytes'] ?? 0;
-                                        echo $ul > 1073741824 ? round($ul/1073741824, 2).' GB' : ($ul > 1048576 ? round($ul/1048576, 2).' MB' : round($ul/1024, 2).' KB');
-                                    @endphp
-                                </td>
-                            </tr>
-                            <tr>
-                                <td class="text-muted">{{ trans('clients.total_traffic') }}</td>
-                                <td class="fw-bold" style="direction: ltr;">
-                                    @php
-                                        $t = $radiusInfo['traffic']['total_bytes'] ?? 0;
-                                        echo $t > 1073741824 ? round($t/1073741824, 2).' GB' : ($t > 1048576 ? round($t/1048576, 2).' MB' : round($t/1024, 2).' KB');
-                                    @endphp
-                                </td>
-                            </tr>
-                        </table>
-                    </div>
-                </div>
-                @else
-                <div class="text-center py-4 text-muted">
-                    <i class="bi bi-wifi-off fs-1 d-block mb-2"></i>
-                    <p>{{ trans('clients.offline') }}</p>
-                </div>
-                @endif
             </div>
         </div>
+
+        {{-- Today's Traffic Mini Stats --}}
+        <div class="row g-2 mb-3">
+            <div class="col-4">
+                <div class="card border-0 shadow-sm text-center py-3">
+                    <small class="text-muted">استهلاك اليوم</small>
+                    <strong class="text-primary fs-5">{{ fmtBytes($dlToday + $ulToday) }}</strong>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="card border-0 shadow-sm text-center py-3">
+                    <small class="text-muted">تحميل</small>
+                    <strong class="text-success fs-5">{{ fmtBytes($dlToday) }}</strong>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="card border-0 shadow-sm text-center py-3">
+                    <small class="text-muted">رفع</small>
+                    <strong class="text-info fs-5">{{ fmtBytes($ulToday) }}</strong>
+                </div>
+            </div>
+        </div>
+
+        {{-- Active Sessions --}}
+        @if(count($activeSessions) > 0)
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-light py-2">
+                <h6 class="mb-0 fw-bold small"><i class="bi bi-wifi text-success"></i> الجلسات النشطة ({{ count($activeSessions) }})</h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 small">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                <th>وقت البدء</th>
+                                <th>IP</th>
+                                <th>المدة</th>
+                                <th>تحميل</th>
+                                <th>رفع</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($activeSessions as $s)
+                            @php $h = floor(($s->acctsessiontime ?? 0)/3600); $m = floor((($s->acctsessiontime ?? 0)%3600)/60); @endphp
+                            <tr>
+                                <td class="fw-bold">#{{ $s->radacctid }}</td>
+                                <td class="small">{{ $s->acctstarttime ? date('m-d H:i', strtotime($s->acctstarttime)) : '—' }}</td>
+                                <td><code>{{ $s->framedipaddress ?? '—' }}</code></td>
+                                <td>{{ $h }}h {{ $m }}m</td>
+                                <td>{{ fmtBytes($s->acctoutputoctets ?? 0) }}</td>
+                                <td>{{ fmtBytes($s->acctinputoctets ?? 0) }}</td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        @endif
+
+        {{-- Last Session Info --}}
+        @if(isset($radiusInfo['last_session']))
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-light py-2">
+                <h6 class="mb-0 fw-bold small"><i class="bi bi-clock-history text-info"></i> آخر جلسة</h6>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <table class="table table-sm table-borderless mb-0">
+                            <tr><td class="text-muted">IP</td><td class="fw-bold" style="direction:ltr;">{{ $radiusInfo['last_session']['framed_ip'] ?? '—' }}</td></tr>
+                            <tr><td class="text-muted">الراوتر</td><td class="fw-bold" style="direction:ltr;">{{ $radiusInfo['last_session']['nas'] ?? '—' }}</td></tr>
+                            <tr><td class="text-muted">المدة</td><td class="fw-bold">@php $sec = $radiusInfo['last_session']['session_time'] ?? 0; $h = floor($sec/3600); $m = floor(($sec%3600)/60); @endphp {{ $h }}h {{ $m }}m</td></tr>
+                            <tr><td class="text-muted">آخر دخول</td><td>{{ $radiusInfo['last_login'] ?? '—' }}</td></tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="fw-bold small">استهلاك الشهر</h6>
+                        <table class="table table-sm table-borderless mb-0">
+                            <tr><td class="text-muted">تحميل</td><td class="fw-bold text-primary" style="direction:ltr;">{{ fmtBytes($radiusInfo['traffic']['download_bytes'] ?? 0) }}</td></tr>
+                            <tr><td class="text-muted">رفع</td><td class="fw-bold text-success" style="direction:ltr;">{{ fmtBytes($radiusInfo['traffic']['upload_bytes'] ?? 0) }}</td></tr>
+                            <tr><td class="text-muted">الإجمالي</td><td class="fw-bold" style="direction:ltr;">{{ fmtBytes($radiusInfo['traffic']['total_bytes'] ?? 0) }}</td></tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        @else
+        <div class="text-center py-4 text-muted">
+            <i class="bi bi-wifi-off fs-1 d-block mb-2"></i>
+            <p>{{ trans('clients.offline') }}</p>
+        </div>
+        @endif
     </div>
     @endif
 

@@ -925,38 +925,42 @@ class ClientController extends Controller
         }
     }
 
-    public function getClientDetails($id)
-    {
-        $client = Clients::with(['subscription', 'invoices'])
-            ->withSum('invoices as remaining_amount_total', 'remaining_amount')
-            ->findOrFail($id);
+public function getClientDetails($id)
+{
+    $client = Clients::with(["subscription", "invoices"])->withSum("invoices as remaining_amount_total", "remaining_amount")->findOrFail($id);
 
-        // Get RADIUS online status + session info
-        $radiusInfo = null;
-        $unpaidInvoices = collect();
-        $totalUnpaid = 0;
-        if ($client->sas_username) {
-            $radius = app(\App\Services\Radius\RadiusService::class);
-            $radiusInfo = $radius->getClientInfo($client->sas_username);
+    $radiusInfo = null;
+    $unpaidInvoices = collect();
+    $totalUnpaid = 0;
+    $activeSessions = [];
+    $todayTraffic = [];
+    $liveData = null;
 
-            // Get traffic data for this month
-            $traffic = $radius->getTraffic($client->sas_username);
-            $radiusInfo['traffic'] = $traffic;
+    if ($client->sas_username) {
+        $radius = app(\App\Services\Radius\RadiusService::class);
+        $radiusInfo = $radius->getClientInfo($client->sas_username);
+        $traffic = $radius->getTraffic($client->sas_username);
+        $radiusInfo["traffic"] = $traffic;
+        $activeSessions = $radius->getActiveUserSessions($client->sas_username);
+        $todayTraffic = $radius->getTodayTraffic($client->sas_username);
+
+        try {
+            $routeros = app(\App\Services\Radius\RouterOSService::class);
+            if ($routeros->connect()) {
+                $liveData = $routeros->getPppUser($client->sas_username);
+                $routeros->disconnect();
+            }
+        } catch (\Exception $e) {
+            Log::warning("RouterOS: " . $e->getMessage());
         }
-
-        // Get unpaid invoices with details
-        $unpaidInvoices = \App\Models\Admin\Invoice::with(['subscription'])
-            ->where('client_id', $id)
-            ->whereIn('status', ['unpaid', 'partial'])
-            ->orderBy('due_date', 'asc')
-            ->get();
-
-        $totalUnpaid = $unpaidInvoices->sum('remaining_amount') ?? 0;
-
-        $html = view($this->admin_view . '.details_modal', compact('client', 'radiusInfo', 'unpaidInvoices', 'totalUnpaid'))->render();
-        return response()->json(['html' => $html]);
     }
 
+    $unpaidInvoices = \App\Models\Admin\Invoice::with(["subscription"])->where("client_id", $id)->whereIn("status", ["unpaid", "partial"])->orderBy("due_date", "asc")->get();
+    $totalUnpaid = $unpaidInvoices->sum("remaining_amount") ?? 0;
+
+    $html = view($this->admin_view . ".details_modal", compact("client", "radiusInfo", "unpaidInvoices", "totalUnpaid", "activeSessions", "todayTraffic", "liveData"))->render();
+    return response()->json(["html" => $html]);
+}
     public function remainingInvoices($id)
     {
         $client = $this->ClientsRepository->getById($id);
