@@ -4,11 +4,11 @@
 <div class="container-fluid">
     <div class="row">
         <div class="col-md-6 mx-auto">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0 fw-bold">
                         <i class="bi bi-speedometer2 me-2"></i>
-                        تغيير سرعة {{ $username }}
+                        تغيير سرعة <code>{{ $username }}</code>
                     </h5>
                 </div>
                 <div class="card-body">
@@ -20,39 +20,67 @@
                         @endif
                     </div>
 
+                    @if($currentProfile)
+                    <div class="alert alert-secondary mb-3">
+                        <i class="bi bi-lightning me-1"></i>
+                        الباقة الحالية: <strong>{{ $currentProfile }}</strong>
+                    </div>
+                    @endif
+
                     <form action="{{ route('admin.sessions.change-speed.post', $username) }}" method="POST">
                         @csrf
 
                         <div class="mb-3">
-                            <label class="form-label">السرعة الجديدة</label>
-                            <div class="input-group">
-                                <input type="text" name="speed" class="form-control @error('speed') is-invalid @enderror"
-                                    value="{{ old('speed', '10M/10M') }}" placeholder="مثال: 20M/20M" required>
-                                <span class="input-group-text">Mbps</span>
-                                @error('speed')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
+                            <label class="form-label fw-bold">اختر باقة السرعة</label>
+                            <div class="d-flex flex-column gap-2">
+                                @forelse($profiles as $profile)
+                                <div class="form-check p-3 border rounded-3 {{ $currentProfile == $profile->radius_profile ? 'border-primary bg-primary bg-opacity-10' : '' }}"
+                                     onclick="this.querySelector('input[type=radio]').click()"
+                                     style="cursor:pointer; transition: all 0.15s ease;"
+                                     onmouseover="this.style.borderColor='#3b82f6'"
+                                     onmouseout="this.style.borderColor=''">
+                                    <input class="form-check-input" type="radio" name="profile"
+                                           value="{{ $profile->radius_profile }}"
+                                           id="profile_{{ $profile->id }}"
+                                           {{ $currentProfile == $profile->radius_profile ? 'checked' : '' }}
+                                           required>
+                                    <label class="form-check-label w-100" for="profile_{{ $profile->id }}">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <span class="fw-bold">{{ $profile->name }}</span>
+                                                <br>
+                                                <small class="text-muted">
+                                                    <i class="bi bi-arrow-down-up"></i>
+                                                    {{ $profile->radius_speed ?? $profile->radius_profile }}
+                                                </small>
+                                            </div>
+                                            <span class="badge bg-primary fs-6 px-3 py-1">
+                                                \${{ number_format($profile->price, 2) }}
+                                            </span>
+                                        </div>
+                                    </label>
+                                </div>
+                                @empty
+                                <div class="text-center py-4 text-muted">
+                                    <i class="bi bi-exclamation-circle fs-3 d-block mb-2"></i>
+                                    <p>لا توجد باقات سرعة متاحة</p>
+                                    <a href="{{ route('admin.profiles.create') }}" class="btn btn-sm btn-primary">
+                                        <i class="bi bi-plus-lg me-1"></i> إضافة باقة
+                                    </a>
+                                </div>
+                                @endforelse
                             </div>
-                            <div class="form-text">الصيغة: <code>تحميل/رفع</code> مثل <code>10M/10M</code> أو <code>4M/2M</code></div>
+                            @error('profile')
+                                <div class="text-danger small mt-1">{{ $message }}</div>
+                            @enderror
                         </div>
 
-                        {{-- Quick speed buttons --}}
-                        <div class="mb-3">
-                            <label class="form-label">سرعات سريعة</label>
-                            <div class="d-flex flex-wrap gap-2">
-                                @foreach(['2M/2M', '4M/2M', '10M/10M', '20M/20M', '50M/50M', '100M/100M'] as $s)
-                                    <button type="button" class="btn btn-outline-secondary btn-sm speed-preset"
-                                        data-speed="{{ $s }}">{{ $s }}</button>
-                                @endforeach
-                            </div>
-                        </div>
-
-                        <div class="d-flex justify-content-between">
+                        <div class="d-flex justify-content-between mt-4">
                             <a href="{{ route('admin.sessions.index') }}" class="btn btn-secondary">
                                 <i class="bi bi-arrow-right me-1"></i> رجوع
                             </a>
                             <button type="submit" class="btn btn-warning">
-                                <i class="bi bi-lightning me-1"></i> تغيير السرعة
+                                <i class="bi bi-lightning me-1"></i> تطبيق الباقة
                             </button>
                         </div>
                     </form>
@@ -61,17 +89,4 @@
         </div>
     </div>
 </div>
-@endsection
-
-@section("scripts")
-<script>
-document.querySelectorAll('.speed-preset').forEach(btn => {
-    btn.addEventListener('click', function() {
-        document.querySelector('input[name="speed"]').value = this.dataset.speed;
-        document.querySelectorAll('.speed-preset').forEach(b => b.classList.remove('btn-primary'));
-        this.classList.add('btn-primary');
-        this.classList.remove('btn-outline-secondary');
-    });
-});
-</script>
 @endsection

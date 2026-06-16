@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Services\Radius\RadiusService;
 use App\Services\Radius\RouterOSService;
+use App\Services\Radius\ProfileService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\Clients;
@@ -93,24 +94,38 @@ class SessionsController extends Controller
                 ->with("error", "\u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645 \u063a\u064a\u0631 \u0645\u062a\u0635\u0644");
         }
 
-        return view("dashbord.sessions.change-speed", compact("username", "session"));
+        // Get available profiles
+        $profiles = app(ProfileService::class)->getAvailableProfiles();
+        $currentProfile = app(ProfileService::class)->getClientProfile($username);
+
+        return view("dashbord.sessions.change-speed", compact("username", "session", "profiles", "currentProfile"));
     }
 
     public function changeSpeed(Request $request, $username)
     {
         $request->validate([
-            "speed" => "required|string|max:20",
+            "profile" => "required|string|max:50",
         ]);
 
-        $result = $this->radius->coaChangeSpeed($username, $request->speed);
+        $profileName = $request->profile;
 
-        if ($result["success"]) {
+        // Apply profile via ProfileService (updates radusergroup + radreply + CoA)
+        $profileService = app(ProfileService::class);
+        $success = $profileService->applyProfile($username, $profileName);
+
+        if ($success) {
+            // Get the profile display name for the message
+            $profile = collect($profileService->getAvailableProfiles())
+                ->firstWhere('radius_profile', $profileName);
+
+            $displayName = $profile ? $profile->name : $profileName;
+
             return redirect()->route("admin.sessions.index")
-                ->with("success", $result["message"]);
+                ->with("success", "\u062a\u0645 \u062a\u063a\u064a\u064a\u0631 \u0633\u0631\u0639\u0629 {$username} \u0625\u0644\u0649 {$displayName} \u0628\u0646\u062c\u0627\u062d");
         }
 
         return redirect()->route("admin.sessions.index")
-            ->with("error", $result["message"]);
+            ->with("error", "\u0641\u0634\u0644 \u062a\u063a\u064a\u064a\u0631 \u0627\u0644\u0633\u0631\u0639\u0629 \u0644\u0644\u0645\u0633\u062a\u062e\u062f\u0645 {$username}");
     }
 
     public function refresh(Request $request)
