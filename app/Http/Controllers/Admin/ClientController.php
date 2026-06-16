@@ -958,7 +958,24 @@ public function getClientDetails($id)
     $unpaidInvoices = \App\Models\Admin\Invoice::with(["subscription"])->where("client_id", $id)->whereIn("status", ["unpaid", "partial"])->orderBy("due_date", "asc")->get();
     $totalUnpaid = $unpaidInvoices->sum("remaining_amount") ?? 0;
 
-    $html = view($this->admin_view . ".details_modal", compact("client", "radiusInfo", "unpaidInvoices", "totalUnpaid", "activeSessions", "todayTraffic", "liveData"))->render();
+    // Get current speed from RADIUS
+    $currentSpeed = null;
+    $recentSessions = [];
+    if ($client->sas_username) {
+        $currentSpeed = DB::connection("radius")->table("radreply")
+            ->where("username", $client->sas_username)
+            ->where("attribute", "Mikrotik-Rate-Limit")
+            ->value("value");
+
+        $recentSessions = DB::connection("radius")->table("radacct")
+            ->where("username", $client->sas_username)
+            ->whereNotNull("acctstoptime")
+            ->orderBy("acctstoptime", "desc")
+            ->limit(5)
+            ->get();
+    }
+
+    $html = view($this->admin_view . ".details_modal", compact("client", "radiusInfo", "unpaidInvoices", "totalUnpaid", "activeSessions", "todayTraffic", "liveData", "currentSpeed", "recentSessions"))->render();
     return response()->json(["html" => $html]);
 }
     public function remainingInvoices($id)
