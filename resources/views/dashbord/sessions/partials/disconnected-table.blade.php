@@ -3,6 +3,7 @@
         <tr>
             <th style="width:40px;">#</th>
             <th>اسم المستخدم</th>
+            <th>اسم الزبون</th>
             <th>IP</th>
             <th>الراوتر (NAS)</th>
             <th>المدة</th>
@@ -21,15 +22,16 @@
                         <span class="s-dot offline"></span>
                         <div>
                             <span class="user-name">{{ $session->username }}</span>
-                            @if(isset($clients[$session->username]))
-                                <br>
-                                <small class="text-muted" style="font-size:0.75rem;">
-                                    <i class="bi bi-person"></i> {{ $clients[$session->username] }}
-                                </small>
-                            @endif
                             <span class="user-sid">{{ $session->acctsessionid }}</span>
                         </div>
                     </div>
+                </td>
+                <td>
+                    @if(isset($clients[$session->username]))
+                        <span class="fw-bold text-dark" style="font-size:0.9rem;">{{ $clients[$session->username] }}</span>
+                    @else
+                        <span class="text-muted small">—</span>
+                    @endif
                 </td>
                 <td><span class="s-ip">{{ $session->framedipaddress }}</span></td>
                 <td>
@@ -93,7 +95,7 @@
             </tr>
         @empty
             <tr>
-                <td colspan="9" class="s-empty">
+                <td colspan="10" class="s-empty">
                     <i class="fas fa-history"></i>
                     <h6>لا توجد جلسات منتهية</h6>
                     <p>خلال آخر 7 أيام</p>
