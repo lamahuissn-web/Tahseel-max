@@ -230,7 +230,7 @@
         @if($client->radius_stop_at)
         <div class="alert alert-danger py-2 mb-3 small">
             <i class="bi bi-calendar-x"></i>
-            {{ 'مجدول للإيقاف بتاريخ: <strong>' . $client->radius_stop_at . '</strong>' }}
+            {!! 'مجدول للإيقاف بتاريخ: <strong>' . $client->radius_stop_at . '</strong>' !!}
         </div>
         @endif
 
