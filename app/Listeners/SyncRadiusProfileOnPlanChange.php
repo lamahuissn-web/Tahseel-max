@@ -21,7 +21,6 @@ class SyncRadiusProfileOnPlanChange
      */
     public function handle($event): void
     {
-        // Support different event types
         $client = null;
 
         if (property_exists($event, 'client')) {
@@ -31,7 +30,6 @@ class SyncRadiusProfileOnPlanChange
         }
 
         if (!$client || !($client instanceof Clients)) {
-            // Try to get from the model directly
             if (property_exists($event, 'model') && $event->model instanceof Clients) {
                 $client = $event->model;
             } else {
@@ -49,8 +47,10 @@ class SyncRadiusProfileOnPlanChange
                 $client->subscription_id
             );
 
-            if ($result) {
-                Log::info("RADIUS profile synced for client {$client->id} ({$client->sas_username})");
+            if ($result['applied']) {
+                Log::info("RADIUS profile synced for client {$client->id} ({$client->sas_username}): {$result['message']}");
+            } else {
+                Log::info("RADIUS profile check for client {$client->id} ({$client->sas_username}): {$result['message']}");
             }
         } catch (\Exception $e) {
             Log::error("Failed to sync RADIUS profile for client {$client->id}: " . $e->getMessage());

@@ -253,19 +253,12 @@ class ClientController extends Controller
             $client = $this->clientService->store($request);
             $this->handleSas4Operations($client, $request);
 
-            // Sync RADIUS profile if subscription changed
-            try {
-                if ($client->sas_username && $client->subscription_id) {
-                    $oldSubId = $oldClientData['subscription_id'] ?? null;
-                    if ($oldSubId != $client->subscription_id) {
-                        app(ProfileService::class)->updateClientOnPlanChange(
-                            $client->sas_username,
-                            $client->subscription_id
-                        );
-                    }
-                }
-            } catch (\Exception $e) {
-                Log::warning('RADIUS profile sync failed: ' . $e->getMessage());
+            // Sync RADIUS profile for new client
+            if ($client->sas_username && $client->subscription_id) {
+                app(ProfileService::class)->updateClientOnPlanChange(
+                    $client->sas_username,
+                    $client->subscription_id
+                );
             }
 
             $notificationMessage = sprintf(
@@ -344,18 +337,16 @@ class ClientController extends Controller
             $this->handleSas4Operations($client, $request);
 
             // Sync RADIUS profile if subscription changed
-            try {
-                if ($client->sas_username && $client->subscription_id) {
-                    $oldSubId = $oldClientData['subscription_id'] ?? null;
-                    if ($oldSubId != $client->subscription_id) {
-                        app(ProfileService::class)->updateClientOnPlanChange(
-                            $client->sas_username,
-                            $client->subscription_id
-                        );
-                    }
+            $radiusMessage = null;
+            if ($client->sas_username && $client->subscription_id) {
+                $oldSubId = $oldClientData['subscription_id'] ?? null;
+                if ($oldSubId != $client->subscription_id) {
+                    $result = app(ProfileService::class)->updateClientOnPlanChange(
+                        $client->sas_username,
+                        $client->subscription_id
+                    );
+                    $radiusMessage = $result['message'];
                 }
-            } catch (\Exception $e) {
-                Log::warning('RADIUS profile sync failed: ' . $e->getMessage());
             }
 
             $notificationMessage = sprintf(

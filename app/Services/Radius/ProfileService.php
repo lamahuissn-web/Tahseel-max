@@ -11,22 +11,24 @@ use Illuminate\Support\Facades\Log;
  * Each subscription can have a radius_profile (e.g. "10M", "20M") and
  * a radius_speed (e.g. "10M/10M"). When the profile changes, this service
  * updates radusergroup + radreply + sends CoA.
+ * 
+ * Manual overrides: if a client's radius_profile differs from the
+ * subscription's radius_profile, the change is considered a manual override
+ * and is preserved during plan changes.
  */
 class ProfileService
 {
     /**
      * Apply a RADIUS profile to a user
      */
-    public function applyProfile(string $username, string $profileName): bool
+    public function applyProfile(string $username, string $profileName, ?string $speed = null): bool
     {
         try {
-            // 1. Remove old group assignment
             DB::connection('radius')
                 ->table('radusergroup')
                 ->where('username', $username)
                 ->delete();
 
-            // 2. Assign new group
             DB::connection('radius')
                 ->table('radusergroup')
                 ->insert([
@@ -35,20 +37,19 @@ class ProfileService
                     'priority'  => 1,
                 ]);
 
-            // 3. Get speed from subscription
-            $speed = DB::table('tbl_subscriptions')
-                ->where('radius_profile', $profileName)
-                ->value('radius_speed');
+            if ($speed === null) {
+                $speed = DB::table('tbl_subscriptions')
+                    ->where('radius_profile', $profileName)
+                    ->value('radius_speed');
+            }
+
+            DB::connection('radius')
+                ->table('radreply')
+                ->where('username', $username)
+                ->where('attribute', 'Mikrotik-Rate-Limit')
+                ->delete();
 
             if ($speed) {
-                // Remove old speed attribute
-                DB::connection('radius')
-                    ->table('radreply')
-                    ->where('username', $username)
-                    ->where('attribute', 'Mikrotik-Rate-Limit')
-                    ->delete();
-
-                // Insert new speed
                 DB::connection('radius')
                     ->table('radreply')
                     ->insert([
@@ -59,14 +60,12 @@ class ProfileService
                     ]);
             }
 
-            // 4. CoA to apply changes immediately
             try {
                 app(RadiusService::class)->coaChangeSpeed($username, $speed ?: '10M/10M');
             } catch (\Exception $e) {
                 Log::info("CoA failed during profile change for {$username}: " . $e->getMessage());
             }
 
-            // 5. Update client record
             DB::table('tbl_clients')
                 ->where('sas_username', $username)
                 ->update(['radius_profile' => $profileName]);
@@ -80,9 +79,6 @@ class ProfileService
         }
     }
 
-    /**
-     * Get all available RADIUS profiles from subscriptions
-     */
     public function getAvailableProfiles(): array
     {
         return DB::table('tbl_subscriptions')
@@ -93,40 +89,64 @@ class ProfileService
             ->toArray();
     }
 
-    /**
-     * Get current profile for a user
-     */
     public function getClientProfile(string $username): ?string
     {
         return DB::table('tbl_clients')
             ->where('sas_username', $username)
             ->value('radius_profile');
     }
+
     /**
-     * Auto-update RADIUS profile when a client's subscription changes
-     * Reads radius_profile + radius_speed from the new subscription
-     * Updates radusergroup, radreply, and sends CoA
+     * Auto-update RADIUS profile when a client's subscription changes.
+     *
+     * Checks for manual overrides: if the client's current radius_profile
+     * differs from the subscription's radius_profile, the manual override
+     * is preserved and the subscription profile is not applied.
+     *
+     * Returns an array with 'applied' (bool), 'message' (string),
+     * and 'profile' (?string).
      */
-    public function updateClientOnPlanChange(string $username, int $newSubscriptionId): bool
+    public function updateClientOnPlanChange(string $username, int $newSubscriptionId): array
     {
-        // Get the subscription's RADIUS profile settings
+        $result = [
+            'applied' => false,
+            'message' => '',
+            'profile' => null,
+        ];
+
+        $currentProfile = DB::table('tbl_clients')
+            ->where('sas_username', $username)
+            ->value('radius_profile');
+
         $subscription = DB::table('tbl_subscriptions')->find($newSubscriptionId);
+
         if (!$subscription || empty($subscription->radius_profile)) {
-            // No RADIUS profile linked to this subscription — remove old one
-            DB::connection('radius')
-                ->table('radusergroup')
-                ->where('username', $username)
-                ->delete();
-            DB::connection('radius')
-                ->table('radreply')
-                ->where('username', $username)
-                ->where('attribute', 'Mikrotik-Rate-Limit')
-                ->delete();
-            return true;
+            $result['message'] = $currentProfile
+                ? "الاشتراك الجديد ليس لديه باقة سرعة — تم الإبقاء على الباقة الحالية ({$currentProfile})"
+                : "الاشتراك الجديد ليس لديه باقة سرعة";
+            $result['profile'] = $currentProfile;
+            Log::info("Plan change: {$username} — {$result['message']}");
+            return $result;
         }
 
-        // Apply the new profile
-        return $this->applyProfile($username, $subscription->radius_profile);
+        if ($currentProfile && $currentProfile !== $subscription->radius_profile) {
+            $result['message'] = "تم الإبقاء على الباقة اليدوية ({$currentProfile}) — تختلف عن باقة الاشتراك ({$subscription->radius_profile})";
+            $result['profile'] = $currentProfile;
+            Log::info("Plan change manual override: {$username} — {$result['message']}");
+            return $result;
+        }
+
+        $applied = $this->applyProfile($username, $subscription->radius_profile, $subscription->radius_speed);
+        $result['applied'] = $applied;
+        $result['profile'] = $subscription->radius_profile;
+        $result['message'] = $applied
+            ? "تم تطبيق باقة السرعة: {$subscription->radius_profile}"
+            : "فشل تطبيق باقة السرعة: {$subscription->radius_profile}";
+
+        if ($applied) {
+            Log::info("RADIUS profile synced: {$username} -> {$subscription->radius_profile} (plan change to subscription #{$newSubscriptionId})");
+        }
+
+        return $result;
     }
 }
-
