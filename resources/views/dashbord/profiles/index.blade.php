@@ -281,14 +281,6 @@
         </div>
     </div>
 
-    @php
-        $totalUsers = 0; $totalSubs = 0;
-        foreach($profiles as $p) {
-            $totalUsers += DB::connection('radius')->table('radusergroup')->where('groupname', $p)->count();
-            if(isset($subscriptions[$p])) $totalSubs++;
-        }
-    @endphp
-
     {{-- Stats Cards Row --}}
     <div class="row g-4 mb-4">
         <div class="col-md-4">
@@ -351,11 +343,9 @@
                         @forelse($profiles as $profile)
                         @php
                             $speed = $groupSpeeds[$profile]->value ?? '—';
-                            $sim = DB::connection('radius')->table('radgroupcheck')
-                                ->where('groupname', $profile)->where('attribute','Simultaneous-Use')->value('value') ?? 1;
+                            $sim = $simUse[$profile]->value ?? 1;
                             $sub = $subscriptions[$profile] ?? null;
-                            $userCount = DB::connection('radius')->table('radusergroup')
-                                ->where('groupname', $profile)->count();
+                            $userCount = (int)($userCounts[$profile]->total ?? 0);
                         @endphp
                         <tr>
                             <td class="ps-4">

@@ -20,28 +20,51 @@ class ProfileController extends Controller
 
     public function index()
     {
-        // Get all RADIUS groups from FreeRADIUS
         $radiusDb = DB::connection('radius');
+
+        // 1. Get all RADIUS groups (profiles)
         $profiles = $radiusDb->table('radgroupcheck')
             ->select('groupname')
             ->distinct()
             ->get()
             ->pluck('groupname');
 
-        // Get RadGroupReply speeds
+        // 2. Get speeds (Mikrotik-Rate-Limit) — single query
         $groupSpeeds = $radiusDb->table('radgroupreply')
             ->where('attribute', 'Mikrotik-Rate-Limit')
             ->get()
             ->keyBy('groupname');
 
-        // Get subscriptions linked to profiles
+        // 3. Get Simultaneous-Use for ALL profiles — single query (was N+1)
+        $simUse = $radiusDb->table('radgroupcheck')
+            ->where('attribute', 'Simultaneous-Use')
+            ->get()
+            ->keyBy('groupname');
+
+        // 4. Get user counts per profile — single query (was N+1)
+        $userCounts = $radiusDb->table('radusergroup')
+            ->select('groupname', DB::raw('COUNT(*) as total'))
+            ->groupBy('groupname')
+            ->get()
+            ->keyBy('groupname');
+
+        // 5. Get subscriptions linked to profiles
         $subscriptions = DB::table('tbl_subscriptions')
             ->whereNotNull('radius_profile')
             ->get()
             ->keyBy('radius_profile');
 
+        // 6. Pre-calculate stats totals (was @php in view)
+        $profileList = $profiles->toArray();
+        $totalUsers = 0;
+        foreach ($profileList as $p) {
+            $totalUsers += (int)($userCounts[$p]->total ?? 0);
+        }
+        $totalSubs = $subscriptions->whereIn('radius_profile', $profileList)->count();
+
         return view('dashbord.profiles.index', compact(
-            'profiles', 'groupSpeeds', 'subscriptions'
+            'profiles', 'groupSpeeds', 'simUse', 'userCounts',
+            'subscriptions', 'totalUsers', 'totalSubs'
         ));
     }
 
