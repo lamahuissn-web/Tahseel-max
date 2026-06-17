@@ -1,6 +1,5 @@
 <?php
 
-
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
@@ -20,9 +19,6 @@ use App\Notifications\InvoicePaidNotification;
 use App\Services\ClientService;
 use App\Services\CompanyService;
 use App\Services\ProjectsService;
-use App\Services\Radius\RadiusService;
-use App\Services\Radius\RouterOSService;
-use App\Services\Radius\ProfileService;
 use App\Traits\ImageProcessing;
 use App\Traits\ValidationMessage;
 use Carbon\Carbon;
@@ -191,15 +187,13 @@ class ClientController extends Controller
                         return $badge;
                     }
                 })
-                ->addColumn('radius_username', function ($row) {
+                ->addColumn('sas4_status', function ($row) {
                     if (!$row->sas_username) {
                         return '<span class="badge bg-light text-muted">—</span>';
                     }
-                    $radius = app(\App\Services\Radius\RadiusService::class);
-                    $online = $radius->isOnline($row->sas_username);
-                    $icon = $online ? '<i class="bi bi-wifi text-success"></i>' : '<i class="bi bi-wifi text-secondary"></i>';
-                    $class = $online ? 'badge bg-success text-white' : 'badge bg-secondary text-white';
-                    return '<span class="' . $class . '">' . $icon . ' ' . e($row->sas_username) . '</span>';
+                    return '<span class="sas4-indicator" data-id="' . $row->id . '" data-username="' . e($row->sas_username) . '">' .
+                        '<i class="bi bi-wifi text-secondary"></i> ' . e($row->sas_username) .
+                        '</span>';
                 })
                 ->addColumn('action', function ($row) {
                     $actionButtons = '<div class="btn-group">';
@@ -232,7 +226,7 @@ class ClientController extends Controller
 
                     return $actionButtons;
                 })
-                ->rawColumns(['subscription', 'action', 'status', 'radius_username'])
+                ->rawColumns(['subscription', 'action', 'status', 'sas4_status'])
                 ->make(true);
         }
         return view($this->admin_view . '.index');
@@ -252,15 +246,6 @@ class ClientController extends Controller
         try {
             $client = $this->clientService->store($request);
             $this->handleSas4Operations($client, $request);
-
-            // Sync RADIUS profile for new client
-            if ($client->sas_username && $client->subscription_id) {
-                app(ProfileService::class)->updateClientOnPlanChange(
-                    $client->sas_username,
-                    $client->subscription_id
-                );
-            }
-
             $notificationMessage = sprintf(
                 'تم إنشاء عميل جديد: %s - النوع: %s - السعر: %s %s - تم الإنشاء بواسطة %s',
                 $client->name,
@@ -288,36 +273,7 @@ class ClientController extends Controller
     /***********************************************/
     public function show(string $id)
     {
-        $client = Clients::with(['subscription', 'invoices'])
-            ->withSum('invoices as remaining_amount_total', 'remaining_amount')
-            ->findOrFail($id);
-
-        // Get RADIUS online status + session info
-        $radiusInfo = null;
-        $unpaidInvoices = collect();
-        $totalUnpaid = 0;
-        if ($client->sas_username) {
-            $radius = app(\App\Services\Radius\RadiusService::class);
-            $radiusInfo = $radius->getClientInfo($client->sas_username);
-            $traffic = $radius->getTraffic($client->sas_username);
-            $radiusInfo['traffic'] = $traffic;
-        }
-
-        // Get unpaid invoices with details
-        $unpaidInvoices = \App\Models\Admin\Invoice::with(['subscription'])
-            ->where('client_id', $id)
-            ->whereIn('status', ['unpaid', 'partial'])
-            ->orderBy('due_date', 'asc')
-            ->get();
-
-        $totalUnpaid = $unpaidInvoices->sum('remaining_amount') ?? 0;
-
-        $data['client'] = $client;
-        $data['radiusInfo'] = $radiusInfo;
-        $data['unpaidInvoices'] = $unpaidInvoices;
-        $data['totalUnpaid'] = $totalUnpaid;
-
-        return view($this->admin_view . '.client_details', $data);
+        //
     }
 
     /***********************************************/
@@ -335,20 +291,6 @@ class ClientController extends Controller
             $this->clientService->update($request, $id);
             $client = $this->ClientsRepository->getById($id);
             $this->handleSas4Operations($client, $request);
-
-            // Sync RADIUS profile if subscription changed
-            $radiusMessage = null;
-            if ($client->sas_username && $client->subscription_id) {
-                $oldSubId = $oldClientData['subscription_id'] ?? null;
-                if ($oldSubId != $client->subscription_id) {
-                    $result = app(ProfileService::class)->updateClientOnPlanChange(
-                        $client->sas_username,
-                        $client->subscription_id
-                    );
-                    $radiusMessage = $result['message'];
-                }
-            }
-
             $notificationMessage = sprintf(
                 'تم تحديث بيانات العميل: %s - تم التحديث بواسطة %s',
                 $client->name,
@@ -428,10 +370,25 @@ class ClientController extends Controller
     }
     /***********************************************/
     public function client_paid_invoices($id)
-
- {
+    {
         $data['all_data'] = $this->ClientsRepository->getById($id);
-        $data['client'] = $data['all_data'];
+        $data['unpaid_data'] = Invoice::with(['client', 'employee', 'subscription'])
+            ->where('client_id', $id)
+            ->where('status', 'unpaid')
+            ->get();
+        $data['paid_data'] = Invoice::with(['client', 'employee', 'subscription'])
+            ->where('client_id', $id)
+            ->whereIn('status', ['paid', 'partial'])
+            ->get();
+        $data['total_unpaid'] = $data['unpaid_data']->sum('amount');
+        $data['total_paid'] = $data['paid_data']->sum('paid_amount');
+        // dd($data);
+        return view($this->admin_view . '.invoices.invoices', $data);
+    }
+    /***********************************************/
+    public function client_invoices($id)
+    {
+        $data['all_data'] = $this->ClientsRepository->getById($id);
         $data['unpaid_data'] = Invoice::where('client_id', $id)
             ->where('status', 'unpaid')
             ->get();
@@ -445,8 +402,6 @@ class ClientController extends Controller
 
         $data['total_unpaid'] = $data['unpaid_data']->sum('amount');
         $data['total_paid'] = $data['paid_data']->sum('paid_amount');
-        $data['unpaidInvoices'] = $data['unpaid_data'];
-        $data['totalUnpaid'] = $data['total_unpaid'];
         // dd($data);
         return view($this->admin_view . '.add_invoice.add_invoice', $data);
     }
@@ -670,26 +625,6 @@ class ClientController extends Controller
                 $newStatus = $data['is_active'];
 
                 $this->ClientsRepository->update($id, $data);
-                
-                // RADIUS: قطع/تفعيل حسب الحالة الجديدة
-                if ($client->sas_username) {
-                    $radius = app(\App\Services\Radius\RadiusService::class);
-                    if ($newStatus == '0') {
-                        try {
-                            $radius->disableClient($client);
-                            \Log::info("RADIUS disabled {$client->sas_username} (status became inactive)");
-                        } catch (\Exception $e) {
-                            \Log::warning("RADIUS disable failed for {$client->sas_username}: " . $e->getMessage());
-                        }
-                    } else {
-                        try {
-                            $radius->enableClient($client);
-                            \Log::info("RADIUS enabled {$client->sas_username} (status became active)");
-                        } catch (\Exception $e) {
-                            \Log::warning("RADIUS enable failed for {$client->sas_username}: " . $e->getMessage());
-                        }
-                    }
-                }
                 
                 // إذا كان الطلب AJAX، أعد JSON response
                 if (request()->ajax() || request()->wantsJson()) {
@@ -917,59 +852,15 @@ class ClientController extends Controller
         }
     }
 
-public function getClientDetails($id)
-{
-    $client = Clients::with(["subscription", "invoices"])->withSum("invoices as remaining_amount_total", "remaining_amount")->findOrFail($id);
+    public function getClientDetails($id)
+    {
+        $client = Clients::with(['subscription', 'invoices'])
+            ->withSum('invoices as remaining_amount_total', 'remaining_amount')
+            ->findOrFail($id);
 
-    $radiusInfo = null;
-    $unpaidInvoices = collect();
-    $totalUnpaid = 0;
-    $activeSessions = [];
-    $todayTraffic = [];
-    $liveData = null;
-
-    if ($client->sas_username) {
-        $radius = app(\App\Services\Radius\RadiusService::class);
-        $radiusInfo = $radius->getClientInfo($client->sas_username);
-        $traffic = $radius->getTraffic($client->sas_username);
-        $radiusInfo["traffic"] = $traffic;
-        $activeSessions = $radius->getActiveUserSessions($client->sas_username);
-        $todayTraffic = $radius->getTodayTraffic($client->sas_username);
-
-        try {
-            $routeros = app(\App\Services\Radius\RouterOSService::class);
-            if ($routeros->connect()) {
-                $liveData = $routeros->getPppUser($client->sas_username);
-                $routeros->disconnect();
-            }
-        } catch (\Exception $e) {
-            Log::warning("RouterOS: " . $e->getMessage());
-        }
+        return view($this->admin_view . '.details_modal', compact('client'))->render();
     }
 
-    $unpaidInvoices = \App\Models\Admin\Invoice::with(["subscription"])->where("client_id", $id)->whereIn("status", ["unpaid", "partial"])->orderBy("due_date", "asc")->get();
-    $totalUnpaid = $unpaidInvoices->sum("remaining_amount") ?? 0;
-
-    // Get current speed from RADIUS
-    $currentSpeed = null;
-    $recentSessions = [];
-    if ($client->sas_username) {
-        $currentSpeed = DB::connection("radius")->table("radreply")
-            ->where("username", $client->sas_username)
-            ->where("attribute", "Mikrotik-Rate-Limit")
-            ->value("value");
-
-        $recentSessions = DB::connection("radius")->table("radacct")
-            ->where("username", $client->sas_username)
-            ->whereNotNull("acctstoptime")
-            ->orderBy("acctstoptime", "desc")
-            ->limit(5)
-            ->get();
-    }
-
-    $html = view($this->admin_view . ".details_modal", compact("client", "radiusInfo", "unpaidInvoices", "totalUnpaid", "activeSessions", "todayTraffic", "liveData", "currentSpeed", "recentSessions"))->render();
-    return response()->json(["html" => $html]);
-}
     public function remainingInvoices($id)
     {
         $client = $this->ClientsRepository->getById($id);
@@ -989,188 +880,202 @@ public function getClientDetails($id)
         return view($this->admin_view . '.quick_panel', compact('client'))->render();
     }
 
-        public function disconnect(Request $request, string $id)
+    public function getSas4Info($id)
     {
-        if (!$request->ajax()) {
-            abort(404);
-        }
-        
         $client = $this->ClientsRepository->getById($id);
-        
-        if (!$client->sas_username) {
-            return response()->json(["success" => false, "message" => "" . trans("clients.no_radius_username")]);
+        if (!$client || !$client->sas_username) {
+            return response()->json(['error' => trans('clients.no_sas4_username_linked')], 404);
         }
-        
-        try {
-            $radius = app(\App\Services\Radius\RadiusService::class);
-            $result = $radius->coaDisconnect($client->sas_username);
-            
-            if ($result["success"]) {
-                return response()->json(["success" => true, "message" => $result["message"]]);
+
+        $sas4Service = app(\App\Services\Sas4\Sas4ApiService::class);
+        $info = $sas4Service->getUserFullInfo($client->sas_username);
+
+        if (!$info) {
+            return response()->json(['error' => trans('clients.sas4_user_not_found')], 404);
+        }
+
+        return response()->json($info);
+    }
+
+    public function getSas4Traffic($id)
+    {
+        $client = $this->ClientsRepository->getById($id);
+        if (!$client || !$client->sas_username) {
+            return response()->json(['error' => trans('clients.no_sas4_username_linked')], 404);
+        }
+
+        $sas4Service = app(\App\Services\Sas4\Sas4ApiService::class);
+        $data = $sas4Service->getTrafficAndSessions($client->sas_username);
+
+        if (!$data) {
+            return response()->json(['error' => trans('clients.sas4_user_not_found')], 404);
+        }
+
+        return response()->json($data);
+    }
+
+    public function getSas4DailyTraffic($id)
+    {
+        $client = $this->ClientsRepository->getById($id);
+        if (!$client || !$client->sas_username) {
+            return response()->json(['error' => trans('clients.no_sas4_username_linked')], 404);
+        }
+
+        $month = request('month', date('n'));
+        $year = request('year', date('Y'));
+
+        $sas4Service = app(\App\Services\Sas4\Sas4ApiService::class);
+        $data = $sas4Service->getDailyTrafficReport($client->sas_username, $month, $year);
+
+        if (!$data) {
+            return response()->json(['error' => trans('clients.sas4_user_not_found')], 404);
+        }
+
+        return response()->json($data);
+    }
+
+    public function searchSas4Users()
+    {
+        $query = request('q', '');
+        $sas4Service = app(\App\Services\Sas4\Sas4ApiService::class);
+        $result = $sas4Service->searchUsers($query);
+
+        return response()->json($result ?? ['data' => []]);
+    }
+
+    public function getSas4OnlineStatus()
+    {
+        $usernames = request('usernames', []);
+        if (empty($usernames)) {
+            return response()->json([]);
+        }
+
+        $sas4Service = app(\App\Services\Sas4\Sas4ApiService::class);
+        $statusMap = [];
+
+        foreach ($usernames as $username) {
+            $user = $sas4Service->getUserByUsername($username);
+            if ($user && isset($user['data'])) {
+                $userData = $user['data'];
+                $statusMap[$username] = [
+                    'online' => $userData['online_status'] ?? 0,
+                    'enabled' => $userData['enabled'] ?? 0,
+                    'expiration' => $userData['expiration'] ?? '',
+                ];
             }
-            
-            // Fallback to DB disconnect
-            $radius->disableClient($client);
-            return response()->json(["success" => true, "message" => trans("clients.disconnected_via_db")]);
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error("Disconnect failed for client {$id}: " . $e->getMessage());
-            return response()->json(["success" => false, "message" => $e->getMessage()]);
         }
+
+        return response()->json($statusMap);
+    }
+
+    public function getSas4Profiles()
+    {
+        $sas4Service = app(\App\Services\Sas4\Sas4ApiService::class);
+        $result = $sas4Service->getProfiles();
+
+        return response()->json($result ?? ['data' => []]);
+    }
+
+    public function sas4Control($id)
+    {
+        $client = $this->ClientsRepository->getById($id);
+        if (!$client || !$client->sas_username) {
+            return response()->json(['success' => false, 'message' => trans('clients.no_sas4_username_linked')], 404);
+        }
+
+        $action = request('action');
+        $profileId = request('profile_id');
+
+        $sas4Service = app(\App\Services\Sas4\Sas4ApiService::class);
+        $sas4User = $sas4Service->getUserByUsername($client->sas_username);
+
+        if (!$sas4User || !isset($sas4User['data']['id'])) {
+            return response()->json(['success' => false, 'message' => trans('clients.sas4_user_not_found')], 404);
+        }
+
+        $sas4UserId = $sas4User['data']['id'];
+
+        $result = null;
+        $message = '';
+
+        switch ($action) {
+            case 'enable':
+                $result = $sas4Service->enableUser($sas4UserId);
+                $message = trans('clients.sas4_enabled_success');
+                break;
+            case 'disable':
+                $result = $sas4Service->disableUser($sas4UserId);
+                $message = trans('clients.sas4_disabled_success');
+                break;
+            case 'disconnect':
+                $result = $sas4Service->disconnectUser($sas4UserId);
+                $message = trans('clients.sas4_disconnected_success');
+                break;
+            case 'change_profile':
+                if (!$profileId) {
+                    return response()->json(['success' => false, 'message' => trans('clients.sas4_profile_required')], 400);
+                }
+                $expirationDate = request('expiration_date');
+                if ($expirationDate) {
+                    $result = $sas4Service->changeProfileAndExpiration($sas4UserId, $profileId, $expirationDate);
+                } else {
+                    $result = $sas4Service->changeProfile($sas4UserId, $profileId);
+                }
+                $message = trans('clients.sas4_profile_changed_success');
+                break;
+            default:
+                return response()->json(['success' => false, 'message' => trans('clients.sas4_invalid_action')], 400);
+        }
+
+        if ($result && isset($result['status']) && $result['status'] == 200) {
+            return response()->json(['success' => true, 'message' => $message]);
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => trans('clients.sas4_action_failed')
+        ], 500);
     }
 
     protected function handleSas4Operations($client, $request)
     {
-        // RADIUS username and password from form
-        $radiusUsername = $request->input('radius_username');
-        $radiusPassword = $request->input('radius_password');
+        $sas4Action = $request->input('sas4_action');
+        $sas4Mode = $request->input('sas4_mode', 'link');
 
-        if ($radiusUsername) {
-            $client->sas_username = $radiusUsername;
-            if ($radiusPassword) {
-                $client->radius_password = $radiusPassword;
-            }
+        if ($sas4Action === 'unlink') {
+            $client->sas_username = null;
             $client->save();
+            return;
+        }
 
-            // Sync to RADIUS tables
-            try {
-                $radius = app(\App\Services\Radius\RadiusService::class);
-                $radius->syncClient($client);
-            } catch (\Exception $e) {
-                \Illuminate\Support\Facades\Log::error("Radius sync failed for client {$client->id}: " . $e->getMessage());
+        if ($sas4Mode === 'create') {
+            $newUsername = $request->input('sas4_new_username');
+            $newPassword = $request->input('sas4_new_password');
+            $newProfile = $request->input('sas4_new_profile');
+
+            if (!$newUsername || !$newPassword || !$newProfile) {
+                return;
+            }
+
+            $sas4Service = app(\App\Services\Sas4\Sas4ApiService::class);
+
+            if ($sas4Service->usernameExists($newUsername)) {
+                return;
+            }
+
+            $result = $sas4Service->createUser($newUsername, $newPassword, $newProfile, $client->name);
+
+            if ($result && isset($result['status']) && $result['status'] == 200) {
+                $client->sas_username = $newUsername;
+                $client->save();
+            }
+        } elseif ($sas4Mode === 'link' || $sas4Action === 'link') {
+            $sasUsername = $request->input('sas_username');
+            if ($sasUsername) {
+                $client->sas_username = $sasUsername;
+                $client->save();
             }
         }
     }
 
-    public function toggleRadius(Request $request, string $id)
-    {
-        if (!$request->ajax()) {
-            abort(404);
-        }
-        $client = $this->ClientsRepository->getById($id);
-        if (!$client->sas_username) {
-            return response()->json(["success" => false, "message" => trans("clients.no_radius_username")]);
-        }
-        try {
-            $radius = app(\App\Services\Radius\RadiusService::class);
-            $isDisabled = \Illuminate\Support\Facades\DB::connection("radius")
-                ->table("radcheck")
-                ->where("username", $client->sas_username)
-                ->where("attribute", "Auth-Type")
-                ->where("value", "Reject")
-                ->exists();
-            if ($isDisabled) {
-                $radius->enableClient($client);
-                return response()->json(["success" => true, "message" => trans("clients.radius_enabled"), "status" => "enabled"]);
-            } else {
-                $radius->disableClient($client);
-                return response()->json(["success" => true, "message" => trans("clients.radius_disabled"), "status" => "disabled"]);
-            }
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error("Toggle radius failed: ".$e->getMessage());
-            return response()->json(["success" => false, "message" => $e->getMessage()]);
-        }
-    }
-
-    public function changeRadiusSpeed(Request $request, string $id)
-    {
-        if (!$request->ajax()) {
-            abort(404);
-        }
-        $client = $this->ClientsRepository->getById($id);
-        if (!$client->sas_username) {
-            return response()->json(["success" => false, "message" => trans("clients.no_radius_username")]);
-        }
-        $speed = $request->input("speed");
-        if (!$speed) {
-            return response()->json(["success" => false, "message" => trans("clients.speed_required")]);
-        }
-        try {
-            \Illuminate\Support\Facades\DB::connection("radius")
-                ->table("radreply")
-                ->where("username", $client->sas_username)
-                ->where("attribute", "Mikrotik-Rate-Limit")
-                ->delete();
-            \Illuminate\Support\Facades\DB::connection("radius")
-                ->table("radreply")
-                ->insert([
-                    "username" => $client->sas_username,
-                    "attribute" => "Mikrotik-Rate-Limit",
-                    "op" => ":=",
-                    "value" => $speed,
-                ]);
-            return response()->json(["success" => true, "message" => trans("clients.speed_updated", ["speed" => $speed])]);
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error("Change speed failed: ".$e->getMessage());
-            return response()->json(["success" => false, "message" => $e->getMessage()]);
-        }
-    }
-
-    public function scheduleRadiusStop(Request $request, string $id)
-    {
-        if (!$request->ajax()) {
-            abort(404);
-        }
-        $client = $this->ClientsRepository->getById($id);
-        if (!$client->sas_username) {
-            return response()->json(["success" => false, "message" => trans("clients.no_radius_username")]);
-        }
-        $stopDate = $request->input("stop_date");
-        // Empty stop_date = clear the schedule
-        if (!$stopDate) {
-            $client->radius_stop_at = null;
-            $client->save();
-            return response()->json(["success" => true, "message" => "\u062a\u0645 \u0625\u0644\u063a\u0627\u0621 \u062c\u062f\u0648\u0644\u0629 \u0627\u0644\u0625\u064a\u0642\u0627\u0641"]);
-        }
-        try {
-            $client->radius_stop_at = $stopDate;
-            $client->save();
-            return response()->json(["success" => true, "message" => trans("clients.stop_scheduled", ["date" => $stopDate])]);
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error("Schedule stop failed: ".$e->getMessage());
-            return response()->json(["success" => false, "message" => $e->getMessage()]);
-        }
-    }
-
-
-    /**
-     * Load Internet Tab content via AJAX
-     */
-    public function internetTab(Request $request, string $id)
-    {
-        $client = $this->ClientsRepository->getById($id);
-
-        if (!$client->sas_username) {
-            return response()->json([
-                'html' => '<div class="text-center py-5 text-muted"><i class="bi bi-wifi-off fs-1 d-block mb-2"></i><p>' . trans('clients.no_radius_username') . '</p></div>'
-            ]);
-        }
-
-        $username = $client->sas_username;
-        $radiusService = app(RadiusService::class);
-
-        $isOnline = $radiusService->isOnline($username);
-        $activeSessions = $radiusService->getActiveUserSessions($username);
-        $todayTraffic = $radiusService->getTodayTraffic($username);
-        $monthlyTraffic = $radiusService->getTraffic($username);
-        $clientInfo = $radiusService->getClientInfo($username);
-
-        // Try MikroTik API for live data
-        $liveData = null;
-        try {
-            $routerosService = app(RouterOSService::class);
-            if ($routerosService->connect()) {
-                $liveData = $routerosService->getPppUser($username);
-                $routerosService->disconnect();
-            }
-        } catch (\Exception $e) {
-            Log::warning('RouterOS API fallback failed: ' . $e->getMessage());
-        }
-
-        $html = view('dashbord.clients._internet_tab', compact(
-            'client', 'username', 'isOnline', 'activeSessions',
-            'todayTraffic', 'monthlyTraffic', 'clientInfo', 'liveData'
-        ))->render();
-
-        return response()->json(['html' => $html]);
-    }
 }

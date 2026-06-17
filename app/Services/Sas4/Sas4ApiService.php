@@ -1,0 +1,542 @@
+<?php
+
+namespace App\Services\Sas4;
+
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
+
+class Sas4ApiService
+{
+    protected $baseUrl;
+    protected $username;
+    protected $password;
+    protected $aesKey;
+
+    public function __construct()
+    {
+        $this->baseUrl = rtrim(config('sas4.url'), '/');
+        $this->username = config('sas4.username');
+        $this->password = config('sas4.password');
+        $this->aesKey = config('sas4.aes_key');
+    }
+
+    /**
+     * CryptoJS-compatible AES-256-CBC encryption
+     */
+    protected function aesEncrypt($data)
+    {
+        $salt = openssl_random_pseudo_bytes(8);
+        $keyIv = '';
+        $prev = '';
+        while (strlen($keyIv) < 48) {
+            $prev = md5($prev . $this->aesKey . $salt, true);
+            $keyIv .= $prev;
+        }
+        $key = substr($keyIv, 0, 32);
+        $iv = substr($keyIv, 32, 16);
+        $encrypted = openssl_encrypt($data, 'AES-256-CBC', $key, OPENSSL_RAW_DATA, $iv);
+        return base64_encode('Salted__' . $salt . $encrypted);
+    }
+
+    /**
+     * Get JWT token (cached)
+     */
+    public function getToken()
+    {
+        return Cache::remember('sas4_token', config('sas4.token_cache_minutes') * 60, function () {
+            $payload = $this->aesEncrypt(json_encode([
+                'username' => $this->username,
+                'password' => $this->password,
+                'language' => 'en',
+            ]));
+
+            $response = $this->request('POST', '/admin/api/index.php/api/login', [
+                'payload' => $payload,
+            ], false);
+
+            if ($response && isset($response['token'])) {
+                return $response['token'];
+            }
+
+            Log::error('SAS4: Failed to get token', ['response' => $response]);
+            return null;
+        });
+    }
+
+    /**
+     * Make HTTP request to SAS 4 API
+     */
+    protected function request($method, $path, $data = null, $useToken = true)
+    {
+        $url = $this->baseUrl . $path;
+        $ch = curl_init($url);
+
+        $headers = [
+            'Accept: application/json',
+        ];
+
+        if ($useToken) {
+            $token = $this->getToken();
+            if (!$token) {
+                return null;
+            }
+            $headers[] = 'Authorization: Bearer ' . $token;
+        }
+
+        if ($method === 'POST') {
+            curl_setopt($ch, CURLOPT_POST, true);
+            if ($data !== null) {
+                if (isset($data['payload'])) {
+                    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
+                    $headers[] = 'Content-Type: application/x-www-form-urlencoded';
+                } else {
+                    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+                    $headers[] = 'Content-Type: application/json';
+                }
+            }
+        } elseif ($method === 'PUT') {
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PUT');
+            if ($data !== null) {
+                if (isset($data['payload'])) {
+                    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
+                    $headers[] = 'Content-Type: application/x-www-form-urlencoded';
+                } else {
+                    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+                    $headers[] = 'Content-Type: application/json';
+                }
+            }
+        } elseif ($data !== null) {
+            $url .= '?' . http_build_query($data);
+        }
+
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        $decoded = json_decode($response, true);
+
+        if ($httpCode >= 400) {
+            Log::error('SAS4 API error', ['url' => $url, 'code' => $httpCode, 'response' => $response]);
+            return null;
+        }
+
+        return $decoded;
+    }
+
+    /**
+     * Search users by query (for autocomplete)
+     */
+    public function searchUsers($query, $page = 1, $count = 20)
+    {
+        $payload = $this->aesEncrypt(json_encode([
+            'search' => $query,
+            'page' => $page,
+            'count' => $count,
+        ]));
+
+        return $this->request('POST', '/admin/api/index.php/api/index/user', [
+            'payload' => $payload,
+        ]);
+    }
+
+    /**
+     * Get user details by username
+     */
+    public function getUserByUsername($username)
+    {
+        $result = $this->searchUsers($username, 1, 100);
+        if (!$result || !isset($result['data'])) {
+            return null;
+        }
+
+        foreach ($result['data'] as $user) {
+            if (strtolower($user['username']) === strtolower($username)) {
+                $details = $this->getUserById($user['id']);
+                if ($details && isset($details['data'])) {
+                    // Preserve online_status from search results
+                    if (isset($user['online_status'])) {
+                        $details['data']['online_status'] = $user['online_status'];
+                    }
+                }
+                return $details;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Get user details by ID
+     */
+    public function getUserById($userId)
+    {
+        return $this->request('GET', "/admin/api/index.php/api/user/{$userId}");
+    }
+
+    /**
+     * Get user overview (status, balance, expiration, last IP, etc.)
+     */
+    public function getUserOverview($userId)
+    {
+        return $this->request('GET', "/admin/api/index.php/api/user/overview/{$userId}");
+    }
+
+    /**
+     * Get user traffic data
+     */
+    public function getUserTraffic($userId)
+    {
+        $payload = $this->aesEncrypt(json_encode([
+            'user_id' => $userId,
+            'month' => date('m'),
+            'year' => date('Y'),
+        ]));
+
+        return $this->request('POST', '/admin/api/index.php/api/user/traffic', [
+            'payload' => $payload,
+        ]);
+    }
+
+    public function getDailyTrafficReport($username, $month, $year)
+    {
+        $user = $this->getUserByUsername($username);
+        if (!$user || !isset($user['data'])) {
+            return null;
+        }
+
+        $userId = $user['data']['id'];
+        $daysInMonth = (int) date('t', mktime(0, 0, 0, $month, 1, $year));
+
+        $payload = $this->aesEncrypt(json_encode([
+            'user_id' => $userId,
+            'month' => (int) $month,
+            'year' => (int) $year,
+            'report_type' => 'daily',
+        ]));
+
+        $response = $this->request('POST', '/admin/api/index.php/api/user/traffic', [
+            'payload' => $payload,
+        ]);
+
+        if (!$response || !isset($response['data'])) {
+            return null;
+        }
+
+        $data = $response['data'];
+        $rx = $data['rx'] ?? [];
+        $tx = $data['tx'] ?? [];
+        $total = $data['total'] ?? [];
+        $totalReal = $data['total_real'] ?? [];
+        $freeTraffic = $data['free_traffic'] ?? [];
+
+        $days = [];
+        $summary = [
+            'total_download' => 0,
+            'total_upload' => 0,
+            'total_traffic' => 0,
+            'total_real' => 0,
+        ];
+
+        for ($d = 1; $d <= $daysInMonth; $d++) {
+            $idx = $d - 1;
+            $rxVal = (int) ($rx[$idx] ?? 0);
+            $txVal = (int) ($tx[$idx] ?? 0);
+            $totalVal = (int) ($total[$idx] ?? 0);
+            $totalRealVal = (int) ($totalReal[$idx] ?? 0);
+            $freeVal = (int) ($freeTraffic[$idx] ?? 0);
+
+            $days[] = [
+                'day' => $d,
+                'date' => sprintf('%d-%d-%d', $year, $month, $d),
+                'download' => $rxVal,
+                'upload' => $txVal,
+                'total' => $totalVal,
+                'total_real' => $totalRealVal,
+                'free_traffic' => $freeVal,
+                'has_traffic' => ($rxVal > 0 || $txVal > 0),
+            ];
+
+            $summary['total_download'] += $rxVal;
+            $summary['total_upload'] += $txVal;
+            $summary['total_traffic'] += $totalVal;
+            $summary['total_real'] += $totalRealVal;
+        }
+
+        return [
+            'user_id' => $userId,
+            'username' => $user['data']['username'],
+            'month' => (int) $month,
+            'year' => (int) $year,
+            'days' => $days,
+            'summary' => $summary,
+        ];
+    }
+
+    /**
+     * Get list of profiles (bandwidth plans)
+     */
+    public function getProfiles()
+    {
+        return $this->request('GET', '/admin/api/index.php/api/list/profile/0');
+    }
+
+    /**
+     * Get online users list
+     */
+    public function getOnlineUsers($search = null)
+    {
+        $data = [];
+        if ($search) {
+            $data['search'] = $search;
+        }
+        $payload = $this->aesEncrypt(json_encode($data));
+
+        return $this->request('POST', '/admin/api/index.php/api/index/online', [
+            'payload' => $payload,
+        ]);
+    }
+
+    /**
+     * Ping a user
+     */
+    public function pingUser($userId)
+    {
+        $payload = $this->aesEncrypt(json_encode([
+            'user_id' => $userId,
+        ]));
+
+        return $this->request('POST', '/admin/api/index.php/api/user/ping', [
+            'payload' => $payload,
+        ]);
+    }
+
+    public function getTrafficAndSessions($username)
+    {
+        $user = $this->getUserByUsername($username);
+        if (!$user || !isset($user['data'])) {
+            return null;
+        }
+
+        $userData = $user['data'];
+        $userId = $userData['id'];
+
+        $overview = $this->getUserOverview($userId);
+        $overviewData = $overview ? ($overview['data'] ?? $overview) : null;
+
+        $searchResult = $this->searchUsers($username, 1, 1);
+        $searchUser = null;
+        if ($searchResult && isset($searchResult['data'])) {
+            foreach ($searchResult['data'] as $u) {
+                if (strtolower($u['username']) === strtolower($username)) {
+                    $searchUser = $u;
+                    break;
+                }
+            }
+        }
+
+        $userData['online'] = $userData['online_status'] ?? ($searchUser['online_status'] ?? 0);
+
+        if ($overviewData && isset($overviewData['last_online'])) {
+            $userData['last_login'] = $overviewData['last_online'];
+        }
+
+        $dailyTrafficDetails = $searchUser['daily_traffic_details'] ?? null;
+        $totalTrafficBytes = null;
+        $trafficDetailsArray = [];
+
+        if ($dailyTrafficDetails && is_array($dailyTrafficDetails)) {
+            if (isset($dailyTrafficDetails['traffic'])) {
+                $totalTrafficBytes = $dailyTrafficDetails['traffic'];
+            }
+            if (isset($dailyTrafficDetails['data']) && is_array($dailyTrafficDetails['data'])) {
+                $trafficDetailsArray = $dailyTrafficDetails['data'];
+            } elseif (isset($dailyTrafficDetails['daily']) && is_array($dailyTrafficDetails['daily'])) {
+                $trafficDetailsArray = $dailyTrafficDetails['daily'];
+            } elseif (isset($dailyTrafficDetails[0])) {
+                $trafficDetailsArray = $dailyTrafficDetails;
+            }
+        }
+
+        $trafficApiResponse = $this->getUserTraffic($userId);
+        if ($trafficApiResponse) {
+            $trafficData = $trafficApiResponse['data'] ?? $trafficApiResponse;
+            if (is_array($trafficData)) {
+                if (isset($trafficData['total_bytes']) || isset($trafficData['total'])) {
+                    $totalTrafficBytes = $totalTrafficBytes ?? ($trafficData['total_bytes'] ?? $trafficData['total'] ?? null);
+                }
+                if (isset($trafficData['daily']) && is_array($trafficData['daily'])) {
+                    $trafficDetailsArray = $trafficDetailsArray ?: $trafficData['daily'];
+                }
+                if (isset($trafficData['data']) && is_array($trafficData['data']) && empty($trafficDetailsArray)) {
+                    $trafficDetailsArray = $trafficData['data'];
+                }
+            }
+        }
+
+        return [
+            'user' => $userData,
+            'overview' => $overviewData,
+            'profile_details' => $searchUser['profile_details'] ?? null,
+            'total_traffic_bytes' => $totalTrafficBytes,
+            'daily_traffic' => $trafficDetailsArray,
+            'online_status' => (int)($searchUser['online_status'] ?? $userData['online_status'] ?? 0),
+        ];
+    }
+
+    /**
+     * Get all data for a SAS 4 user by username
+     */
+    public function getUserFullInfo($username)
+    {
+        $user = $this->getUserByUsername($username);
+        if (!$user || !isset($user['data'])) {
+            return null;
+        }
+
+        $userData = $user['data'];
+        $userId = $userData['id'];
+
+        $overview = $this->getUserOverview($userId);
+        $traffic = $this->getUserTraffic($userId);
+
+        // Use online_status from search results (0 = offline, 1 = online)
+        $userData['online'] = $userData['online_status'] ?? 0;
+
+        // Add last_online from overview if available
+        if ($overview && isset($overview['data']['last_online'])) {
+            $userData['last_login'] = $overview['data']['last_online'];
+        }
+
+        return [
+            'user' => $userData,
+            'overview' => $overview ? ($overview['data'] ?? $overview) : null,
+            'traffic' => $traffic ? ($traffic['data'] ?? $traffic) : null,
+        ];
+    }
+
+    /**
+     * Create a new SAS 4 user
+     */
+    public function createUser($username, $password, $profileId, $firstname = '')
+    {
+        $payload = $this->aesEncrypt(json_encode([
+            'username' => $username,
+            'password' => $password,
+            'profile_id' => $profileId,
+            'firstname' => $firstname,
+            'enabled' => 1,
+        ]));
+
+        return $this->request('POST', '/admin/api/index.php/api/user', [
+            'payload' => $payload,
+        ]);
+    }
+
+    /**
+     * Check if a username exists
+     */
+    public function usernameExists($username)
+    {
+        $result = $this->searchUsers($username, 1, 100);
+        if (!$result || !isset($result['data'])) {
+            return false;
+        }
+
+        foreach ($result['data'] as $user) {
+            if (strtolower($user['username']) === strtolower($username)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Enable a SAS 4 user
+     */
+    public function enableUser($userId)
+    {
+        $payload = $this->aesEncrypt(json_encode([
+            'enabled' => 1,
+        ]));
+
+        return $this->request('PUT', "/admin/api/index.php/api/user/{$userId}", [
+            'payload' => $payload,
+        ]);
+    }
+
+    /**
+     * Disable a SAS 4 user
+     */
+    public function disableUser($userId)
+    {
+        $payload = $this->aesEncrypt(json_encode([
+            'enabled' => 0,
+        ]));
+
+        return $this->request('PUT', "/admin/api/index.php/api/user/{$userId}", [
+            'payload' => $payload,
+        ]);
+    }
+
+    /**
+     * Disconnect a SAS 4 user (kick online session)
+     */
+    public function disconnectUser($userId)
+    {
+        $payload = $this->aesEncrypt(json_encode([
+            'user_id' => $userId,
+        ]));
+
+        return $this->request('POST', '/admin/api/index.php/api/user/disconnect', [
+            'payload' => $payload,
+        ]);
+    }
+
+    /**
+     * Change a SAS 4 user's profile (plan)
+     */
+    public function changeProfile($userId, $profileId)
+    {
+        $payload = $this->aesEncrypt(json_encode([
+            'profile_id' => $profileId,
+        ]));
+
+        return $this->request('PUT', "/admin/api/index.php/api/user/{$userId}", [
+            'payload' => $payload,
+        ]);
+    }
+
+    /**
+     * Change a SAS 4 user's expiration date
+     */
+    public function changeExpiration($userId, $expirationDate)
+    {
+        $payload = $this->aesEncrypt(json_encode([
+            'expiration' => $expirationDate,
+        ]));
+
+        return $this->request('PUT', "/admin/api/index.php/api/user/{$userId}", [
+            'payload' => $payload,
+        ]);
+    }
+
+    /**
+     * Change profile and expiration date together
+     */
+    public function changeProfileAndExpiration($userId, $profileId, $expirationDate)
+    {
+        $payload = $this->aesEncrypt(json_encode([
+            'profile_id' => $profileId,
+            'expiration' => $expirationDate,
+        ]));
+
+        return $this->request('PUT', "/admin/api/index.php/api/user/{$userId}", [
+            'payload' => $payload,
+        ]);
+    }
+}

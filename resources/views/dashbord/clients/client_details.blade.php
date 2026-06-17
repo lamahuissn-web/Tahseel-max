@@ -1,153 +1,203 @@
-@extends('dashbord.layouts.master')
+<div class="d-flex flex-wrap flex-sm-nowrap  mb-6">
+    <!--begin: Pic-->
 
-@section('css')
-<style>
-.online-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-left:6px;animation:pulse 2s infinite}
-.online-dot.online{background:#28a745;box-shadow:0 0 6px #28a745}
-.online-dot.offline{background:#6c757d}
-@keyframes pulse{0%{opacity:1}50%{opacity:0.5}100%{opacity:1}}
-#internetTabContent{min-height:300px}
-</style>
-@endsection
-
-@section('toolbar')
-<div id="kt_app_toolbar_container" class="app-container container-xxl d-flex flex-stack">
-    @php
-    $title = trans("clients.client_details") . " - " . $client->name;
-    $breadcrumbs = [
-        ["label" => trans("Toolbar.home"), "link" => route("admin.clients.create")],
-        ["label" => trans("Toolbar.clients"), "link" => route("admin.clients.index")],
-        ["label" => $client->name, "link" => ""],
-    ];
-    PageTitle($title, $breadcrumbs);
-    @endphp
-    <div class="d-flex align-items-center gap-2 gap-lg-3">
-        <a href="{{ route('admin.clients.index') }}" class="btn btn-sm btn-light">
-            <i class="bi bi-arrow-right"></i> {{ trans('invoices.back') }}
-        </a>
-        @can('update_client')
-        <a href="{{ route('admin.clients.edit', $client->id) }}" class="btn btn-sm btn-primary">
-            <i class="bi bi-pencil-square"></i> {{ trans('clients.edit_clients') }}
-        </a>
-        @endcan
+    <div class="me-7 mb-4">
+        <div class="symbol symbol-100px symbol-lg-160px symbol-fixed position-relative">
+            <img src="{{ asset('images/avatar.jpg') }}" alt="image" />
+            <div
+                class="position-absolute translate-middle bottom-0 start-100 mb-6 bg-success rounded-circle border border-4 border-body h-20px w-20px">
+            </div>
+        </div>
     </div>
-</div>
-@endsection
 
-@section('content')
-<!-- Client Basic Info Card -->
-<div class="card shadow-sm border-0 mb-4">
-    <div class="card-body">
-        <div class="row g-3">
-            <div class="col-md-3 col-6">
-                <small class="text-muted d-block">رقم الهاتف</small>
-                <span class="fw-bold">{{ $client->phone ?? '—' }}</span>
+    <div class="flex-grow-1">
+
+        <div class="d-flex justify-content-between align-items-start flex-wrap mb-2">
+
+            <div class="d-flex flex-column">
+
+                <div class="d-flex align-items-center mb-2">
+                    <a href="#"
+                        class="text-gray-900 text-hover-primary fs-2 fw-bold me-1">{{ $all_data->name }}</a>
+                    <a href="#">
+                        <i class="bi bi-patch-check fs-1 text-primary"></i>
+                    </a>
+
+                </div>
+
+                <div class="d-flex flex-wrap fw-semibold fs-6 mb-4 pe-2">
+                    <a href="https://wa.me/{{ preg_replace('/[^0-9]/', '', $all_data->phone) }}"
+                        target="_blank"
+                        class="d-flex align-items-center text-gray-500 text-hover-primary me-5 mb-2">
+                        <i class="bi bi-telephone fs-4 me-1"></i> {{ $all_data->phone }}
+                    </a>
+                    <a href="#" class="d-flex align-items-center text-gray-500 text-hover-primary me-5 mb-2">
+                        <i class="bi bi-geo-alt fs-4 me-1"></i> {{ $all_data->address1 }}</a>
+                </div>
+                <!--end::Info-->
             </div>
-            <div class="col-md-3 col-6">
-                <small class="text-muted d-block">نوع الزبون</small>
-                <span class="badge bg-info">{{ $client->client_type ?? '—' }}</span>
-            </div>
-            <div class="col-md-3 col-6">
-                <small class="text-muted d-block">RADIUS (SAS)</small>
-                <span class="fw-bold">{{ $client->sas_username ?? '—' }}</span>
-            </div>
-            <div class="col-md-3 col-6">
-                <small class="text-muted d-block">الحالة</small>
-                @if($client->is_active)
-                    <span class="badge bg-success">🟢 نشط</span>
-                @else
-                    <span class="badge bg-secondary">🔴 غير نشط</span>
+            <!--end::User-->
+            <!--begin::Actions-->
+            <div class="d-flex my-4">
+                <a href="{{ route('admin.clients.index') }}" class="btn btn-sm btn-light me-2"
+                    id="kt_user_follow_button">
+                    <i class="ki-duotone ki-check fs-3 d-none"></i>
+                    <span class="indicator-label">{{ trans('invoices.back') }}</span>
+                    <span class="indicator-progress">Please wait...
+                        <span class="spinner-border spinner-border-sm align-middle ms-2"></span></span>
+
+                </a>
+
+                @php
+                    $cleanPhone = preg_replace('/[^0-9]/', '', $all_data->phone ?? '');
+                    $hasValidPhone = strlen($cleanPhone) >= 7 && !preg_match('/^0+$/', $cleanPhone);
+                @endphp
+                @if($hasValidPhone)
+                <button class="btn btn-sm btn-success d-flex align-items-center gap-1 me-2 whatsapp-reminder-btn" onclick="sendClientWhatsAppReminder({{ $all_data->id }})">
+                    <i class="bi bi-whatsapp fs-6"></i>
+                    <span>{{ trans('clients.whatsapp_send_reminder') }}</span>
+                </button>
                 @endif
+
             </div>
-            <div class="col-md-3 col-6">
-                <small class="text-muted d-block">الباقة</small>
-                <span class="fw-bold">{{ $client->subscription->name ?? '—' }}</span>
+            <!--end::Actions-->
+        </div>
+        <!--end::Title-->
+        <!--begin::Stats-->
+        {{-- <div class="d-flex flex-wrap flex-stack">
+            <!--begin::Wrapper-->
+            <div class="d-flex flex-column flex-grow-1 pe-8">
+                <!--begin::Stats-->
+                <div class="d-flex flex-wrap">
+                    <!--begin::Stat-->
+
+
+                    <div class="border border-gray-300 border-dashed rounded min-w-125px py-3 px-4 me-6 mb-3">
+                        <!--begin::Number-->
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-book-fill fs-3 text-info me-2"></i>
+                            <div class="fs-2 fw-bold" data-kt-countup="true" data-kt-countup-value="{{ $unpaid_data->count() }}">{{ $unpaid_data->count() }}</div>
+                        </div>
+                        <div class="fw-semibold fs-6 text-gray-500">{{ trans('invoices.unpaid_data') }}</div>
+                    </div>
+
+                    <div class="border border-gray-300 border-dashed rounded min-w-125px py-3 px-4 me-6 mb-3">
+                        <!--begin::Number-->
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-people-fill fs-3 text-primary me-2"></i>
+                            <div class="fs-2 fw-bold" data-kt-countup="true" data-kt-countup-value="{{ $paid_data->count() }}"
+                                data-kt-countup-prefix="">
+                                {{ $paid_data->count() }}</div>
+                        </div>
+                        <div class="fw-semibold fs-6 text-gray-500">{{ trans('invoices.paid_data') }}</div>
+                    </div>
+
+                    <div class="border border-gray-300 border-dashed rounded min-w-125px py-3 px-4 me-6 mb-3">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-check-circle fs-3 text-success me-2"></i>
+                            <div class="fs-2 fw-bold" data-kt-countup="true" data-kt-countup-value="{{ $total_unpaid }}"
+                                data-kt-countup-prefix="$">
+                                {{ $total_unpaid }}</div>
+                        </div>
+                        <div class="fw-semibold fs-6 text-gray-500">{{ trans('invoices.total_unpaid') }}</div>
+                    </div>
+
+                    <div class="border border-gray-300 border-dashed rounded min-w-125px py-3 px-4 me-6 mb-3">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-check-circle fs-3 text-success me-2"></i>
+                            <div class="fs-2 fw-bold" data-kt-countup="true" data-kt-countup-value="{{ $total_paid }}"
+                                data-kt-countup-prefix="$">
+                                {{ $total_paid }}</div>
+                        </div>
+                        <div class="fw-semibold fs-6 text-gray-500">{{ trans('invoices.total_paid') }}</div>
+                    </div>
+
+
+
+                </div>
+
             </div>
-            <div class="col-md-3 col-6">
-                <small class="text-muted d-block">السعر</small>
-                <span class="fw-bold">\${{ number_format($client->price, 2) }}</span>
+
+        </div> --}}
+
+        <div class="d-flex flex-wrap flex-stack">
+            <div class="d-flex flex-column flex-grow-1 pe-8">
+                <div class="d-flex flex-wrap">
+                    <div class="border border-gray-300 border-dashed rounded min-w-125px py-3 px-4 me-6 mb-3">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-receipt fs-3 text-warning me-2"></i>  <!-- Changed to receipt with warning color -->
+                            <div class="fs-2 fw-bold">{{ $unpaid_data->count() }}</div>
+                        </div>
+                        <div class="fw-semibold fs-6 text-gray-500">{{ trans('invoices.unpaid_data') }}</div>
+                    </div>
+
+                    <div class="border border-gray-300 border-dashed rounded min-w-125px py-3 px-4 me-6 mb-3">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-receipt-cutoff fs-3 text-success me-2"></i>  <!-- Paid invoice icon -->
+                            <div class="fs-2 fw-bold">{{ $paid_data->count() }}</div>
+                        </div>
+                        <div class="fw-semibold fs-6 text-gray-500">{{ trans('invoices.paid_data') }}</div>
+                    </div>
+
+                    <div class="border border-gray-300 border-dashed rounded min-w-125px py-3 px-4 me-6 mb-3">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-currency-dollar fs-3 text-danger me-2"></i>  <!-- Dollar sign for money -->
+                            <div class="fs-2 fw-bold">${{ $total_unpaid }}</div>
+                        </div>
+                        <div class="fw-semibold fs-6 text-gray-500">{{ trans('invoices.total_unpaid') }}</div>
+                    </div>
+
+                    <div class="border border-gray-300 border-dashed rounded min-w-125px py-3 px-4 me-6 mb-3">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-cash-stack fs-3 text-success me-2"></i>  <!-- Stack of cash for paid amount -->
+                            <div class="fs-2 fw-bold">${{ $total_paid }}</div>
+                        </div>
+                        <div class="fw-semibold fs-6 text-gray-500">{{ trans('invoices.total_paid') }}</div>
+                    </div>
+                </div>
             </div>
-            <div class="col-md-3 col-6">
-                <small class="text-muted d-block">المبلغ المتبقي</small>
-                <span class="fw-bold {{ ($client->remaining_amount_total ?? 0) > 0 ? 'text-danger' : 'text-success' }}">
-                    \${{ number_format($client->remaining_amount_total ?? 0, 2) }}
-                </span>
-            </div>
-            <div class="col-md-3 col-6">
-                <small class="text-muted d-block">تاريخ البداية</small>
-                <span class="fw-bold">{{ $client->start_date ?? ($client->subscription_date ?? '—') }}</span>
-            </div>
-            <div class="col-12">
-                <small class="text-muted d-block">العنوان</small>
-                <span>{{ $client->address1 ?? '—' }}{{ $client->address2 ? ' - ' . $client->address2 : '' }}</span>
-            </div>
-            @if($client->notes)
-            <div class="col-12">
-                <small class="text-muted d-block">ملاحظات</small>
-                <span class="text-muted">{{ $client->notes }}</span>
-            </div>
-            @endif
         </div>
     </div>
+
 </div>
 
-<ul class="nav nav-tabs mb-4" id="clientTabs" role="tablist">
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="invoices-tab" data-bs-toggle="tab" data-bs-target="#invoicesTabPane"
-                type="button" role="tab">
-            <i class="bi bi-receipt"></i> {{ trans('clients.invoices_tab') }}
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="internet-tab" data-bs-toggle="tab" data-bs-target="#internetTabPane"
-                type="button" role="tab">
-            <i class="bi bi-wifi"></i> 🌐 {{ trans('clients.internet_tab') }}
-        </button>
-    </li>
-</ul>
+<script>
+    function sendClientWhatsAppReminder(clientId) {
+        var $btn = $('.whatsapp-reminder-btn');
+        var originalHtml = $btn.html();
 
-<div class="tab-content" id="clientTabsContent">
-    <div class="tab-pane fade" id="invoicesTabPane" role="tabpanel">
-        @include('dashbord.clients._client_content')
-    </div>
-    <div class="tab-pane fade show active" id="internetTabPane" role="tabpanel">
-        <div id="internetTabContent" class="text-center py-5">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading...</span>
-            </div>
-            <p class="mt-2 text-muted">Loading internet data...</p>
-        </div>
-    </div>
-</div>
-@endsection
+        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> جاري الإرسال...');
 
-@section('js')
-    @include('dashbord.clients._radius_actions_js')
-    <script>
-    function getLocalePrefix() {
-        var path = window.location.pathname;
-        var match = path.match(/^\/(en|ar)\//);
-        return match ? match[1] : 'en';
+        $.ajax({
+            url: '{{ route('admin.clients.whatsapp_reminder', ['id' => '__ID__']) }}'.replace('__ID__', clientId),
+            type: 'POST',
+            data: { _token: '{{ csrf_token() }}' },
+            success: function(res) {
+                if (res.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: res.message,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: '{{ trans("forms.error") }}',
+                        text: res.error
+                    });
+                }
+            },
+            error: function() {
+                Swal.fire({
+                    icon: 'error',
+                    title: '{{ trans("forms.error") }}',
+                    text: '{{ trans("clients.whatsapp_send_failed") }}'
+                });
+            },
+            complete: function() {
+                $btn.prop('disabled', false).html(originalHtml);
+            }
+        });
     }
-
-    function loadInternetTab(clientId) {
-        var container = document.getElementById('internetTabContent');
-        if (!container) return;
-
-        container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>';
-
-        fetch('/' + getLocalePrefix() + '/admin/clients/' + clientId + '/internet-tab', {headers:{'X-Requested-With':'XMLHttpRequest','Accept':'application/json'}})
-            .then(function(r) { return r.json(); })
-            .then(function(res) {
-                container.innerHTML = res.html;
-            })
-            .catch(function(e) {
-                container.innerHTML = '<div class="alert alert-danger">Failed to load: ' + e.message + '</div>';
-            });
-    }
-
-    document.addEventListener('DOMContentLoaded', function() {
-        loadInternetTab({{ $client->id }});
-    });
-    </script>
-@endsection
+</script>

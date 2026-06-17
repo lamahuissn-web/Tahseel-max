@@ -29,11 +29,11 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        if (!Auth::guard('admin')->user()->hasRole("super_admin")) {
+        if (!Auth::guard('admin')->user()->hasRole('Super-Admin')) {
             return redirect()->route('admin.mobile_view');
         }
 
-        return redirect()->intended(route("admin.dashboard"));
+        return redirect()->intended(RouteServiceProvider::ADMIN_HOME);
     }
 
     /**
@@ -47,6 +47,6 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerateToken();
 
-        return redirect()->route("admin.login");
+        return redirect('/admin/login');
     }
 }

@@ -12,9 +12,6 @@
 <link href="{{asset('assets/plugins/custom/fullcalendar/fullcalendar.bundle.css')}}" rel="stylesheet" type="text/css" />
 <link href="{{asset('assets/plugins/custom/datatables/datatables.bundle.css')}}" rel="stylesheet" type="text/css" />
 <link href="{{asset('assets/plugins/global/plugins.bundle.css')}}" rel="stylesheet" type="text/css" />
-<!-- Font Awesome 6 (Free) - SVG+JS -->
-<link href="{{asset("assets/css/fontawsome/svg-with-js.min.css")}}" rel="stylesheet" type="text/css" />
-<script defer src="{{asset("assets/js/custom/fontawsome/all.min.js")}}"></script>
 <link href="{{asset('assets/css/custome/fonts.css')}}" rel="stylesheet" type="text/css" />
 @if(app()->getLocale() =='ar')
 {{-- <link href="{{asset('assets/plugins/custom/prismjs/prismjs.bundle.rtl.css')}}" rel="stylesheet" type="text/css" />--}}

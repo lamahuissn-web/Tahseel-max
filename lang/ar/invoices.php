@@ -68,7 +68,4 @@
   'paid_data' => 'المدفوعة',
   'total_unpaid' => 'اجمالى الغير مدفوعة',
   'total_paid' => 'اجمالى المدفوعة',
-  'invoice_date' => 'تاريخ الفاتورة',
-  'remaining' => 'المتبقي',
-  'optional_paid_date_update' => 'اختياري - تحديث تاريخ الدفع',
 );

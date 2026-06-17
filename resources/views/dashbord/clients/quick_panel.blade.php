@@ -137,40 +137,6 @@
         @endif
     </div>
 
-    {{-- Online Status --}}
-    @php
-        $isOnline = false;
-        $sessionInfo = null;
-        if ($client->sas_username) {
-            $radius = app(\App\Services\Radius\RadiusService::class);
-            $isOnline = $radius->isOnline($client->sas_username);
-            if ($isOnline) {
-                $sessionInfo = $radius->getClientInfo($client->sas_username);
-            }
-        }
-    @endphp
-
-    @if($client->sas_username)
-    <div class="qp-info-item" style="border-color: {{ $isOnline ? "#c3e6cb" : "#e8e8e8" }};">
-        <div class="qp-info-main">
-            <span class="qp-info-label">{{ trans("clients.online_status") }}</span>
-            <span class="qp-info-value">
-                @if($isOnline)
-                    <span class="text-success"><i class="bi bi-wifi"></i> {{ trans("clients.online") }}</span>
-                    @if($sessionInfo && isset($sessionInfo["last_session"]["framed_ip"]))
-                        <br><small class="text-muted" style="direction: ltr;">{{ $sessionInfo["last_session"]["framed_ip"] }}</small>
-                    @endif
-                @else
-                    <span class="text-secondary"><i class="bi bi-wifi-off"></i> {{ trans("clients.offline") }}</span>
-                @endif
-            </span>
-        </div>
-        <div class="qp-info-action" style="font-size: 12px; color: {{ $isOnline ? "#198754" : "#6c757d" }};">
-            <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: {{ $isOnline ? "#198754" : "#6c757d" }};"></span>
-        </div>
-    </div>
-    @endif
-
     {{-- Stat Row --}}
     <div class="row g-2 mb-3">
         <div class="col-4">
