@@ -1,28 +1,29 @@
 @extends('dashbord.layouts.master')
 @section('content')
-<form action="{{ isset($name) ? route('admin.profiles.update', $name) : route('admin.profiles.store') }}" method="POST">
+<form action="{{ isset($profile) ? route('admin.profiles.update', $profile) : route('admin.profiles.store') }}" method="POST">
     @csrf
-    @if(isset($name)) @method('PUT') @endif
+    @if(isset($profile)) @method('PUT') @endif
 
     <div class="card shadow-sm">
         <div class="card-header bg-light">
-            <h6 class="card-title mb-0 fw-bold">{{ isset($name) ? 'تعديل باقة: ' . $name : 'إضافة باقة جديدة' }}</h6>
+            <h6 class="card-title mb-0 fw-bold">{{ isset($profile) ? 'تعديل باقة: ' . $profile->name : 'إضافة باقة جديدة' }}</h6>
         </div>
         <div class="card-body">
-            @if(!isset($name))
+            @if(!isset($profile))
             <div class="mb-3">
                 <label class="form-label">اسم الباقة</label>
                 <input type="text" name="name" class="form-control" required placeholder="مثال: 10M, 20M, 50M">
+                <small class="text-muted">هذا الاسم سيكون Pool Name في الميكروتك</small>
             </div>
             @endif
             <div class="mb-3">
-                <label class="form-label">السرعة (Mikrotik-Rate-Limit)</label>
-                <input type="text" name="speed" class="form-control" required placeholder="10M/10M" value="{{ $replies['Mikrotik-Rate-Limit']->value ?? '' }}">
-                <small class="text-muted">مثال: 10M/10M, 20M/20M, 50M/50M</small>
+                <label class="form-label">السرعة</label>
+                <input type="text" name="speed" class="form-control" required placeholder="10M/10M" value="{{ $profile->speed ?? '' }}">
+                <small class="text-muted">مثال: 10M/10M, 20M/20M, 50M/50M — تغيير السرعة يطبق على كل زبائن الباقة فوراً</small>
             </div>
             <div class="mb-3">
                 <label class="form-label">التزامن (Simultaneous-Use)</label>
-                <input type="number" name="simultaneous_use" class="form-control" min="1" max="10" value="{{ $checks['Simultaneous-Use']->value ?? 1 }}">
+                <input type="number" name="simultaneous_use" class="form-control" min="1" max="10" value="{{ $profile->simultaneous_use ?? 1 }}">
                 <small class="text-muted">عدد الأجهزة المسموح لها بالتزامن</small>
             </div>
             <div class="mb-3">
@@ -35,7 +36,7 @@
                     </option>
                     @endforeach
                 </select>
-                <small class="text-muted">ربط هذه الباقة مع خطة اشتراك في تحصيل</small>
+                <small class="text-muted">ربط الباقة مع خطة اشتراك — السرعة مستقلة عن السعر</small>
             </div>
         </div>
         <div class="card-footer text-end">

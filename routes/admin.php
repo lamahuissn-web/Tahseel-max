@@ -254,9 +254,9 @@ Route::group(
             Route::get('/profiles', [App\Http\Controllers\Admin\ProfileController::class, 'index'])->name('profiles.index');
             Route::get('/profiles/create', [App\Http\Controllers\Admin\ProfileController::class, 'create'])->name('profiles.create');
             Route::post('/profiles', [App\Http\Controllers\Admin\ProfileController::class, 'store'])->name('profiles.store');
-            Route::get('/profiles/{name}/edit', [App\Http\Controllers\Admin\ProfileController::class, 'edit'])->name('profiles.edit');
-            Route::put('/profiles/{name}', [App\Http\Controllers\Admin\ProfileController::class, 'update'])->name('profiles.update');
-            Route::delete('/profiles/{name}', [App\Http\Controllers\Admin\ProfileController::class, 'destroy'])->name('profiles.destroy');
+            Route::get('/profiles/{profile}/edit', [App\Http\Controllers\Admin\ProfileController::class, 'edit'])->name('profiles.edit');
+            Route::put('/profiles/{profile}', [App\Http\Controllers\Admin\ProfileController::class, 'update'])->name('profiles.update');
+            Route::delete('/profiles/{profile}', [App\Http\Controllers\Admin\ProfileController::class, 'destroy'])->name('profiles.destroy');
 
             Route::get('/logs', [LogController::class, 'index'])->name('logs.index');
             Route::get('/logs/{id}', [LogController::class, 'show'])->name('logs.show');

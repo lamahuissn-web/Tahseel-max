@@ -16,9 +16,6 @@ class Clients extends Model
     protected $table='tbl_clients';
     protected $guarded=[];
 
-
-
-
     public function scopeLastClientCode($query)
     {
         return $query->orderBy('id', 'desc')->pluck('client_code')->first();
@@ -27,6 +24,16 @@ class Clients extends Model
     public function subscription()
     {
         return $this->belongsTo(Subscription::class, 'subscription_id');
+    }
+
+    public function profile()
+    {
+        return $this->belongsTo(\App\Models\Profile::class, 'profile_id');
+    }
+
+    public function overrideProfile()
+    {
+        return $this->belongsTo(\App\Models\Profile::class, 'override_profile_id');
     }
 
     public function invoices()

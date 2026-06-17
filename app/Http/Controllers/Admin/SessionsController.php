@@ -116,7 +116,7 @@ class SessionsController extends Controller
         if ($success) {
             // Get the profile display name for the message
             $profile = collect($profileService->getAvailableProfiles())
-                ->firstWhere('radius_profile', $profileName);
+                ->firstWhere('name', $profileName);
 
             $displayName = $profile ? $profile->name : $profileName;
 

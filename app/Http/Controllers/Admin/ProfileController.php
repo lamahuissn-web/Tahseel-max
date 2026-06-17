@@ -3,68 +3,43 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Profile;
 use App\Services\Radius\ProfileService;
 use App\Services\Radius\RadiusService;
-use App\Services\Radius\RouterOSService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ProfileController extends Controller
 {
-    protected $profileService;
+    protected ProfileService $profileService;
 
     public function __construct(ProfileService $profileService)
     {
         $this->profileService = $profileService;
     }
 
+    /**
+     * Show all profiles (tbl_profiles) with aggregated stats
+     */
     public function index()
     {
-        $radiusDb = DB::connection('radius');
-
-        // 1. Get all RADIUS groups (profiles)
-        $profiles = $radiusDb->table('radgroupcheck')
-            ->select('groupname')
-            ->distinct()
+        $stats = $this->profileService->getProfileStats();
+        $allProfiles = Profile::withCount('subscriptions')->get();
+        $linkedSubs = DB::table('tbl_subscriptions')
+            ->whereNotNull('profile_id')
             ->get()
-            ->pluck('groupname');
+            ->keyBy('profile_id');
 
-        // 2. Get speeds (Mikrotik-Rate-Limit) — single query
-        $groupSpeeds = $radiusDb->table('radgroupreply')
-            ->where('attribute', 'Mikrotik-Rate-Limit')
-            ->get()
-            ->keyBy('groupname');
-
-        // 3. Get Simultaneous-Use for ALL profiles — single query (was N+1)
-        $simUse = $radiusDb->table('radgroupcheck')
-            ->where('attribute', 'Simultaneous-Use')
-            ->get()
-            ->keyBy('groupname');
-
-        // 4. Get user counts per profile — single query (was N+1)
-        $userCounts = $radiusDb->table('radusergroup')
-            ->select('groupname', DB::raw('COUNT(*) as total'))
-            ->groupBy('groupname')
-            ->get()
-            ->keyBy('groupname');
-
-        // 5. Get subscriptions linked to profiles
-        $subscriptions = DB::table('tbl_subscriptions')
-            ->whereNotNull('radius_profile')
-            ->get()
-            ->keyBy('radius_profile');
-
-        // 6. Pre-calculate stats totals (was @php in view)
-        $profileList = $profiles->toArray();
         $totalUsers = 0;
-        foreach ($profileList as $p) {
-            $totalUsers += (int)($userCounts[$p]->total ?? 0);
+        $totalProfiles = count($stats);
+        foreach ($stats as $s) {
+            $totalUsers += $s->clients_count ?? 0;
         }
-        $totalSubs = $subscriptions->whereIn('radius_profile', $profileList)->count();
+        $totalLinkedSubs = $allProfiles->sum('subscriptions_count');
 
         return view('dashbord.profiles.index', compact(
-            'profiles', 'groupSpeeds', 'simUse', 'userCounts',
-            'subscriptions', 'totalUsers', 'totalSubs'
+            'stats', 'allProfiles', 'linkedSubs', 'totalUsers', 'totalProfiles', 'totalLinkedSubs'
         ));
     }
 
@@ -80,139 +55,182 @@ class ProfileController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:50',
-            'speed' => 'required|string|max:20',
-            'simultaneous_use' => 'nullable|integer|min:1|max:10',
-            'subscription_id' => 'nullable|exists:tbl_subscriptions,id',
+            'name'              => 'required|string|max:100|unique:tbl_profiles,name',
+            'speed'             => 'required|string|max:20',
+            'simultaneous_use'  => 'nullable|integer|min:1|max:10',
+            'subscription_id'   => 'nullable|exists:tbl_subscriptions,id',
         ]);
 
-        $radiusDb = DB::connection('radius');
-        $profileName = $request->name;
+        DB::beginTransaction();
+        try {
+            $profile = Profile::create([
+                'name'             => $request->name,
+                'speed'            => $request->speed,
+                'simultaneous_use' => $request->simultaneous_use ?? 1,
+            ]);
 
-        // Create group in radgroupcheck (simultaneous-use)
-        $radiusDb->table('radgroupcheck')->insert([
-            'groupname' => $profileName,
-            'attribute' => 'Simultaneous-Use',
-            'op' => ':=',
-            'value' => $request->simultaneous_use ?? 1,
-        ]);
+            $radiusDb = DB::connection('radius');
 
-        // Create group speed in radgroupreply
-        $radiusDb->table('radgroupreply')->insert([
-            'groupname' => $profileName,
-            'attribute' => 'Mikrotik-Rate-Limit',
-            'op' => ':=',
-            'value' => $request->speed,
-        ]);
+            $radiusDb->table('radgroupcheck')->insert([
+                'groupname' => $profile->name,
+                'attribute' => 'Simultaneous-Use',
+                'op'        => ':=',
+                'value'     => $request->simultaneous_use ?? 1,
+            ]);
 
-        // Link to subscription
-        if ($request->subscription_id) {
-            DB::table('tbl_subscriptions')
-                ->where('id', $request->subscription_id)
-                ->update([
-                    'radius_profile' => $profileName,
-                    'radius_speed' => $request->speed,
+            $radiusDb->table('radgroupreply')->insert([
+                'groupname' => $profile->name,
+                'attribute' => 'Mikrotik-Rate-Limit',
+                'op'        => ':=',
+                'value'     => $request->speed,
+            ]);
+
+            if ($request->subscription_id) {
+                DB::table('tbl_subscriptions')->where('id', $request->subscription_id)->update([
+                    'profile_id'     => $profile->id,
+                    'radius_profile' => $profile->name,
+                    'radius_speed'   => $request->speed,
                 ]);
-        }
+            }
 
-        return redirect()->route('admin.profiles.index')
-            ->with('success', 'تم إنشاء الباقة "' . $profileName . '" بنجاح');
+            DB::commit();
+
+            return redirect()->route('admin.profiles.index')
+                ->with('success', 'تم إنشاء الباقة "' . $profile->name . '" بنجاح');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Failed to create profile: ' . $e->getMessage());
+            return redirect()->back()->withInput()->withErrors(['error' => 'فشل إنشاء الباقة: ' . $e->getMessage()]);
+        }
     }
 
-    public function edit($name)
+    public function edit(Profile $profile)
     {
-        $radiusDb = DB::connection('radius');
-        $checks = $radiusDb->table('radgroupcheck')
-            ->where('groupname', $name)
-            ->get()
-            ->keyBy('attribute');
-
-        $replies = $radiusDb->table('radgroupreply')
-            ->where('groupname', $name)
-            ->get()
-            ->keyBy('attribute');
-
         $subscription = DB::table('tbl_subscriptions')
-            ->where('radius_profile', $name)
+            ->where('profile_id', $profile->id)
+            ->orWhere('radius_profile', $profile->name)
             ->first();
 
         $subscriptions = DB::table('tbl_subscriptions')
             ->select('id', 'name', 'price')
             ->get();
 
-        return view('dashbord.profiles.form', compact(
-            'name', 'checks', 'replies', 'subscription', 'subscriptions'
-        ));
+        return view('dashbord.profiles.form', compact('profile', 'subscription', 'subscriptions'));
     }
 
-    public function update(Request $request, $name)
+    public function update(Request $request, Profile $profile)
     {
         $request->validate([
-            'speed' => 'required|string|max:20',
-            'simultaneous_use' => 'nullable|integer|min:1|max:10',
-            'subscription_id' => 'nullable|exists:tbl_subscriptions,id',
+            'speed'             => 'required|string|max:20',
+            'simultaneous_use'  => 'nullable|integer|min:1|max:10',
+            'subscription_id'   => 'nullable|exists:tbl_subscriptions,id',
         ]);
 
-        $radiusDb = DB::connection('radius');
+        DB::beginTransaction();
+        try {
+            $oldSpeed = $profile->speed;
+            $radiusDb = DB::connection('radius');
 
-        // Update simultaneous-use
-        $radiusDb->table('radgroupcheck')
-            ->where('groupname', $name)
-            ->where('attribute', 'Simultaneous-Use')
-            ->update(['value' => $request->simultaneous_use ?? 1]);
+            $radiusDb->table('radgroupcheck')
+                ->where('groupname', $profile->name)
+                ->where('attribute', 'Simultaneous-Use')
+                ->update(['value' => $request->simultaneous_use ?? 1]);
 
-        // Update speed
-        $radiusDb->table('radgroupreply')
-            ->where('groupname', $name)
-            ->where('attribute', 'Mikrotik-Rate-Limit')
-            ->update(['value' => $request->speed]);
+            $radiusDb->table('radgroupreply')
+                ->where('groupname', $profile->name)
+                ->where('attribute', 'Mikrotik-Rate-Limit')
+                ->update(['value' => $request->speed]);
 
-        // Update subscription link
-        DB::table('tbl_subscriptions')
-            ->where('radius_profile', $name)
-            ->update(['radius_profile' => null, 'radius_speed' => null]);
+            $profile->update([
+                'speed'            => $request->speed,
+                'simultaneous_use' => $request->simultaneous_use ?? 1,
+            ]);
 
-        if ($request->subscription_id) {
-            DB::table('tbl_subscriptions')
-                ->where('id', $request->subscription_id)
-                ->update([
-                    'radius_profile' => $name,
-                    'radius_speed' => $request->speed,
+            // Unlink old subscription
+            DB::table('tbl_subscriptions')->where('profile_id', $profile->id)->update([
+                'profile_id'     => null,
+                'radius_profile' => null,
+                'radius_speed'   => null,
+            ]);
+
+            if ($request->subscription_id) {
+                DB::table('tbl_subscriptions')->where('id', $request->subscription_id)->update([
+                    'profile_id'     => $profile->id,
+                    'radius_profile' => $profile->name,
+                    'radius_speed'   => $request->speed,
                 ]);
-        }
+            }
 
-        return redirect()->route('admin.profiles.index')
-            ->with('success', 'تم تحديث الباقة "' . $name . '" بنجاح');
+            DB::commit();
+
+            $result = ['updated_count' => 0, 'coa_success' => 0, 'coa_failed' => 0];
+            if ($oldSpeed !== $request->speed) {
+                $result = $this->profileService->bulkUpdateSpeed($profile->id, $request->speed);
+            }
+
+            $message = 'تم تحديث الباقة "' . $profile->name . '" بنجاح';
+            if ($result['updated_count'] > 0) {
+                $message .= ' — تم تحديث ' . $result['updated_count'] . ' زبون';
+                if ($result['coa_failed'] > 0) {
+                    $message .= ' (' . $result['coa_failed'] . ' فشل CoA)';
+                    return redirect()->route('admin.profiles.index')->with('warning', $message);
+                }
+            }
+
+            return redirect()->route('admin.profiles.index')->with('success', $message);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Failed to update profile: ' . $e->getMessage());
+            return redirect()->back()->withInput()->withErrors(['error' => 'فشل تحديث الباقة: ' . $e->getMessage()]);
+        }
     }
 
-    public function destroy($name)
+    public function destroy(Profile $profile)
     {
         $radiusDb = DB::connection('radius');
 
-        $radiusDb->table('radgroupcheck')
-            ->where('groupname', $name)->delete();
-        $radiusDb->table('radgroupreply')
-            ->where('groupname', $name)->delete();
+        try {
+            DB::beginTransaction();
 
-        // Unlink subscriptions
-        DB::table('tbl_subscriptions')
-            ->where('radius_profile', $name)
-            ->update(['radius_profile' => null, 'radius_speed' => null]);
+            DB::table('tbl_clients')
+                ->where('profile_id', $profile->id)
+                ->orWhere('radius_profile', $profile->name)
+                ->update(['profile_id' => null, 'radius_profile' => null]);
 
-        return redirect()->route('admin.profiles.index')
-            ->with('success', 'تم حذف الباقة "' . $name . '" بنجاح');
+            DB::table('tbl_subscriptions')
+                ->where('profile_id', $profile->id)
+                ->orWhere('radius_profile', $profile->name)
+                ->update(['profile_id' => null, 'radius_profile' => null, 'radius_speed' => null]);
+
+            $radiusDb->table('radgroupcheck')->where('groupname', $profile->name)->delete();
+            $radiusDb->table('radgroupreply')->where('groupname', $profile->name)->delete();
+
+            $profile->delete();
+
+            DB::commit();
+
+            return redirect()->route('admin.profiles.index')
+                ->with('success', 'تم حذف الباقة "' . $profile->name . '" بنجاح');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Failed to delete profile: ' . $e->getMessage());
+            return redirect()->back()->withErrors(['error' => 'فشل حذف الباقة: ' . $e->getMessage()]);
+        }
     }
 
     public function applyToUser(Request $request)
     {
         $request->validate([
-            'username' => 'required|string',
-            'profile' => 'required|string',
+            'username'   => 'required|string',
+            'profile_id' => 'required|exists:tbl_profiles,id',
         ]);
 
-        $result = $this->profileService->applyProfile(
+        $result = $this->profileService->applyProfileById(
             $request->username,
-            $request->profile
+            $request->profile_id
         );
 
         return response()->json([

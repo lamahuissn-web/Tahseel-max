@@ -34,15 +34,15 @@
                             <label class="form-label fw-bold">اختر باقة السرعة</label>
                             <div class="d-flex flex-column gap-2">
                                 @forelse($profiles as $profile)
-                                <div class="form-check p-3 border rounded-3 {{ $currentProfile == $profile->radius_profile ? 'border-primary bg-primary bg-opacity-10' : '' }}"
+                                <div class="form-check p-3 border rounded-3 {{ $currentProfile == $profile->name ? 'border-primary bg-primary bg-opacity-10' : '' }}"
                                      onclick="this.querySelector('input[type=radio]').click()"
                                      style="cursor:pointer; transition: all 0.15s ease;"
                                      onmouseover="this.style.borderColor='#3b82f6'"
                                      onmouseout="this.style.borderColor=''">
                                     <input class="form-check-input" type="radio" name="profile"
-                                           value="{{ $profile->radius_profile }}"
+                                           value="{{ $profile->name }}"
                                            id="profile_{{ $profile->id }}"
-                                           {{ $currentProfile == $profile->radius_profile ? 'checked' : '' }}
+                                           {{ $currentProfile == $profile->name ? 'checked' : '' }}
                                            required>
                                     <label class="form-check-label w-100" for="profile_{{ $profile->id }}">
                                         <div class="d-flex justify-content-between align-items-center">
@@ -51,12 +51,9 @@
                                                 <br>
                                                 <small class="text-muted">
                                                     <i class="bi bi-arrow-down-up"></i>
-                                                    {{ $profile->radius_speed ?? $profile->radius_profile }}
+                                                    {{ $profile->speed ?? $profile->name }}
                                                 </small>
                                             </div>
-                                            <span class="badge bg-primary fs-6 px-3 py-1">
-                                                \${{ number_format($profile->price, 2) }}
-                                            </span>
                                         </div>
                                     </label>
                                 </div>

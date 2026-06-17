@@ -7,7 +7,6 @@
         --profile-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
 
-    /* Header Styling */
     .profile-header {
         background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
         border: none;
@@ -47,7 +46,6 @@
         color: #fff;
     }
 
-    /* Stats Cards */
     .profile-stat-card {
         border: 1px solid var(--profile-border);
         border-radius: 14px;
@@ -57,7 +55,7 @@
     }
     .profile-stat-card:hover {
         transform: translateY(-2px);
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02) !important;
+        box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05), 0 4px 6px -2px rgba(0,0,0,0.02) !important;
     }
     .profile-stat-label {
         font-size: 0.85rem;
@@ -80,7 +78,6 @@
         justify-content: center;
     }
 
-    /* Table Styling */
     .profile-table-container {
         background: #fff;
         border: 1px solid var(--profile-border);
@@ -116,7 +113,6 @@
         vertical-align: middle;
     }
 
-    /* Element Badges */
     .profile-name-badge {
         display: inline-flex;
         align-items: center;
@@ -226,7 +222,6 @@
         border: 1px solid #e2e8f0;
     }
 
-    /* Actions */
     .btn-action {
         width: 34px;
         height: 34px;
@@ -262,7 +257,7 @@
 
 @section('content')
 <div class="app-container container-xxl">
-    
+
     {{-- Header --}}
     <div class="card profile-header shadow-sm">
         <div class="card-body p-4 d-flex justify-content-between align-items-center flex-wrap gap-3">
@@ -271,7 +266,7 @@
                 <div>
                     <span class="d-block">باقات السرعة (RADIUS Profiles)</span>
                     <small class="text-muted d-block mt-1 fs-7 text-light opacity-50" style="font-weight:500;">
-                        إدارة خطط سرعات الإنترنت للمشتركين والربط مع باقات الاشتراكات الفواتيرية
+                        إدارة خطط سرعات الإنترنت — Profile = Pool Name في الميكروتك
                     </small>
                 </div>
             </div>
@@ -281,14 +276,14 @@
         </div>
     </div>
 
-    {{-- Stats Cards Row --}}
+    {{-- Stats Cards --}}
     <div class="row g-4 mb-4">
         <div class="col-md-4">
             <div class="card profile-stat-card shadow-sm">
                 <div class="card-body d-flex justify-content-between align-items-center">
                     <div>
                         <span class="profile-stat-label">إجمالي باقات RADIUS</span>
-                        <h3 class="profile-stat-value mb-0 mt-1">{{ count($profiles) }}</h3>
+                        <h3 class="profile-stat-value mb-0 mt-1">{{ $totalProfiles }}</h3>
                     </div>
                     <div class="profile-stat-icon-wrapper bg-primary bg-opacity-10">
                         <i class="bi bi-layers text-primary fs-3"></i>
@@ -300,7 +295,7 @@
             <div class="card profile-stat-card shadow-sm">
                 <div class="card-body d-flex justify-content-between align-items-center">
                     <div>
-                        <span class="profile-stat-label">إجمالي المشتركين النشطين</span>
+                        <span class="profile-stat-label">إجمالي المشتركين</span>
                         <h3 class="profile-stat-value mb-0 mt-1">{{ $totalUsers }}</h3>
                     </div>
                     <div class="profile-stat-icon-wrapper bg-success bg-opacity-10">
@@ -314,7 +309,7 @@
                 <div class="card-body d-flex justify-content-between align-items-center">
                     <div>
                         <span class="profile-stat-label">باقات مرتبطة بالخطط</span>
-                        <h3 class="profile-stat-value mb-0 mt-1">{{ $totalSubs }}</h3>
+                        <h3 class="profile-stat-value mb-0 mt-1">{{ $totalLinkedSubs }}</h3>
                     </div>
                     <div class="profile-stat-icon-wrapper bg-warning bg-opacity-10">
                         <i class="bi bi-link-45deg text-warning fs-3"></i>
@@ -324,7 +319,7 @@
         </div>
     </div>
 
-    {{-- Table Container --}}
+    {{-- Table --}}
     <div class="card profile-table-container shadow-sm border-0">
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -332,63 +327,66 @@
                     <thead>
                         <tr>
                             <th class="ps-4">اسم الباقة</th>
-                            <th>سرعة الرفع / التحميل</th>
-                            <th>الأجهزة المتزامنة (Sim-Use)</th>
+                            <th>السرعة</th>
+                            <th>الأجهزة المتزامنة</th>
                             <th>الخطة المرتبطة</th>
-                            <th>عدد المستخدمين</th>
+                            <th>عدد المشتركين</th>
                             <th class="text-end pe-4" style="width: 120px;">الإجراءات</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse($profiles as $profile)
-                        @php
-                            $speed = $groupSpeeds[$profile]->value ?? '—';
-                            $sim = $simUse[$profile]->value ?? 1;
-                            $sub = $subscriptions[$profile] ?? null;
-                            $userCount = (int)($userCounts[$profile]->total ?? 0);
-                        @endphp
+                        @forelse($stats as $stat)
                         <tr>
                             <td class="ps-4">
                                 <span class="profile-name-badge">
-                                    <i class="bi bi-folder-fill me-1"></i> {{ $profile }}
+                                    <i class="bi bi-folder-fill me-1"></i> {{ $stat->name }}
                                 </span>
                             </td>
                             <td>
+                                @if($stat->speed)
                                 <span class="speed-badge">
-                                    <i class="bi bi-lightning-charge-fill me-1"></i> {{ $speed }}
+                                    <i class="bi bi-lightning-charge-fill me-1"></i> {{ $stat->speed }}
+                                </span>
+                                @else
+                                <span class="sub-unlinked-badge">
+                                    <i class="bi bi-dash-circle me-1"></i> غير محددة
+                                </span>
+                                @endif
+                            </td>
+                            <td>
+                                <span class="sim-badge {{ $stat->simultaneous_use > 1 ? 'multi' : 'single' }}">
+                                    <i class="bi {{ $stat->simultaneous_use > 1 ? 'bi-pc-display' : 'bi-laptop' }} me-1"></i>
+                                    {{ $stat->simultaneous_use }} {{ $stat->simultaneous_use > 1 ? 'أجهزة' : 'جهاز' }}
                                 </span>
                             </td>
                             <td>
-                                <span class="sim-badge {{ $sim > 1 ? 'multi' : 'single' }}">
-                                    <i class="bi {{ $sim > 1 ? 'bi-pc-display' : 'bi-laptop' }} me-1"></i>
-                                    {{ $sim }} {{ $sim > 1 ? 'أجهزة متصلة' : 'جهاز واحد' }}
-                                </span>
-                            </td>
-                            <td>
-                                @if($sub)
+                                @php
+                                    $linkedSub = $linkedSubs->get($stat->id);
+                                @endphp
+                                @if($linkedSub)
                                     <div class="sub-link-card">
                                         <span class="sub-name">
-                                            <i class="bi bi-journal-check me-1"></i>{{ $sub->name }}
+                                            <i class="bi bi-journal-check me-1"></i>{{ $linkedSub->name }}
                                         </span>
-                                        <span class="sub-price">${{ number_format($sub->price, 2) }}</span>
+                                        <span class="sub-price">${{ number_format($linkedSub->price, 2) }}</span>
                                     </div>
                                 @else
                                     <span class="sub-unlinked-badge">
-                                        <i class="bi bi-exclamation-triangle-fill me-1"></i> غير مرتبطة بخطة
+                                        <i class="bi bi-exclamation-triangle-fill me-1"></i> غير مرتبطة
                                     </span>
                                 @endif
                             </td>
                             <td>
-                                <span class="user-count-badge {{ $userCount > 0 ? 'active' : 'empty' }}">
-                                    <i class="bi bi-people-fill me-1"></i> {{ $userCount }} مشترك
+                                <span class="user-count-badge {{ $stat->clients_count > 0 ? 'active' : 'empty' }}">
+                                    <i class="bi bi-people-fill me-1"></i> {{ $stat->clients_count ?: '—' }}
                                 </span>
                             </td>
                             <td class="pe-4">
                                 <div class="d-flex justify-content-end gap-2">
-                                    <a href="{{ route('admin.profiles.edit', $profile) }}" class="btn-action btn-action-edit" title="تعديل الباقة">
+                                    <a href="{{ route('admin.profiles.edit', $stat->id) }}" class="btn-action btn-action-edit" title="تعديل الباقة">
                                         <i class="bi bi-pencil-fill"></i>
                                     </a>
-                                    <form action="{{ route('admin.profiles.destroy', $profile) }}" method="POST" class="d-inline" onsubmit="return confirm('هل أنت متأكد من حذف الباقة {{ $profile }}؟')">
+                                    <form action="{{ route('admin.profiles.destroy', $stat->id) }}" method="POST" class="d-inline" onsubmit="return confirm('هل أنت متأكد من حذف الباقة {{ $stat->name }}؟')">
                                         @csrf @method('DELETE')
                                         <button type="submit" class="btn-action btn-action-delete" title="حذف الباقة">
                                             <i class="bi bi-trash-fill"></i>
