@@ -1,8 +1,46 @@
 <div class="" style="margin-top: 30px">
+    <style>
+        @media screen and (max-width: 767px) {
+            #table1_wrapper .dataTable thead { display: none !important; }
+            #table1_wrapper .dataTable tbody,
+            #table1_wrapper .dataTable tbody tr,
+            #table1_wrapper .dataTable tbody td { display: block; width: 100%; box-sizing: border-box; }
+            #table1_wrapper .dataTable tbody tr {
+                background: #fff; border: 1px solid #e0e0e0; border-radius: 12px;
+                padding: 12px 14px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+            }
+            #table1_wrapper .dataTable tbody td {
+                border: none !important; padding: 4px 0 !important;
+                text-align: right !important; font-size: 13px;
+            }
+            #table1_wrapper .dataTable tbody td::before {
+                content: attr(data-label);
+                display: inline-block; font-weight: 600; color: #6b7280;
+                font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px;
+                margin-left: 6px; min-width: 80px;
+            }
+            #table1_wrapper .dataTable tbody td[data-label=""]::before { display: none; }
+            #table1_wrapper .dataTable tbody td:last-child {
+                text-align: center !important; margin-top: 8px;
+                padding-top: 8px !important; border-top: 1px solid #f0f0f0 !important;
+            }
+            #table1_wrapper .dataTable tbody td:last-child::before { display: none; }
+            #table1_wrapper .dataTables_info,
+            #table1_wrapper .dataTables_length,
+            #table1_wrapper .dataTables_filter { text-align: center !important; float: none !important; margin-bottom: 8px; }
+            #table1_wrapper .dataTables_paginate { text-align: center !important; float: none !important; margin-top: 8px; }
+            #table1_wrapper .dataTables_filter input { width: 100% !important; max-width: 100% !important; }
+            .filter-row .col-md-4 { width: 50% !important; flex: 0 0 50% !important; max-width: 50% !important; }
+            #table1_wrapper .dt-buttons { text-align: center !important; }
+        }
+        @media screen and (max-width: 480px) {
+            .filter-row .col-md-4 { width: 100% !important; flex: 0 0 100% !important; max-width: 100% !important; }
+        }
+    </style>
     <div class="card-body">
-        <div class="col-md-12 row">
+        <div class="col-md-12 row filter-row">
 
-            <div class="col-md-4">
+            <div class="col-md-4 col-sm-6">
                 <label for="type" class="form-label">{{ trans('reports.type') }}</label>
                 <div class="input-group flex-nowrap">
                     <span class="input-group-text" id="basic-addon4">{!! form_icon('select1') !!}</span>
@@ -24,7 +62,7 @@
             </div>
 
 
-            <div class="col-md-4">
+            <div class="col-md-4 col-sm-6">
                 <label for="status" class="form-label">{{ trans('reports.status') }}</label>
                 <div class="input-group flex-nowrap">
                     <span class="input-group-text" id="basic-addon4">{!! form_icon('select1') !!}</span>
@@ -47,7 +85,7 @@
                     <span class="invalid-feedback d-block">{{ $message }}</span>
                 @enderror
             </div>
-            <div class="col-md-4">
+            <div class="col-md-4 col-sm-6">
                 <label for="month" class="form-label">{{ trans('reports.month') }}</label>
                 <div class="input-group flex-nowrap">
                     <span class="input-group-text">{!! form_icon('date') !!}</span>
@@ -59,7 +97,7 @@
                 @enderror
             </div>
 
-            <div class="col-md-4 mb-3" style="margin-top: 10px;">
+            <div class="col-md-4 col-sm-6 mb-3" style="margin-top: 10px;">
                 <label for="from_date" class="form-label">{{ trans('reports.from_date') }}</label>
                 <div class="input-group flex-nowrap">
                     <span class="input-group-text">{!! form_icon('date') !!}</span>
@@ -71,7 +109,7 @@
                 @enderror
             </div>
 
-            <div class="col-md-4 mb-3" style="margin-top: 10px;">
+            <div class="col-md-4 col-sm-6 mb-3" style="margin-top: 10px;">
                 <label for="to_date" class="form-label">{{ trans('reports.to_date') }}</label>
                 <div class="input-group flex-nowrap">
                     <span class="input-group-text">{!! form_icon('date') !!}</span>
@@ -181,6 +219,25 @@
                 "serverSide": true,
                 "deferRender": true,
                 "order": [],
+                "createdRow": function(row, data, dataIndex) {
+                    var labels = {
+                        0: '#',
+                        1: '{{ trans("invoices.invoice_number") }}',
+                        2: '{{ trans("invoices.amount") }}',
+                        3: '{{ trans("invoices.paid_amount") }}',
+                        4: '{{ trans("invoices.remaining_amount") }}',
+                        5: '{{ trans("invoices.due_date") }}',
+                        6: '{{ trans("invoices.paid_date") }}',
+                        7: '{{ trans("invoices.collected_by") }}',
+                        8: '{{ trans("invoices.status") }}',
+                        9: '{{ trans("invoices.subscription") }}',
+                        10: '{{ trans("invoices.notes") }}',
+                        11: ''
+                    };
+                    $('td', row).each(function(i) {
+                        $(this).attr('data-label', labels[i] || '');
+                    });
+                },
                 "ajax": {
                     url: "{{ route('admin.reports.index') }}",
                     type: "POST",
