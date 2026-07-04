@@ -25,6 +25,7 @@ use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\AllDataExport;
 use App\Models\AppConfig;
 use Illuminate\Support\Facades\Storage;
+use App\Services\WhatsApp\PaymentReceiptNotifier;
 
 class InvoiceController extends Controller
 {
@@ -677,6 +678,8 @@ class InvoiceController extends Controller
             sendTelegramNotification($notificationMessage, 'invoice_paid');
 
             DB::commit();
+            // WhatsApp receipt notification (non-blocking)
+            app(PaymentReceiptNotifier::class)->notify($invoice);
 
             log_helper(
                 'invoice_paid',
@@ -761,6 +764,8 @@ class InvoiceController extends Controller
             sendTelegramNotification($notificationMessage, 'invoice_paid');
 
             DB::commit();
+            // WhatsApp receipt notification (non-blocking)
+            app(PaymentReceiptNotifier::class)->notify($invoice);
 
             log_helper(
                 'invoice_paid',

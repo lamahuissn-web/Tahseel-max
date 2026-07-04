@@ -1,50 +1,59 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+# Tahseel Constitution — WhatsApp Payment Notification
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Non-Blocking Notifications (NON-NEGOTIABLE)
+Payment collection MUST always succeed independently of WhatsApp delivery.
+If WhatsApp is unreachable, misconfigured, or the client has no phone number,
+the payment MUST still be recorded. The notification is fire-and-forget:
+log the error, do not roll back the payment.
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+### II. Full Financial Transparency
+Every payment notification MUST include:
+- Which invoice was just paid (amount + month/year)
+- A clear, itemised list of any REMAINING unpaid invoices with their amounts
+- The total outstanding balance
+This prevents disputes and gives the client a complete picture in one message.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### III. Graceful Degradation
+The feature MUST handle three failure modes without interrupting the user:
+1. Client has no WhatsApp number — skip silently
+2. OpenWA is unreachable — log warning, payment continues
+3. Invalid invoice data — log error, payment continues
+No user-facing error messages for WhatsApp failures.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### IV. Single Responsibility
+The notification logic MUST live in its own dedicated service/class.
+The InvoiceController@pay_invoice method MUST NOT contain WhatsApp logic.
+It calls a single method: notifier->notifyPaymentReceipt(invoice).
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### V. Message Template Consistency
+All WhatsApp payment notifications MUST use a single, centrally defined template.
+The template MUST be version-controlled and reviewable. No inline string building
+scattered across controllers.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+### VI. Observable by Default
+Every attempted notification MUST be logged with:
+- Whether it was sent or skipped (and why)
+- The client ID, invoice ID, and amounts involved
+Use Laravel's Log facade at info level for sends and warning for skips.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+## Technical Constraints
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
-
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+- **Framework**: Laravel 10. Must use existing WhatsAppService for actual sending.
+- **Client WhatsApp number**: From tbl_clients.whatsapp or tbl_clients.phone field.
+- **Invoice data**: From tbl_invoices table. Outstanding invoices = unpaid invoices
+  for the same client excluding the one just paid.
+- **Sending**: Via OpenWA API through WhatsAppService->sendMessage().
+- **Existing code**: Do NOT modify InvoiceController@pay_invoice signature or return type.
+- **Language**: Messages in Arabic (العربية) with appropriate emojis for readability.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+- This constitution was written after direct discussion with Kira (the stakeholder)
+  on 2026-07-04, capturing his requirements for financial transparency and
+  non-blocking payment notifications.
+- Changes to notification templates require Kira's approval before deployment.
+- All WhatsApp notification code MUST be reviewed against Principles I, II, III before merging.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.0.0 | **Ratified**: 2026-07-04 | **Last Amended**: 2026-07-04
