@@ -80,7 +80,9 @@ class PaymentReceiptNotifier
             }
 
             // 6. Build the message
+            $customerName = $client->name ?? 'عميل';
             $message = $this->buildMessage(
+                $customerName,
                 $paidMonth,
                 $paidYear,
                 $paidAmount,
@@ -123,6 +125,7 @@ class PaymentReceiptNotifier
      * Arabic body with Western numerals. Follows the exact template structure.
      */
     protected function buildMessage(
+        string $customerName,
         string $paidMonth,
         string $paidYear,
         string $paidAmount,
@@ -134,6 +137,7 @@ class PaymentReceiptNotifier
     ): string {
         $message = "🌐 MegaNet\n\n";
         $message .= "🧾 إيصال اشتراك الإنترنت\n\n";
+        $message .= "👤 اسم المشترك: {$customerName}\n\n";
         $message .= "✅ تم تسجيل عملية الدفع بنجاح في النظام.\n\n";
         $message .= "📅 الاشتراك المسدد: {$paidMonth} / {$paidYear}\n";
         $message .= "💵 المبلغ المدفوع: \${$paidAmount}\n";
