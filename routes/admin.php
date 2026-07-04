@@ -236,6 +236,10 @@ Route::group(
             Route::post('settings/whatsapp/send-selected', [WhatsAppSettingsController::class, 'sendSelected'])->name('settings.whatsapp.send_selected');
             Route::post('/clients/{id}/whatsapp-reminder', [WhatsAppSettingsController::class, 'sendClientReminder'])->name('clients.whatsapp_reminder');
 
+            // 🚨 Emergency Kill Switch
+            Route::post('settings/whatsapp/emergency-stop', [WhatsAppSettingsController::class, 'emergencyStop'])->name('settings.whatsapp.emergency_stop');
+            Route::post('settings/whatsapp/emergency-restart', [WhatsAppSettingsController::class, 'emergencyRestart'])->name('settings.whatsapp.emergency_restart');
+
             Route::get('/logs', [LogController::class, 'index'])->name('logs.index');
             Route::get('/logs/{id}', [LogController::class, 'show'])->name('logs.show');
             Route::delete('logs/{id}', [LogController::class, 'destroy'])->name('logs.delete');

@@ -18,18 +18,6 @@ class WhatsAppRemindersCommand extends Command
     protected $sentCount = 0;
     protected $failedCount = 0;
 
-    protected $arabicMonths = [
-        1 => 'يناير', 2 => 'فبراير', 3 => 'مارس', 4 => 'أبريل',
-        5 => 'مايو', 6 => 'يونيو', 7 => 'يوليو', 8 => 'أغسطس',
-        9 => 'سبتمبر', 10 => 'أكتوبر', 11 => 'نوفمبر', 12 => 'ديسمبر'
-    ];
-
-    public function __construct(WhatsAppService $whatsapp)
-    {
-        parent::__construct();
-        $this->whatsapp = $whatsapp;
-    }
-
     public function handle()
     {
         $enabled = DB::table('app_config')->where('key', 'whatsapp_enabled')->value('value');
@@ -129,9 +117,8 @@ class WhatsAppRemindersCommand extends Command
             $phone = preg_replace('/[^0-9]/', '', $client->phone);
 
             $invoiceSummary = $clientInvoices->map(function ($inv) {
-                $monthNum = (int) Carbon::parse($inv->due_date)->format('n');
-                $monthName = $this->arabicMonths[$monthNum] ?? Carbon::parse($inv->due_date)->format('M');
-                return "{$monthName} ({$inv->invoice_number})";
+                $monthFormatted = Carbon::parse($inv->due_date)->format("m / Y");
+                return "{$monthFormatted}";
             })->join(', ');
 
             $previewData[] = [
@@ -219,12 +206,10 @@ class WhatsAppRemindersCommand extends Command
         foreach ($previewData as $data) {
             $grandTotal += $data['total_amount'];
             $invoiceLines = $data['invoices']->map(function ($inv) {
-                $monthNum = (int) Carbon::parse($inv->due_date)->format('n');
-                $monthName = $this->arabicMonths[$monthNum] ?? Carbon::parse($inv->due_date)->format('M');
-                $amount = number_format($inv->remaining_amount, 2);
-                return "{$monthName} ({$inv->invoice_number}) - {$amount}$";
+                $monthFormatted = Carbon::parse($inv->due_date)->format("m / Y");
+                $amt = number_format($inv->remaining_amount, 2);
+                return "{$monthFormatted} - {$amt}$";
             })->toArray();
-
             $rows[] = [
                 $data['client_name'],
                 $data['phone'],

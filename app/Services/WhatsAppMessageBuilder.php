@@ -7,17 +7,9 @@ use Carbon\Carbon;
 class WhatsAppMessageBuilder
 {
     /**
-     * الأشهر العربية (بلدان الشام)
-     */
-    protected static array $arabicMonths = [
-        1 => "كانون الثاني", 2 => "شباط", 3 => "آذار", 4 => "نيسان",
-        5 => "أيار", 6 => "حزيران", 7 => "تموز", 8 => "آب",
-        9 => "أيلول", 10 => "تشرين الأول", 11 => "تشرين الثاني", 12 => "كانون الأول",
-    ];
-
-    /**
-     * بناء قائمة الفواتير المفصّلة
-     * تقسم الفواتير إلى اشتراكات وخدمات - notes تظهر بين قوسين بنهاية السطر
+     * Build a formatted list of unpaid invoices.
+     * Each line: ❌ MM / YYYY      $amount
+     * Grouped by subscription invoices and service invoices.
      */
     public static function buildInvoiceDetailsList($clientInvoices): string
     {
@@ -26,45 +18,39 @@ class WhatsAppMessageBuilder
 
         foreach ($clientInvoices as $invoice) {
             $amount = number_format($invoice->remaining_amount, 2);
-            $monthNum = (int) Carbon::parse($invoice->due_date)->format("n");
+            $monthNum = Carbon::parse($invoice->due_date)->format("m");
             $yearNum = Carbon::parse($invoice->due_date)->format("Y");
-            $monthName = self::$arabicMonths[$monthNum] ?? Carbon::parse($invoice->due_date)->format("F");
+            $formattedMonth = str_pad($monthNum, 2, "0", STR_PAD_LEFT);
 
             if ($invoice->invoice_type === "service") {
                 $label = !empty($invoice->notes)
                     ? preg_replace("/\s+/", " ", trim($invoice->notes))
                     : "خدمة";
-                $line = "🔧 " . $label . " (" . str_pad($monthNum, 2, "0", STR_PAD_LEFT) . "-" . $yearNum . ") — " . $amount . "\$";
+                $line = "❌ {$formattedMonth} / {$yearNum}      \${$amount}  🔧 {$label}";
                 $serviceLines[] = $line;
             } else {
-                $base = "📅 " . $monthName . " (" . str_pad($monthNum, 2, "0", STR_PAD_LEFT) . "-" . $yearNum . ") — " . $amount . "\$";
+                $line = "❌ {$formattedMonth} / {$yearNum}      \${$amount}";
                 if (!empty($invoice->notes)) {
                     $note = preg_replace("/\s+/", " ", trim($invoice->notes));
-                    $base .= " (" . $note . ")";
+                    $line .= "  ({$note})";
                 }
-                $subscriptionLines[] = $base;
+                $subscriptionLines[] = $line;
             }
         }
 
         $sections = [];
         if (!empty($subscriptionLines)) {
-            $sections[] = "🌐 فواتير الاشتراك:
-" . implode("
-", $subscriptionLines);
+            $sections[] = "🌐 فواتير الاشتراك:\n" . implode("\n", $subscriptionLines);
         }
         if (!empty($serviceLines)) {
-            $sections[] = "🔧 فواتير الخدمات:
-" . implode("
-", $serviceLines);
+            $sections[] = "🔧 فواتير الخدمات:\n" . implode("\n", $serviceLines);
         }
 
-        return implode("
-
-", $sections);
+        return implode("\n\n", $sections);
     }
 
     /**
-     * بناء الرسالة النهائية
+     * Build the final message by replacing placeholders.
      */
     public static function buildMessage(string $template, string $clientName, float $totalAmount, string $invoiceDetailsList): string
     {
@@ -75,20 +61,10 @@ class WhatsAppMessageBuilder
     }
 
     /**
-     * القالب الافتراضي
+     * Default reminder template with MegaNet branding.
      */
     public static function defaultTemplate(): string
     {
-        return "👋 مرحباً {name}،
-
-📋 لديك فواتير مستحقة بإجمالي {total_amount}$.
-
-📄 تفاصيل الفواتير المستحقة:
-{invoice_details_list}
-
-💳 يرجى التكرم بتسوية الرصيد المستحق في أقرب وقت ممكن.
-إذا كنت قد سددت هذا المبلغ مؤخراً، يرجى تجاهل هذه الرسالة.
-
-🙏 شكراً لتفهمك.";
+        return "🌐 MegaNet\n\n👤 اسم المشترك: {name}\n\n📋 لديك فواتير مستحقة بإجمالي \${total_amount}.\n\n📄 تفاصيل الفواتير المستحقة:\n{invoice_details_list}\n\n━━━━━━━━━━━━━━━━━━\n\n⚠️ يرجى التكرم بتسديد الرصيد المستحق في أقرب وقت ممكن.\nإذا كنت قد سددت هذا المبلغ مؤخراً، يرجى تجاهل هذه الرسالة.\n\nشكراً لاختياركم MegaNet 🌹";
     }
 }

@@ -80,41 +80,74 @@
                     <i class="bi bi-link-45deg text-primary me-2"></i> {{ trans('clients.whatsapp_connection') }}
                 </div>
                 <div class="wa-card-body">
-                    <div class="row align-items-center">
-                        <div class="col-md-6">
-                            <div class="d-flex align-items-center gap-2 mb-2">
-                                <span class="wa-status-dot {{ $status['connected'] ? 'connected' : 'disconnected' }}"></span>
-                                <span class="fw-semibold">
-                                    {{ $status['connected'] ? trans('clients.whatsapp_connected') : trans('clients.whatsapp_disconnected') }}
-                                </span>
+                    @if($settings['whatsapp_emergency_stop'] == '1')
+                        {{-- Emergency Stopped State --}}
+                        <div class="row align-items-center">
+                            <div class="col-md-8">
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <span class="wa-status-dot disconnected" style="background: #dc3545;"></span>
+                                    <span class="fw-semibold text-danger">
+                                        <i class="bi bi-exclamation-triangle-fill me-1"></i> {{ trans('clients.whatsapp_emergency_stopped') }}
+                                    </span>
+                                </div>
+                                @if($settings['whatsapp_emergency_stopped_at'])
+                                    <div class="text-muted" style="font-size: 13px;">
+                                        <i class="bi bi-clock me-1"></i> {{ trans('clients.whatsapp_emergency_stopped_at') }} {{ $settings['whatsapp_emergency_stopped_at'] }}
+                                    </div>
+                                @endif
+                                <div class="text-warning mt-1" style="font-size: 12px;">
+                                    <i class="bi bi-info-circle me-1"></i> {{ trans('clients.whatsapp_disabled') }}
+                                </div>
                             </div>
-                            @if($status['connected'] && $status['phone'])
-                                <div class="text-muted" style="font-size: 13px;">
-                                    <i class="bi bi-phone me-1"></i> {{ $status['phone'] }}
+                            <div class="col-md-4 text-md-end mt-2 mt-md-0">
+                                <button class="btn btn-success btn-sm" onclick="emergencyRestart()">
+                                    <i class="bi bi-play-fill me-1"></i> {{ trans('clients.whatsapp_emergency_restart') }}
+                                </button>
+                            </div>
+                        </div>
+                    @else
+                        {{-- Normal State --}}
+                        <div class="row align-items-center">
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <span class="wa-status-dot {{ $status['connected'] ? 'connected' : 'disconnected' }}"></span>
+                                    <span class="fw-semibold">
+                                        {{ $status['connected'] ? trans('clients.whatsapp_connected') : trans('clients.whatsapp_disconnected') }}
+                                    </span>
                                 </div>
-                            @endif
+                                @if($status['connected'] && $status['phone'])
+                                    <div class="text-muted" style="font-size: 13px;">
+                                        <i class="bi bi-phone me-1"></i> {{ $status['phone'] }}
+                                    </div>
+                                @endif
+                            </div>
+                            <div class="col-md-6 text-md-end mt-2 mt-md-0">
+                                <div class="d-flex gap-2 justify-content-md-end">
+                                    <button class="btn btn-outline-primary btn-sm" onclick="restartWhatsApp()">
+                                        <i class="bi bi-arrow-clockwise me-1"></i> {{ trans('clients.whatsapp_restart') }}
+                                    </button>
+                                    <button class="btn btn-outline-danger btn-sm" onclick="emergencyStop()">
+                                        <i class="bi bi-stop-circle me-1"></i> {{ trans('clients.whatsapp_emergency_stop') }}
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-md-6 text-md-end mt-2 mt-md-0">
-                            <button class="btn btn-outline-primary btn-sm" onclick="restartWhatsApp()">
-                                <i class="bi bi-arrow-clockwise me-1"></i> {{ trans('clients.whatsapp_restart') }}
-                            </button>
-                        </div>
-                    </div>
 
-                    @if(!$status['connected'])
-                        <div class="wa-qr-container mt-3">
-                            @if($qr['qr'])
-                                <img src="{{ $qr['qr'] }}" alt="QR Code">
-                                <div class="text-muted mt-2" style="font-size: 13px;">
-                                    <i class="bi bi-qr-code me-1"></i> {{ trans('clients.whatsapp_qr_scan') }}
-                                </div>
-                            @else
-                                <div class="text-muted py-4">
-                                    <i class="bi bi-hourglass-split fs-1"></i>
-                                    <p class="mt-2">{{ trans('clients.whatsapp_connecting') }}</p>
-                                </div>
-                            @endif
-                        </div>
+                        @if(!$status['connected'])
+                            <div class="wa-qr-container mt-3">
+                                @if($qr['qr'])
+                                    <img src="{{ $qr['qr'] }}" alt="QR Code">
+                                    <div class="text-muted mt-2" style="font-size: 13px;">
+                                        <i class="bi bi-qr-code me-1"></i> {{ trans('clients.whatsapp_qr_scan') }}
+                                    </div>
+                                @else
+                                    <div class="text-muted py-4">
+                                        <i class="bi bi-hourglass-split fs-1"></i>
+                                        <p class="mt-2">{{ trans('clients.whatsapp_connecting') }}</p>
+                                    </div>
+                                @endif
+                            </div>
+                        @endif
                     @endif
                 </div>
             </div>
@@ -508,6 +541,47 @@ function restartWhatsApp() {
             } else {
                 toastr.error(res.message);
             }
+        }
+    });
+}
+
+// 🚨 Emergency Kill Switch
+function emergencyStop() {
+    if (!confirm('{{ trans("clients.whatsapp_emergency_confirm") }}')) return;
+
+    $.ajax({
+        url: '{{ route('admin.settings.whatsapp.emergency_stop') }}',
+        type: 'POST',
+        data: { _token: '{{ csrf_token() }}' },
+        success: function(res) {
+            if (res.success) {
+                toastr.success(res.message);
+                setTimeout(function() { location.reload(); }, 1500);
+            } else {
+                toastr.error(res.error || '{{ trans("clients.whatsapp_send_failed") }}');
+            }
+        },
+        error: function() {
+            toastr.error('{{ trans("clients.whatsapp_send_failed") }}');
+        }
+    });
+}
+
+function emergencyRestart() {
+    $.ajax({
+        url: '{{ route('admin.settings.whatsapp.emergency_restart') }}',
+        type: 'POST',
+        data: { _token: '{{ csrf_token() }}' },
+        success: function(res) {
+            if (res.success) {
+                toastr.success(res.message);
+                setTimeout(function() { location.reload(); }, 1500);
+            } else {
+                toastr.error(res.error || '{{ trans("clients.whatsapp_send_failed") }}');
+            }
+        },
+        error: function() {
+            toastr.error('{{ trans("clients.whatsapp_send_failed") }}');
         }
     });
 }

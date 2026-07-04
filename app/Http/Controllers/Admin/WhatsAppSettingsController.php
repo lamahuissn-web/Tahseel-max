@@ -66,6 +66,8 @@ class WhatsAppSettingsController extends Controller
             'whatsapp_auto_status' => DB::table('app_config')->where('key', 'whatsapp_auto_status')->value('value') ?? 'unpaid,partial',
             'whatsapp_auto_delay' => DB::table('app_config')->where('key', 'whatsapp_auto_delay')->value('value') ?? '10',
             'whatsapp_auto_skip_hours' => DB::table('app_config')->where('key', 'whatsapp_auto_skip_hours')->value('value') ?? '24',
+            'whatsapp_emergency_stop' => DB::table('app_config')->where('key', 'whatsapp_emergency_stop')->value('value') ?? '0',
+            'whatsapp_emergency_stopped_at' => DB::table('app_config')->where('key', 'whatsapp_emergency_stopped_at')->value('value') ?? '',
         ];
 
         return view('dashbord.settings.whatsapp', compact('status', 'qr', 'logs', 'settings'));
@@ -102,7 +104,7 @@ class WhatsAppSettingsController extends Controller
     public function preview(Request $request)
     {
         $template = $request->template ?? '';
-        $sampleDetails = "فاتورة شهر أبريل (رقم 12345) بمبلغ 25.00$\nفاتورة شهر مايو (رقم 12346) بمبلغ 25.00$";
+        $sampleDetails = "❌ 04 / 2026      $25.00\n❌ 05 / 2026      $25.00";
         $sample = [
             'name' => 'أحمد محمد',
             'total_amount' => number_format(50.00, 2),
@@ -260,17 +262,17 @@ class WhatsAppSettingsController extends Controller
             $subscriptionLines = [];
             $serviceLines = [];
             foreach ($clientInvoices as $inv) {
-                $dateFormatted = Carbon::parse($inv->due_date)->format('Y-m');
+                $dateFormatted = Carbon::parse($inv->due_date)->format('m / Y');
                 $amount = number_format($inv->remaining_amount, 2);
                 if ($inv->invoice_type === 'service') {
                     $label = !empty($inv->notes) ? preg_replace('/\s+/', ' ', trim($inv->notes)) : 'خدمة';
-                    $serviceLines[] = "🔧 {$label} {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
+                    $serviceLines[] = "🔧 {$dateFormatted}      {$amount}  🔧 {$label}";
                 } else {
                     if (!empty($inv->notes)) {
                         $noteLabel = preg_replace('/\s+/', ' ', trim($inv->notes));
-                        $subscriptionLines[] = "📅 {$noteLabel} {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
+                        $subscriptionLines[] = "❌ {$dateFormatted}      {$amount}  ({$noteLabel})";
                     } else {
-                        $subscriptionLines[] = "📅 {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
+                        $subscriptionLines[] = "❌ {$dateFormatted}      {$amount}";
                     }
                 }
             }
@@ -504,17 +506,17 @@ class WhatsAppSettingsController extends Controller
             $subscriptionLines = [];
             $serviceLines = [];
             foreach ($clientInvoices as $inv) {
-                $dateFormatted = Carbon::parse($inv->due_date)->format('Y-m');
+                $dateFormatted = Carbon::parse($inv->due_date)->format('m / Y');
                 $amount = number_format($inv->remaining_amount, 2);
                 if ($inv->invoice_type === 'service') {
                     $label = !empty($inv->notes) ? preg_replace('/\s+/', ' ', trim($inv->notes)) : 'خدمة';
-                    $serviceLines[] = "🔧 {$label} {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
+                    $serviceLines[] = "🔧 {$dateFormatted}      {$amount}  🔧 {$label}";
                 } else {
                     if (!empty($inv->notes)) {
                         $noteLabel = preg_replace('/\s+/', ' ', trim($inv->notes));
-                        $subscriptionLines[] = "📅 {$noteLabel} {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
+                        $subscriptionLines[] = "❌ {$dateFormatted}      {$amount}  ({$noteLabel})";
                     } else {
-                        $subscriptionLines[] = "📅 {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
+                        $subscriptionLines[] = "❌ {$dateFormatted}      {$amount}";
                     }
                 }
             }
@@ -568,6 +570,117 @@ class WhatsAppSettingsController extends Controller
             'grandTotal' => number_format($grandTotal, 2),
             'days_with_invoices' => $daysWithInvoices,
         ]);
+    }
+    /**
+     * Send WhatsApp reminders to all clients with unpaid invoices in a given month.
+     * Counterpart of monthlyPreview() — sends the actual messages.
+     */
+    public function sendMonthly(Request $request)
+    {
+    $month = $request->input('month');
+    $year = $request->input('year');
+    
+    if (!$month || !$year) {
+        return response()->json(['error' => 'Month and year are required']);
+    }
+    
+    $enabled = DB::table('app_config')->where('key', 'whatsapp_enabled')->value('value');
+    if ($enabled != '1') {
+        return response()->json(['error' => 'WhatsApp reminders are disabled']);
+    }
+    
+    $status = $this->whatsapp->status();
+    if (!$status['connected']) {
+        return response()->json(['error' => 'WhatsApp is not connected']);
+    }
+    
+    $template = DB::table('app_config')->where('key', 'whatsapp_message_template')->value('value')
+        ?? WhatsAppMessageBuilder::defaultTemplate();
+    
+    $startDate = Carbon::createFromDate($year, $month, 1)->startOfMonth()->format('Y-m-d');
+    $endDate = Carbon::createFromDate($year, $month, 1)->endOfMonth()->format('Y-m-d');
+    
+    $clientIdsInMonth = Invoice::whereBetween('due_date', [$startDate, $endDate])
+        ->whereIn('status', ['unpaid', 'partial'])
+        ->pluck('client_id')
+        ->unique();
+    
+    if ($clientIdsInMonth->isEmpty()) {
+        return response()->json(['error' => 'No unpaid invoices found for this month']);
+    }
+    
+    $invoices = Invoice::with(['client'])
+        ->whereIn('client_id', $clientIdsInMonth)
+        ->whereIn('status', ['unpaid', 'partial'])
+        ->whereHas('client', function ($q) {
+            $q->whereNotNull('phone')->where('phone', '!=', '');
+        })
+        ->orderBy('due_date')
+        ->get()
+        ->groupBy('client_id');
+    
+    if ($invoices->isEmpty()) {
+        return response()->json(['error' => 'No eligible clients found for this month']);
+    }
+    
+    $sentCount = 0;
+    $failedCount = 0;
+    $results = [];
+    $currentIndex = 0;
+    
+    foreach ($invoices as $clientId => $clientInvoices) {
+        $client = $clientInvoices->first()->client;
+        if (!$client || !$client->phone) continue;
+        if (!$this->isValidPhone($client->phone)) continue;
+    
+        if ($currentIndex > 0) {
+            sleep(10);
+        }
+    
+        $totalAmount = $clientInvoices->sum('remaining_amount');
+        $invoiceDetailsList = WhatsAppMessageBuilder::buildInvoiceDetailsList($clientInvoices);
+        $message = WhatsAppMessageBuilder::buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
+        $phone = preg_replace('/[^0-9]/', '', $client->phone);
+        $invoiceIds = $clientInvoices->pluck('id')->toArray();
+    
+        $result = $this->whatsapp->send($phone, $message);
+    
+        DB::table('whatsapp_message_logs')->insert([
+            'client_id' => $clientId,
+            'invoice_id' => $clientInvoices->first()->id,
+            'invoice_ids' => json_encode($invoiceIds),
+            'phone' => $phone,
+            'message' => $message,
+            'status' => $result['success'] ? 'sent' : 'failed',
+            'error' => $result['error'] ?? null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    
+        if ($result['success']) {
+            Invoice::where('client_id', $clientId)
+                ->whereIn('status', ['unpaid', 'partial'])
+                ->update(['last_notified_at' => now()]);
+            $sentCount++;
+            $results[] = ['client' => $client->name, 'phone' => $phone, 'status' => 'sent'];
+        } else {
+            $failedCount++;
+            $results[] = ['client' => $client->name, 'phone' => $phone, 'status' => 'failed', 'error' => $result['error']];
+        }
+    
+        $currentIndex++;
+    }
+    
+    $monthName = $this->arabicMonths[(int)$month] ?? Carbon::createFromDate($year, $month, 1)->format('F');
+    
+    return response()->json([
+        'success' => true,
+        'month_name' => $monthName,
+        'year' => $year,
+        'sent' => $sentCount,
+        'failed' => $failedCount,
+        'results' => $results,
+    ]);
     }
 
     public function dailyPreview(Request $request)
@@ -640,17 +753,17 @@ class WhatsAppSettingsController extends Controller
             $subscriptionLines = [];
             $serviceLines = [];
             foreach ($clientInvoices as $inv) {
-                $dateFormatted = Carbon::parse($inv->due_date)->format('Y-m');
+                $dateFormatted = Carbon::parse($inv->due_date)->format('m / Y');
                 $amount = number_format($inv->remaining_amount, 2);
                 if ($inv->invoice_type === 'service') {
                     $label = !empty($inv->notes) ? preg_replace('/\s+/', ' ', trim($inv->notes)) : 'خدمة';
-                    $serviceLines[] = "🔧 {$label} {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
+                    $serviceLines[] = "🔧 {$dateFormatted}      {$amount}  🔧 {$label}";
                 } else {
                     if (!empty($inv->notes)) {
                         $noteLabel = preg_replace('/\s+/', ' ', trim($inv->notes));
-                        $subscriptionLines[] = "📅 {$noteLabel} {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
+                        $subscriptionLines[] = "❌ {$dateFormatted}      {$amount}  ({$noteLabel})";
                     } else {
-                        $subscriptionLines[] = "📅 {$dateFormatted} ({$inv->invoice_number}) - {$amount}$";
+                        $subscriptionLines[] = "❌ {$dateFormatted}      {$amount}";
                     }
                 }
             }
@@ -979,4 +1092,108 @@ class WhatsAppSettingsController extends Controller
             'error' => $result['error'] ?? trans('clients.whatsapp_send_failed'),
         ]);
     }
+
+    public function emergencyStop()
+    {
+        try {
+            // 1. Disable WhatsApp sending
+            DB::table('app_config')->updateOrInsert(
+                ['key' => 'whatsapp_enabled'],
+                ['value' => '0', 'updated_at' => now()]
+            );
+            DB::table('app_config')->updateOrInsert(
+                ['key' => 'whatsapp_auto_enabled'],
+                ['value' => '0', 'updated_at' => now()]
+            );
+
+            // 2. Save emergency state
+            DB::table('app_config')->updateOrInsert(
+                ['key' => 'whatsapp_emergency_stop'],
+                ['value' => '1', 'updated_at' => now()]
+            );
+            DB::table('app_config')->updateOrInsert(
+                ['key' => 'whatsapp_emergency_stopped_at'],
+                ['value' => now()->format('Y-m-d H:i:s'), 'updated_at' => now()]
+            );
+
+            // 3. Disconnect OpenWA session
+            try {
+                $sessionId = env('OPENWA_SESSION_ID', '');
+                $baseUrl = rtrim(env('OPENWA_API_URL', ''), '/');
+                $apiKey = env('OPENWA_API_KEY', '');
+                if ($sessionId && $baseUrl && $apiKey) {
+                    \Illuminate\Support\Facades\Http::withHeaders(['X-API-Key' => $apiKey])
+                        ->timeout(5)
+                        ->post("{$baseUrl}/sessions/{$sessionId}/stop");
+                }
+            } catch (\Exception $e) {
+                \Log::warning('Emergency stop: failed to disconnect OpenWA: ' . $e->getMessage());
+            }
+
+            // 4. Kill rogue PHP processes
+            exec("pkill -f 'php.*(whatsapp|reminder|monthly|test_send)' 2>/dev/null", $output, $exitCode);
+
+            // 5. Clear cache
+            Artisan::call('cache:clear');
+
+            return response()->json([
+                'success' => true,
+                'message' => trans('clients.whatsapp_emergency_stopped_msg'),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    public function emergencyRestart()
+    {
+        try {
+            // 1. Re-enable WhatsApp
+            DB::table('app_config')->updateOrInsert(
+                ['key' => 'whatsapp_enabled'],
+                ['value' => '1', 'updated_at' => now()]
+            );
+
+            // 2. Clear emergency state
+            DB::table('app_config')->updateOrInsert(
+                ['key' => 'whatsapp_emergency_stop'],
+                ['value' => '0', 'updated_at' => now()]
+            );
+            DB::table('app_config')->updateOrInsert(
+                ['key' => 'whatsapp_emergency_stopped_at'],
+                ['value' => '', 'updated_at' => now()]
+            );
+
+            // 3. Reconnect OpenWA session
+            try {
+                $sessionId = env('OPENWA_SESSION_ID', '');
+                $baseUrl = rtrim(env('OPENWA_API_URL', ''), '/');
+                $apiKey = env('OPENWA_API_KEY', '');
+                if ($sessionId && $baseUrl && $apiKey) {
+                    \Illuminate\Support\Facades\Http::withHeaders(['X-API-Key' => $apiKey])
+                        ->timeout(10)
+                        ->post("{$baseUrl}/sessions/{$sessionId}/start");
+                }
+            } catch (\Exception $e) {
+                \Log::warning('Emergency restart: failed to connect OpenWA: ' . $e->getMessage());
+            }
+
+            // 4. Clear cache
+            Artisan::call('cache:clear');
+
+            return response()->json([
+                'success' => true,
+                'message' => trans('clients.whatsapp_emergency_restarted_msg'),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
 }

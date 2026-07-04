@@ -314,6 +314,15 @@
         'whatsapp_invalid_phone' => 'رقم هاتف غير صالح',
         'whatsapp_reminder_sent' => 'تم إرسال التذكير بنجاح',
         'whatsapp_send_failed' => 'فشل إرسال الرسالة',
+
+        // 🚨 Emergency Kill Switch
+        'whatsapp_emergency_stop' => '🛑 إيقاف الطوارئ',
+        'whatsapp_emergency_restart' => '▶️ إعادة تشغيل الخدمة',
+        'whatsapp_emergency_stopped' => '🔴 موقوف بواسطة الطوارئ 🚨',
+        'whatsapp_emergency_confirm' => 'هل أنت متأكد؟ هذا سيوقف جميع رسائل الواتساب فوراً ويقطع اتصال OpenWA.',
+        'whatsapp_emergency_stopped_at' => '⏱️ تم الإيقاف:',
+        'whatsapp_emergency_stopped_msg' => '✅ تم إيقاف الخدمة بنجاح',
+        'whatsapp_emergency_restarted_msg' => '✅ تم إعادة تشغيل الخدمة بنجاح',
         'client_not_found' => 'العميل غير موجود',
         'whatsapp_send_reminder' => 'إرسال تذكير واتساب',
 
