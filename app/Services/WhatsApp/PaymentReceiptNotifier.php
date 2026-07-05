@@ -3,6 +3,8 @@
 namespace App\Services\WhatsApp;
 
 use App\Models\Admin\Invoice;
+use App\Models\Admin\Revenue;
+use App\Models\Admin;
 use App\Models\Clients;
 use App\Services\WhatsAppService;
 use Illuminate\Support\Facades\Log;
@@ -53,6 +55,23 @@ class PaymentReceiptNotifier
                 ? date('d/m/Y', strtotime($invoice->paid_date))
                 : date('d/m/Y');
 
+            // 3a. Get collector name and payment time from Revenue record
+            $revenue = Revenue::where('invoice_id', $invoice->id)->first();
+            $collectorName = 'النظام';
+            $paymentTime = $paymentDate;
+            if ($revenue) {
+                // Look up by Admin ID directly (collected_by = auth()->id())
+                $adminUser = Admin::find($revenue->collected_by);
+                if ($adminUser) {
+                    $collectorName = $adminUser->name;
+                } else {
+                    $collectorName = $revenue->collected_by_name ?? 'النظام';
+                }
+                if ($revenue->received_at) {
+                    $paymentTime = date('d/m/Y h:i A', strtotime($revenue->received_at));
+                }
+            }
+
             // 3. Get the latest paid invoice overall (for "آخر شهر مدفوع")
             $lastPaidInvoice = Invoice::where('client_id', $client->id)
                 ->where('status', 'paid')
@@ -86,7 +105,8 @@ class PaymentReceiptNotifier
                 $paidMonth,
                 $paidYear,
                 $paidAmount,
-                $paymentDate,
+                $collectorName,
+                $paymentTime,
                 $lastPaidMonth,
                 $lastPaidYear,
                 $unpaidInvoices,
@@ -129,7 +149,8 @@ class PaymentReceiptNotifier
         string $paidMonth,
         string $paidYear,
         string $paidAmount,
-        string $paymentDate,
+        string $collectorName,
+        string $paymentTime,
         string $lastPaidMonth,
         string $lastPaidYear,
         $unpaidInvoices,
@@ -141,6 +162,8 @@ class PaymentReceiptNotifier
         $message .= "✅ تم تسجيل عملية الدفع بنجاح في النظام.\n\n";
         $message .= "📅 الاشتراك المسدد: {$paidMonth} / {$paidYear}\n";
         $message .= "💵 المبلغ المدفوع: \${$paidAmount}\n";
+        $message .= "🧑 قبضت بواسطة: {$collectorName}\n";
+        $message .= "⏱ وقت الدفع: {$paymentTime}\n";
 
         $message .= "\n━━━━━━━━━━━━━━━━━━\n";
 
@@ -167,7 +190,6 @@ class PaymentReceiptNotifier
 
         $message .= "\n⚠️ ملاحظة:\n";
         $message .= "هذا الإشعار يُعتبر إثبات دفع إلكتروني مسجل في النظام.\n\n";
-        $message .= "🗓 تاريخ الدفع: {$paymentDate}\n\n";
         $message .= "شكراً لاختياركم MegaNet 🌹\n";
 
         return $message;
