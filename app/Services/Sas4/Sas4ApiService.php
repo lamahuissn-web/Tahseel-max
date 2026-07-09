@@ -226,6 +226,7 @@ class Sas4ApiService
             return null;
         }
 
+        // ... daily traffic processing follows same pattern as original
         $data = $response['data'];
         $rx = $data['rx'] ?? [];
         $tx = $data['tx'] ?? [];
@@ -403,10 +404,8 @@ class Sas4ApiService
         $overview = $this->getUserOverview($userId);
         $traffic = $this->getUserTraffic($userId);
 
-        // Use online_status from search results (0 = offline, 1 = online)
         $userData['online'] = $userData['online_status'] ?? 0;
 
-        // Add last_online from overview if available
         if ($overview && isset($overview['data']['last_online'])) {
             $userData['last_login'] = $overview['data']['last_online'];
         }
@@ -421,7 +420,7 @@ class Sas4ApiService
     /**
      * Create a new SAS 4 user
      */
-    public function createUser($username, $password, $profileId, $firstname = '')
+    public function createUser($username, $password, $profileId, $firstname = '', $parentId = 1)
     {
         $payload = $this->aesEncrypt(json_encode([
             'username' => $username,
@@ -429,6 +428,7 @@ class Sas4ApiService
             'profile_id' => $profileId,
             'firstname' => $firstname,
             'enabled' => 1,
+            'parent_id' => $parentId,
         ]));
 
         return $this->request('POST', '/admin/api/index.php/api/user', [

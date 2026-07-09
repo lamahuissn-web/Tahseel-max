@@ -1065,7 +1065,7 @@ class ClientController extends Controller
 
             $result = $sas4Service->createUser($newUsername, $newPassword, $newProfile, $client->name);
 
-            if ($result && isset($result['status']) && $result['status'] == 200) {
+            if ($result && isset($result['status']) && in_array($result['status'], [200, 201])) {
                 $client->sas_username = $newUsername;
                 $client->save();
             }
