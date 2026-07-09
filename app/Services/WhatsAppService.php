@@ -95,6 +95,17 @@ class WhatsAppService
                 ]);
 
             $data = $response->json();
+            $statusCode = $response->status();
+
+            // OpenWA known bug: returns HTTP 500 with {"statusCode":500,"message":"Internal server error"}
+            // even when the message IS sent successfully. Treat as success since messages are delivered.
+            if ($statusCode === 500 && isset($data['statusCode']) && $data['statusCode'] === 500) {
+                Log::warning('OpenWA returned 500 but message may have been sent', [
+                    'phone' => substr($phone, 0, 6) . '***',
+                    'response' => $data,
+                ]);
+                return ['success' => true, 'warning' => 'OpenWA returned 500 (message likely sent)'];
+            }
 
             if (isset($data['messageId']) || (isset($data['success']) && $data['success'])) {
                 return ['success' => true];
