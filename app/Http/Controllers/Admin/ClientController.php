@@ -1052,6 +1052,8 @@ class ClientController extends Controller
             $newUsername = $request->input('sas4_new_username');
             $newPassword = $request->input('sas4_new_password');
             $newProfile = $request->input('sas4_new_profile');
+            $newExpiration = $request->input('sas4_new_expiration');
+            $newEnabled = $request->input('sas4_new_enabled', 0);
 
             if (!$newUsername || !$newPassword || !$newProfile) {
                 return;
@@ -1063,7 +1065,7 @@ class ClientController extends Controller
                 return;
             }
 
-            $result = $sas4Service->createUser($newUsername, $newPassword, $newProfile, $client->name);
+            $result = $sas4Service->createUser($newUsername, $newPassword, $newProfile, $client->name, 1, $newExpiration, $newEnabled);
 
             if ($result && isset($result['status']) && in_array($result['status'], [200, 201])) {
                 $client->sas_username = $newUsername;

@@ -358,19 +358,34 @@
                                     <div id="sas4_create_section" style="display: none;">
                                         <input type="hidden" name="sas4_action" id="sas4_action" value="create">
                                         <div class="row g-3">
-                                            <div class="col-md-4">
+                                            <div class="col-md-3">
                                                 <label for="sas4_new_username" class="form-label">{{ trans('clients.sas4_username') }}</label>
                                                 <input type="text" class="form-control" name="sas4_new_username" id="sas4_new_username">
                                             </div>
-                                            <div class="col-md-4">
+                                            <div class="col-md-3">
                                                 <label for="sas4_new_password" class="form-label">{{ trans('clients.sas4_password') }}</label>
                                                 <input type="text" class="form-control" name="sas4_new_password" id="sas4_new_password">
                                             </div>
-                                            <div class="col-md-4">
+                                            <div class="col-md-3">
                                                 <label for="sas4_new_profile" class="form-label">{{ trans('clients.sas4_profile') }}</label>
                                                 <select class="form-select" name="sas4_new_profile" id="sas4_new_profile">
                                                     <option value="">{{ trans('clients.select') }}</option>
                                                 </select>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label for="sas4_new_expiration" class="form-label">{{ trans('clients.sas4_expiration_date') }}</label>
+                                                <input type="date" class="form-control" name="sas4_new_expiration" id="sas4_new_expiration">
+                                            </div>
+                                        </div>
+                                        <div class="row mt-3">
+                                            <div class="col-md-12">
+                                                <div class="form-check form-switch form-check-success">
+                                                    <input class="form-check-input" type="checkbox" role="switch" name="sas4_new_enabled" id="sas4_new_enabled" value="1">
+                                                    <label class="form-check-label fw-bold" for="sas4_new_enabled">
+                                                        <i class="bi bi-toggle-on text-success"></i> {{ trans('clients.sas4_enable_on_create') }}
+                                                    </label>
+                                                    <small class="text-muted d-block mt-1">{{ trans('clients.sas4_enable_on_create_hint') }}</small>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>

@@ -420,16 +420,20 @@ class Sas4ApiService
     /**
      * Create a new SAS 4 user
      */
-    public function createUser($username, $password, $profileId, $firstname = '', $parentId = 1)
+    public function createUser($username, $password, $profileId, $firstname = '', $parentId = 1, $expiration = null, $enabled = 0)
     {
-        $payload = $this->aesEncrypt(json_encode([
+        $data = [
             'username' => $username,
             'password' => $password,
             'profile_id' => $profileId,
             'firstname' => $firstname,
-            'enabled' => 1,
+            'enabled' => $enabled,
             'parent_id' => $parentId,
-        ]));
+        ];
+        if ($expiration) {
+            $data['expiration'] = $expiration;
+        }
+        $payload = $this->aesEncrypt(json_encode($data));
 
         return $this->request('POST', '/admin/api/index.php/api/user', [
             'payload' => $payload,
