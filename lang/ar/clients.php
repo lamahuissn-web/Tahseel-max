@@ -258,6 +258,8 @@
        // WhatsApp
        'whatsapp_settings' => 'إعدادات واتساب',
         'whatsapp_control_center' => '📱 WhatsApp Control Center',
+        'whatsapp_address' => 'العنوان',
+        'whatsapp_address_placeholder' => 'ابحث بالعنوان...',
         'whatsapp_automation' => 'التشغيل الآلي',
         'whatsapp_automation_rules' => 'قواعد التشغيل الآلي',
         'whatsapp_rule' => 'القاعدة',

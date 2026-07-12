@@ -92,13 +92,9 @@
                                     </select>
                                 </div>
                                 <div class="col-md-4">
-                                    <label class="form-label fs-7">{{ trans('clients.whatsapp_area') ?? 'المنطقة' }}</label>
-                                    <select class="form-select form-select-sm" name="filter_area" id="filterArea">
-                                        <option value="">{{ trans('clients.all') ?? 'الكل' }}</option>
-                                        @foreach(\App\Models\Admin\AreaSetting::all() as $area)
-                                        <option value="{{ $area->id }}">{{ $area->area_name }}</option>
-                                        @endforeach
-                                    </select>
+                                    <label class="form-label fs-7">{{ trans('clients.whatsapp_address') ?? 'العنوان' }}</label>
+                                    <input type="text" class="form-control form-control-sm" name="filter_address" id="filterAddress" 
+                                           placeholder="{{ trans('clients.whatsapp_address_placeholder') ?? 'ابحث بالعنوان...' }}">
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label fs-7">{{ trans('clients.whatsapp_subscription') ?? 'الاشتراك' }}</label>
@@ -242,7 +238,7 @@ $(document).ready(function() {
         const data = {
             _token: '{{ csrf_token() }}',
             unpaid: $('#filterUnpaid').val(),
-            area: $('#filterArea').val(),
+            address: $('#filterAddress').val(),
             subscription: $('#filterSubscription').val(),
             last_payment: $('#filterLastPayment').val(),
         };
@@ -267,7 +263,7 @@ $(document).ready(function() {
     // Clear filter
     $('#clearFilter').on('click', function() {
         $('#filterUnpaid').val('');
-        $('#filterArea').val('');
+        $('#filterAddress').val('');
         $('#filterSubscription').val('');
         $('#filterLastPayment').val('');
         $('#filterResults').addClass('d-none');

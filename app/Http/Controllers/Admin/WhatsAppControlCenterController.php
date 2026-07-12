@@ -169,8 +169,8 @@ class WhatsAppControlCenterController extends Controller
                       ->havingRaw('COUNT(*) >= ?', [$minUnpaid]);
                 });
             }
-            if ($request->filled('area')) {
-                $query->where('area_id', $request->area);
+            if ($request->filled("address")) {
+                $query->where("address1", "like", "%" . $request->address . "%");
             }
             if ($request->filled('subscription')) {
                 $query->where('subscription_id', $request->subscription);
