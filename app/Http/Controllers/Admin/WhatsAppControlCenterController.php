@@ -33,8 +33,8 @@ class WhatsAppControlCenterController extends Controller
         $totalClients = DB::table('tbl_clients')->whereNull('deleted_at')->count();
         $clientsWithPhone = DB::table('tbl_clients')
             ->whereNull('deleted_at')
-            ->whereNotNull('phone1')
-            ->where('phone1', '!=', '')
+            ->whereNotNull('phone')
+            ->where('phone', '!=', '')
             ->count();
 
         // Last successful send
@@ -134,10 +134,10 @@ class WhatsAppControlCenterController extends Controller
             ->whereNull('deleted_at')
             ->where(function ($q) use ($term) {
                 $q->where('name', 'like', "%{$term}%")
-                  ->orWhere('phone1', 'like', "%{$term}%")
+                  ->orWhere('phone', 'like', "%{$term}%")
                   ->orWhere('id', 'like', "%{$term}%");
             })
-            ->select('id', 'name', 'phone1 as phone')
+            ->select('id', 'name', 'phone as phone')
             ->limit(20)
             ->get();
 
@@ -157,7 +157,7 @@ class WhatsAppControlCenterController extends Controller
         // Preview mode — return matching clients without sending
         if ($request->boolean('preview')) {
             $query = DB::table('tbl_clients')->whereNull('deleted_at')
-                ->whereNotNull('phone1')->where('phone1', '!=', '');
+                ->whereNotNull('phone')->where('phone', '!=', '');
 
             if ($request->filled('unpaid')) {
                 $minUnpaid = (int)$request->unpaid;
@@ -184,7 +184,7 @@ class WhatsAppControlCenterController extends Controller
                 });
             }
 
-            $clients = $query->limit(500)->get(['id', 'name', 'phone1 as phone']);
+            $clients = $query->limit(500)->get(['id', 'name', 'phone as phone']);
             return response()->json(['clients' => $clients]);
         }
 
@@ -207,7 +207,7 @@ class WhatsAppControlCenterController extends Controller
 
         foreach ($request->client_ids as $clientId) {
             $client = DB::table('tbl_clients')->find($clientId);
-            if (!$client || empty($client->phone1)) {
+            if (!$client || empty($client->phone)) {
                 $results['failed']++;
                 continue;
             }
@@ -218,13 +218,13 @@ class WhatsAppControlCenterController extends Controller
                 $body
             );
 
-            $result = $service->sendMessage($client->phone1, $message);
+            $result = $service->sendMessage($client->phone, $message);
             $status = (isset($result['status']) && $result['status'] === 'success') ? 'sent' : 'failed';
 
             WhatsAppMessageLog::create([
                 'client_id' => $client->id,
                 'client_name' => $client->name,
-                'phone' => $client->phone1,
+                'phone' => $client->phone,
                 'message' => $message,
                 'template_type' => $request->template_type,
                 'status' => $status,
