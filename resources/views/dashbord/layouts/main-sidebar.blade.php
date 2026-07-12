@@ -201,19 +201,16 @@ use Illuminate\Support\Facades\Route; ?>
                         <span class="menu-title">إعدادات التطبيق</span>
                     </a>
                 </div>
-
-                {{-- WhatsApp Settings --}}
+                {{-- 📱 WhatsApp Control Center --}}
                 <div class="menu-item">
-                    <a class="menu-link sidebar-menu-link {{ request()->routeIs('admin.settings.whatsapp') ? 'active' : '' }}"
-                        href="{{ route('admin.settings.whatsapp') }}">
+                    <a class="menu-link sidebar-menu-link {{ request()->routeIs("admin.whatsapp.*") ? "active" : "" }}"
+                        href="{{ route("admin.whatsapp.dashboard") }}">
                         <span class="sidebar-menu-icon">
                             <i class="bi bi-whatsapp text-success fs-4"></i>
                         </span>
-                        <span class="menu-title">{{ trans('clients.whatsapp_settings') }}</span>
+                        <span class="menu-title">{{ trans("clients.whatsapp_control_center") }}</span>
                     </a>
                 </div>
-
-                {{-- User & Employees Management Section --}}
                 @canany(['list_roles', 'list_users', 'view_employees'])
                 <hr class="sidebar-section-divider">
 

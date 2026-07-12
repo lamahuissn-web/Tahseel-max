@@ -257,6 +257,7 @@
 
        // WhatsApp
        'whatsapp_settings' => 'إعدادات واتساب',
+        'whatsapp_control_center' => '📱 WhatsApp Control Center',
        'whatsapp_connection' => 'اتصال واتساب',
        'whatsapp_connected' => 'متصل',
        'whatsapp_disconnected' => 'غير متصل',

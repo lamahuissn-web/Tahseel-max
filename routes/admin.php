@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\ClientController;
 use App\Http\Controllers\Admin\CompanyController;
 use App\Http\Controllers\Admin\ConfigAppController;
 use App\Http\Controllers\Admin\WhatsAppSettingsController;
+use App\Http\Controllers\Admin\WhatsAppControlCenterController;
 use App\Http\Controllers\Admin\EmployeesController;
 
 use App\Http\Controllers\Admin\FinancialTransactionsController;
@@ -239,6 +240,28 @@ Route::group(
             // 🚨 Emergency Kill Switch
             Route::post('settings/whatsapp/emergency-stop', [WhatsAppSettingsController::class, 'emergencyStop'])->name('settings.whatsapp.emergency_stop');
             Route::post('settings/whatsapp/emergency-restart', [WhatsAppSettingsController::class, 'emergencyRestart'])->name('settings.whatsapp.emergency_restart');
+
+            // 📱 WhatsApp Control Center
+            Route::prefix('whatsapp')->name('whatsapp.')->group(function () {
+                Route::get('/dashboard', [WhatsAppControlCenterController::class, 'dashboard'])->name('dashboard');
+                Route::get('/templates', [WhatsAppControlCenterController::class, 'templates'])->name('templates');
+                Route::post('/templates/save', [WhatsAppControlCenterController::class, 'saveTemplate'])->name('templates.save');
+                Route::post('/templates/test', [WhatsAppControlCenterController::class, 'testTemplate'])->name('templates.test');
+                Route::get('/send', [WhatsAppControlCenterController::class, 'send'])->name('send');
+                Route::post('/send/broadcast', [WhatsAppControlCenterController::class, 'broadcast'])->name('send.broadcast');
+                Route::get('/send/search-clients', [WhatsAppControlCenterController::class, 'searchClients'])->name('send.search_clients');
+                Route::get('/log', [WhatsAppControlCenterController::class, 'log'])->name('log');
+                Route::get('/log/data', [WhatsAppControlCenterController::class, 'logData'])->name('log.data');
+                Route::post('/log/{id}/resend', [WhatsAppControlCenterController::class, 'resendMessage'])->name('log.resend');
+                Route::get('/automation', [WhatsAppControlCenterController::class, 'automation'])->name('automation');
+                Route::post('/automation/{id}/toggle', [WhatsAppControlCenterController::class, 'toggleAutomationRule'])->name('automation.toggle');
+                Route::post('/automation/{id}/run', [WhatsAppControlCenterController::class, 'runAutomationRule'])->name('automation.run');
+                Route::get('/queue', [WhatsAppControlCenterController::class, 'queue'])->name('queue');
+                Route::post('/queue/resend-failed', [WhatsAppControlCenterController::class, 'resendAllFailed'])->name('queue.resend_failed');
+                Route::post('/queue/pause', [WhatsAppControlCenterController::class, 'toggleQueuePause'])->name('queue.pause');
+            });
+
+ 
 
             Route::get('/logs', [LogController::class, 'index'])->name('logs.index');
             Route::get('/logs/{id}', [LogController::class, 'show'])->name('logs.show');
