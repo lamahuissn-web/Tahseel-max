@@ -205,3 +205,79 @@ Phase 1B (Routes) ──→ Phase 1C (Dashboard) ──→ Phase 1D (Templates)
 | Existing reminders still work | Run `php artisan whatsapp:reminders` — no crash |
 | Existing receipts still work | Trigger a payment — receipt arrives |
 | Emergency stop still works | Hit emergency button — WhatsApp stops |
+
+## Design Constraint — Keen Template Compliance
+
+**CRITICAL:** All new views MUST use Keen's built-in components — NOT custom CSS.
+
+### Required Patterns
+
+```blade
+@extends('dashbord.layouts.master')
+
+@section('toolbar')
+<div id="kt_app_toolbar_container" class="app-container container-xxl d-flex flex-stack">
+    @php
+    $title = trans('...');
+    $breadcrumbs = [
+        ['label' => trans('Toolbar.home'), 'link' => route('admin.dashboard')],
+        ['label' => trans('...'), 'link' => ''],
+    ];
+    PageTitle($title, $breadcrumbs);
+    @endphp
+</div>
+@endsection
+
+@section('content')
+<div id="kt_app_content_container" class="app-container container-xxxl">
+    {{-- Keen card components ONLY --}}
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">{{ trans('...') }}</h3>
+            <div class="card-toolbar">
+                {{-- action buttons --}}
+            </div>
+        </div>
+        <div class="card-body">
+            {{-- content --}}
+        </div>
+    </div>
+</div>
+@endsection
+```
+
+### Allowed Components
+
+| Keen Component | Usage |
+|----------------|-------|
+| `.card` / `.card-header` / `.card-body` / `.card-title` / `.card-toolbar` | All containers |
+| `.row` / `.col-*` | Bootstrap grid |
+| `.form-label` / `.form-control` / `.form-select` / `.input-group` / `.input-group-text` | Forms |
+| `{!! form_icon('...') !!}` | Input icons |
+| `.btn` / `.btn-primary` / `.btn-light` / `.btn-success` / `.btn-danger` / `.btn-sm` | Buttons |
+| `.badge` / `.badge-success` / `.badge-danger` / `.badge-warning` | Status badges |
+| `.table` / `.table-row-bordered` / `.table-align-middle` | Tables |
+| `.select2` / `.selectpicker` | Searchable selects |
+| `.modal` / `.modal-dialog` / `.modal-content` | Modals |
+| `data-kt-*` attributes | Keen JS behaviors |
+| `bi-*` Bootstrap Icons | Icons |
+| `.text-muted` / `.fw-bold` / `.fs-*` / `.text-*` | Typography utilities |
+
+### Forbidden
+
+- ❌ Custom CSS card classes (`wa-card`, `wa-card-header`, `wa-card-body`, etc.)
+- ❌ Inline `<style>` blocks for layout (OK only for very specific overrides)
+- ❌ Hardcoded colors — use Keen CSS variables or Bootstrap utility classes
+- ❌ Div-based tables — use Keen `.table` or DataTables
+
+### RTL Handling
+
+Since Tahseel is Arabic-first:
+- All `.me-*` / `.ms-*` / `.pe-*` / `.ps-*` spacing classes auto-flip via RTL bundle
+- Use `.gap-*` for flex spacing instead of hard margins when possible
+- Use `margin-inline-end` / `margin-inline-start` for directional margins
+- Test every view in both RTL (Arabic) and LTR (English) layout
+
+### Current WhatsApp Page Must Be Replaced
+
+The existing `resources/views/dashbord/settings/whatsapp.blade.php` has ~450 lines of custom CSS + HTML. It will be **completely replaced** by the 6 Keen-compliant tab views under `resources/views/dashbord/whatsapp/`.
