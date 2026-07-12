@@ -7,6 +7,7 @@ use App\Models\Admin\Revenue;
 use App\Models\Admin;
 use App\Models\Clients;
 use App\Services\WhatsAppService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class PaymentReceiptNotifier
@@ -115,6 +116,24 @@ class PaymentReceiptNotifier
 
             // 7. Send via WhatsApp
             $result = $this->whatsapp->send($phone, $message);
+
+            // Log to message log
+            try {
+                DB::table('whatsapp_message_logs')->insert([
+                    'client_id' => $client->id,
+                    'client_name' => $client->name ?? $customerName,
+                    'phone' => $phone,
+                    'message' => $message,
+                    'template_type' => 'receipt',
+                    'status' => ($result['success'] ?? false) ? 'sent' : 'failed',
+                    'error' => ($result['success'] ?? false) ? null : ($result['error'] ?? 'Unknown'),
+                    'sent_by' => 'system:autoreceipt',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            } catch (\Exception $logErr) {
+                Log::warning('[WhatsApp Receipt] Failed to log message', ['error' => $logErr->getMessage()]);
+            }
 
             if ($result['success'] ?? false) {
                 Log::info('[WhatsApp Receipt] Sent successfully', [

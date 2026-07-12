@@ -154,6 +154,41 @@ class WhatsAppControlCenterController extends Controller
      */
     public function broadcast(Request $request)
     {
+        // Preview mode — return matching clients without sending
+        if ($request->boolean('preview')) {
+            $query = DB::table('tbl_clients')->whereNull('deleted_at')
+                ->whereNotNull('phone1')->where('phone1', '!=', '');
+
+            if ($request->filled('unpaid')) {
+                $minUnpaid = (int)$request->unpaid;
+                $query->whereIn('id', function ($q) use ($minUnpaid) {
+                    $q->select('client_id')
+                      ->from('tbl_invoices')
+                      ->whereIn('status', ['unpaid', 'partial'])
+                      ->groupBy('client_id')
+                      ->havingRaw('COUNT(*) >= ?', [$minUnpaid]);
+                });
+            }
+            if ($request->filled('area')) {
+                $query->where('area_id', $request->area);
+            }
+            if ($request->filled('subscription')) {
+                $query->where('subscription_id', $request->subscription);
+            }
+            if ($request->filled('last_payment')) {
+                $query->whereNotIn('id', function ($q) use ($request) {
+                    $q->select('client_id')
+                      ->from('tbl_invoices')
+                      ->where('status', 'paid')
+                      ->where('paid_date', '>=', $request->last_payment);
+                });
+            }
+
+            $clients = $query->limit(500)->get(['id', 'name', 'phone1 as phone']);
+            return response()->json(['clients' => $clients]);
+        }
+
+        // Actual send mode
         $request->validate([
             'template_type' => 'required|string',
             'client_ids' => 'required|array',

@@ -160,12 +160,15 @@ class WhatsAppRemindersCommand extends Command
 
             DB::table('whatsapp_message_logs')->insert([
                 'client_id' => $data['client_id'],
+                'client_name' => $data['client_name'],
                 'invoice_id' => $data['invoices']->first()->id,
                 'invoice_ids' => json_encode($invoiceIds),
                 'phone' => $data['phone'],
                 'message' => $data['message'],
+                'template_type' => 'reminder',
                 'status' => $result['success'] ? 'sent' : 'failed',
                 'error' => $result['error'] ?? null,
+                'sent_by' => 'system:cron',
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
