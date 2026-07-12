@@ -21,6 +21,8 @@ class WhatsAppRemindersCommand extends Command
     public function handle()
     {
         $enabled = DB::table('app_config')->where('key', 'whatsapp_enabled')->value('value');
+        $this->whatsapp = app(WhatsAppService::class);
+
         if ($enabled != '1') {
             $this->error('WhatsApp reminders are disabled.');
             return Command::FAILURE;

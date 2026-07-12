@@ -64,6 +64,12 @@
                         </span>
                     </div>
                 </div>
+                                @if($sessionPhone)
+                                <span class="d-block text-muted fs-7 mt-1">📱 {{ $sessionPhone }}</span>
+                                @endif
+                                @if($sessionLastActive)
+                                <span class="d-block text-muted fs-7">⏱ {{ $sessionLastActive }}</span>
+                                @endif
             </div>
         </div>
 

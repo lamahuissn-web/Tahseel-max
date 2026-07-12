@@ -16,9 +16,35 @@ class WhatsAppControlCenterController extends Controller
      */
     public function dashboard()
     {
-        // Get OpenWA connection status
-        $connectionStatus = DB::table('app_config')->where('key', 'whatsapp_auto_enabled')->value('value');
+        // Get real OpenWA connection status
+        $enabled = DB::table('app_config')->where('key', 'whatsapp_enabled')->value('value');
         $emergencyStop = DB::table('app_config')->where('key', 'whatsapp_emergency_stop')->value('value');
+        $connectionStatus = '1'; // Assume connected
+        try {
+            $openwaUrl = env('OPENWA_API_URL', 'http://192.168.0.75:2785/api');
+            $openwaKey = env('OPENWA_API_KEY', 'tahseel-2026-secret-key');
+            $openwaSession = env('OPENWA_SESSION_ID', '4ba8788e-a913-405d-ae2b-79fed7753241');
+            
+            $ch = curl_init("$openwaUrl/sessions/$openwaSession");
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HTTPHEADER => ['x-api-key: ' . $openwaKey],
+                CURLOPT_TIMEOUT => 5,
+                CURLOPT_CONNECTTIMEOUT => 3,
+            ]);
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            
+            if ($httpCode === 200) {
+                $sessionData = json_decode($response, true);
+                $connectionStatus = ($sessionData['status'] ?? '') === 'ready' ? '1' : '0';
+            } else {
+                $connectionStatus = '0';
+            }
+        } catch (\Exception $e) {
+            $connectionStatus = '0';
+        }
 
         // Message counts
         $messagesToday = WhatsAppMessageLog::whereDate('created_at', today())->count();
@@ -42,10 +68,34 @@ class WhatsAppControlCenterController extends Controller
             ->orderBy('created_at', 'desc')
             ->first();
 
+        // Get session details
+        $sessionPhone = null;
+        $sessionLastActive = null;
+        try {
+            $openwaUrl = env('OPENWA_API_URL', 'http://192.168.0.75:2785/api');
+            $openwaKey = env('OPENWA_API_KEY', 'tahseel-2026-secret-key');
+            $openwaSession = env('OPENWA_SESSION_ID', '4ba8788e-a913-405d-ae2b-79fed7753241');
+            
+            $ch = curl_init("$openwaUrl/sessions/$openwaSession");
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_HTTPHEADER => ['x-api-key: ' . $openwaKey],
+                CURLOPT_TIMEOUT => 5,
+            ]);
+            $response = curl_exec($ch);
+            if (curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200) {
+                $sd = json_decode($response, true);
+                $sessionPhone = $sd['phone'] ?? null;
+                $sessionLastActive = isset($sd['lastActive']) ? date('Y-m-d h:i A', strtotime($sd['lastActive'])) : null;
+            }
+            curl_close($ch);
+        } catch (\Exception $e) {}
+
         return view('dashbord.whatsapp.dashboard', compact(
-            'connectionStatus', 'emergencyStop',
+            'connectionStatus', 'emergencyStop', 'enabled',
             'messagesToday', 'messagesThisMonth', 'failuresToday',
-            'totalClients', 'clientsWithPhone', 'lastSent'
+            'totalClients', 'clientsWithPhone', 'lastSent',
+            'sessionPhone', 'sessionLastActive'
         ));
     }
 
@@ -105,7 +155,7 @@ class WhatsAppControlCenterController extends Controller
 
         // Send via existing WhatsApp service
         $service = app(WhatsAppService::class);
-        $result = $service->sendMessage($request->phone, $message);
+        $result = $service->send($request->phone, $message);
 
         return response()->json([
             'success' => isset($result['status']) && $result['status'] === 'success',
@@ -218,7 +268,7 @@ class WhatsAppControlCenterController extends Controller
                 $body
             );
 
-            $result = $service->sendMessage($client->phone, $message);
+            $result = $service->send($client->phone, $message);
             $status = (isset($result['status']) && $result['status'] === 'success') ? 'sent' : 'failed';
 
             WhatsAppMessageLog::create([
@@ -311,11 +361,11 @@ class WhatsAppControlCenterController extends Controller
     /**
      * 🔄 Resend a failed message.
      */
-    public function resendMessage($id)
+    public function resend($id)
     {
         $log = WhatsAppMessageLog::findOrFail($id);
         $service = app(WhatsAppService::class);
-        $result = $service->sendMessage($log->phone, $log->message);
+        $result = $service->send($log->phone, $log->message);
 
         $log->update([
             'status' => (isset($result['status']) && $result['status'] === 'success') ? 'sent' : 'failed',
@@ -409,7 +459,7 @@ class WhatsAppControlCenterController extends Controller
         $results = ['resent' => 0, 'still_failed' => 0];
 
         foreach ($failed as $log) {
-            $result = $service->sendMessage($log->phone, $log->message);
+            $result = $service->send($log->phone, $log->message);
             if (isset($result['status']) && $result['status'] === 'success') {
                 $log->update(['status' => 'sent', 'error' => null]);
                 $results['resent']++;
