@@ -165,6 +165,57 @@
     </div>
 </div>
 
+{{-- ═══ Filter Results Review Modal ═══ --}}
+<div class="modal fade" id="filterResultsModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="filterResultsTitle">
+                    <i class="bi bi-list-check me-2"></i>
+                    <span id="filterResultsTitleText">{{ trans('clients.whatsapp_filter_results') ?? 'نتائج الفلتر' }}</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-row-bordered align-middle mb-0" id="filterResultsTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-4" style="width: 50px;">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="selectAllResults">
+                                        <label class="form-check-label" for="selectAllResults"></label>
+                                    </div>
+                                </th>
+                                <th>{{ trans('clients.name') ?? 'الاسم' }}</th>
+                                <th>{{ trans('clients.phone') ?? 'الرقم' }}</th>
+                                <th>{{ trans('clients.status') ?? 'الحالة' }}</th>
+                                <th class="text-center">{{ trans('clients.whatsapp_unpaid_bills_short') ?? ' unpaid' }}</th>
+                            </tr>
+                        </thead>
+                        <tbody id="filterResultsBody">
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-6">
+                                    <i class="bi bi-search fs-2 d-block mb-2"></i>
+                                    {{ trans('clients.whatsapp_no_results') ?? 'لا توجد نتائج' }}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer d-flex justify-content-between">
+                <button type="button" class="btn btn-light" id="backToFiltersBtn">
+                    <i class="bi bi-arrow-right"></i> {{ trans('clients.whatsapp_back_to_filters') ?? 'العودة للفلاتر' }}
+                </button>
+                <button type="button" class="btn btn-primary" id="addSelectedBtn" disabled>
+                    <i class="bi bi-plus-lg"></i> <span id="addSelectedText">{{ trans('clients.whatsapp_add_selected') ?? 'إضافة المحددين' }}</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {{-- ═══ Preview Modal ═══ --}}
 <div class="modal fade" id="previewModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
@@ -219,6 +270,7 @@ const templates = @json(collect($templates)->mapWithKeys(fn($t, $k) => [$k => $t
 $(document).ready(function() {
     // ── State ──
     let selectedClients = new Map(); // id -> { name, phone }
+    let filterResults = []; // smart filter results for review modal
     let searchTimeout;
 
     // ── Typeahead Search ──
@@ -328,9 +380,14 @@ $(document).ready(function() {
             if (clients.length === 0) {
                 Swal.fire({ icon: 'info', text: '{{ trans("clients.whatsapp_no_matching") ?? "لا يوجد زبائن متطابقين" }}', timer: 2000, showConfirmButton: false });
             } else {
-                clients.forEach(c => addClient(c.id, c.name, c.phone));
-                Swal.fire({ icon: 'success', text: clients.length + ' {{ trans("clients.whatsapp_filter_added") ?? "تمت الإضافة" }}', timer: 1500, showConfirmButton: false });
-                $('#filterModal').modal('hide');
+                // Show review modal so user can select which clients to add
+                filterResults = clients;
+                // Hide filter modal first, then show results modal after fully hidden
+                $('#filterModal').one('hidden.bs.modal', function() {
+                    renderFilterResults(clients);
+                    $('#filterResultsModal').modal('show');
+                }).modal('hide');
+                // Reset the one() binding so it only fires once
             }
         }).fail(function() {
             Swal.fire({ icon: 'error', text: '{{ trans("clients.whatsapp_test_error") ?? "حدث خطأ" }}' });
@@ -394,6 +451,137 @@ $(document).ready(function() {
             }
         });
     }
+
+    // ── Filter Results Review Modal ──
+
+    function renderFilterResults(clients) {
+        const tbody = $('#filterResultsBody');
+        const count = clients.length;
+        $('#filterResultsTitleText').text('{{ trans("clients.whatsapp_filter_results") ?? "نتائج الفلتر" }} — ' + count + ' {{ trans("clients.whatsapp_recipient") ?? "زبون" }}');
+
+        if (count === 0) {
+            tbody.html(`
+                <tr>
+                    <td colspan="5" class="text-center text-muted py-6">
+                        <i class="bi bi-search fs-2 d-block mb-2"></i>
+                        {{ trans("clients.whatsapp_no_matching") ?? "لا يوجد زبائن متطابقين" }}
+                    </td>
+                </tr>
+            `);
+            $('#addSelectedBtn').prop('disabled', true);
+            $('#addSelectedText').text('{{ trans("clients.whatsapp_add_selected") ?? "إضافة المحددين" }}');
+            return;
+        }
+
+        // Store in filterResults for lookups (currently same as passed, but keep in sync)
+        filterResults = clients;
+
+        const rows = clients.map(c => {
+            // Sanitize name for HTML attribute — escape & and " only
+            const safeName = String(c.name).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+            const safePhone = String(c.phone || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+            return `
+            <tr class="filter-result-row">
+                <td class="ps-4">
+                    <div class="form-check">
+                        <input class="form-check-input filter-result-cb" type="checkbox" value="${c.id}"
+                               data-name="${safeName}" data-phone="${safePhone}">
+                    </div>
+                </td>
+                <td>
+                    <span class="fw-semibold text-gray-800">${safeName}</span>
+                </td>
+                <td>
+                    <span class="text-muted">${c.phone || '-'}</span>
+                </td>
+                <td>
+                    ${c.is_active == 1 || c.is_active === true
+                        ? '<span class="badge badge-light-success">{{ trans("clients.active") ?? "نشط" }}</span>'
+                        : '<span class="badge badge-light-danger">{{ trans("clients.inactive") ?? "غير نشط" }}</span>'}
+                </td>
+                <td class="text-center">
+                    <span class="badge badge-light-${c.unpaid_count > 0 ? 'warning' : 'secondary'}">${c.unpaid_count}</span>
+                </td>
+            </tr>`;
+        }).join('');
+
+        tbody.html(rows);
+
+        // Reset select-all and button
+        $('#selectAllResults').prop('checked', true);
+        $('.filter-result-cb').prop('checked', true);
+        updateAddSelectedBtn();
+    }
+
+    function updateAddSelectedBtn() {
+        const checked = $('.filter-result-cb:checked').length;
+        const btn = $('#addSelectedBtn');
+        const text = $('#addSelectedText');
+
+        if (checked === 0) {
+            btn.prop('disabled', true);
+            text.text('{{ trans("clients.whatsapp_add_selected") ?? "إضافة المحددين" }}');
+        } else {
+            btn.prop('disabled', false);
+            text.text('{{ trans("clients.whatsapp_add_selected") ?? "إضافة المحددين" }} (' + checked + ')');
+        }
+
+        // Update select-all state
+        const total = $('.filter-result-cb').length;
+        const allChecked = checked === total;
+        $('#selectAllResults').prop('checked', allChecked);
+    }
+
+    // Select-all toggle
+    $('#selectAllResults').on('change', function() {
+        $('.filter-result-cb').prop('checked', $(this).is(':checked'));
+        updateAddSelectedBtn();
+    });
+
+    // Individual checkbox toggle
+    $(document).on('change', '.filter-result-cb', function() {
+        updateAddSelectedBtn();
+    });
+
+    // Add selected clients
+    $('#addSelectedBtn').on('click', function() {
+        const checkedCbs = $('.filter-result-cb:checked');
+        const count = checkedCbs.length;
+
+        checkedCbs.each(function() {
+            const id = parseInt($(this).val());
+            // Look up client data from filterResults array (reliable, no HTML attr issues)
+            const client = filterResults.find(c => c.id === id);
+            if (client) {
+                addClient(id, client.name, client.phone || '');
+            }
+        });
+
+        $('#filterResultsModal').modal('hide');
+
+        // Show toast after modal fully hides
+        setTimeout(function() {
+            Swal.fire({
+                icon: 'success',
+                text: count + ' {{ trans("clients.whatsapp_filter_added") ?? "تمت الإضافة" }}',
+                timer: 1500,
+                showConfirmButton: false
+            });
+        }, 300);
+    });
+
+    // Back to filters
+    $('#backToFiltersBtn').on('click', function() {
+        $('#filterResultsModal').one('hidden.bs.modal', function() {
+            $('#filterModal').modal('show');
+        }).modal('hide');
+    });
+
+    // Clean up when results modal is hidden
+    $('#filterResultsModal').on('hidden.bs.modal', function() {
+        // Reset select-all for next use
+        $('#selectAllResults').prop('checked', false);
+    });
 
     // ── Submit Send ──
     $('#broadcastForm').on('submit', function(e) {
