@@ -178,30 +178,57 @@ class WhatsAppControlCenterController extends Controller
             $query = DB::table('tbl_clients')->whereNull('deleted_at')
                 ->whereNotNull('phone')->where('phone', '!=', '');
 
-            if ($request->filled('unpaid')) {
-                $unpaidCount = (int) $request->unpaid;
-                $query->whereRaw('(SELECT COUNT(*) FROM tbl_invoices WHERE tbl_invoices.client_id = tbl_clients.id AND tbl_invoices.paid = 0) >= ?', [$unpaidCount]);
-            }
-
-            if ($request->filled('address')) {
-                $addr = $request->address;
-                $query->where(function ($q) use ($addr) {
-                    $q->where('address1', 'like', "%{$addr}%")->orWhere('address2', 'like', "%{$addr}%");
+            // Search query (name, phone, or ID)
+            if ($request->filled('q')) {
+                $q = $request->q;
+                $query->where(function ($qry) use ($q) {
+                    $qry->where('name', 'like', "%{$q}%")
+                      ->orWhere('phone', 'like', "%{$q}%")
+                      ->orWhere('id', 'like', "%{$q}%");
                 });
             }
 
+            // Client type filter
+            if ($request->filled('client_type')) {
+                $query->where('client_type', $request->client_type);
+            }
+
+            // Status filter
+            if ($request->filled('status')) {
+                $query->where('is_active', $request->status);
+            }
+
+            // Unpaid bills filter
+            if ($request->filled('unpaid')) {
+                $unpaidCount = (int) $request->unpaid;
+                $query->whereRaw('(SELECT COUNT(*) FROM tbl_invoices WHERE tbl_invoices.client_id = tbl_clients.id AND tbl_invoices.status IN ("unpaid","partial")) >= ?', [$unpaidCount]);
+            }
+
+            // Subscription filter
             if ($request->filled('subscription')) {
                 $query->where('subscription_id', $request->subscription);
             }
 
+            // Last payment before
             if ($request->filled('last_payment')) {
                 $query->whereRaw('(SELECT MAX(created_at) FROM tbl_payments WHERE tbl_payments.client_id = tbl_clients.id) <= ?', [$request->last_payment . ' 23:59:59']);
             }
 
-            $clients = $query->select('id', 'name', 'phone')->limit(200)->get();
+            $clients = $query->select(
+                    'id', 'name', 'phone', 'is_active',
+                    DB::raw('(SELECT COUNT(*) FROM tbl_invoices WHERE tbl_invoices.client_id = tbl_clients.id AND tbl_invoices.status IN ("unpaid","partial")) as unpaid_count')
+                )
+                ->limit(200)
+                ->get();
 
             return response()->json([
-                'clients' => $clients->map(fn($c) => ['id' => $c->id, 'name' => $c->name, 'phone' => $c->phone]),
+                'clients' => $clients->map(fn($c) => [
+                    'id' => $c->id,
+                    'name' => $c->name,
+                    'phone' => $c->phone,
+                    'is_active' => $c->is_active,
+                    'unpaid_count' => (int) $c->unpaid_count,
+                ]),
             ]);
         }
 
