@@ -93,7 +93,7 @@
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label fs-7">{{ trans('clients.whatsapp_address') ?? 'العنوان' }}</label>
-                                    <input type="text" class="form-control form-control-sm" name="filter_address" id="filterAddress" 
+                                    <input type="text" class="form-control form-control-sm" name="filter_address" id="filterAddress"
                                            placeholder="{{ trans('clients.whatsapp_address_placeholder') ?? 'ابحث بالعنوان...' }}">
                                 </div>
                                 <div class="col-md-4">

@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\WhatsAppMessageLog;
 use App\Services\WhatsApp\WhatsAppTemplateService;
+use App\Services\WhatsAppMessageBuilder;
+use App\Services\WhatsAppService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -16,34 +18,24 @@ class WhatsAppControlCenterController extends Controller
      */
     public function dashboard()
     {
-        // Get real OpenWA connection status
-        $enabled = DB::table('app_config')->where('key', 'whatsapp_enabled')->value('value');
         $emergencyStop = DB::table('app_config')->where('key', 'whatsapp_emergency_stop')->value('value');
-        $connectionStatus = '1'; // Assume connected
-        try {
-            $openwaUrl = env('OPENWA_API_URL', 'http://192.168.0.75:2785/api');
-            $openwaKey = env('OPENWA_API_KEY', 'tahseel-2026-secret-key');
-            $openwaSession = env('OPENWA_SESSION_ID', '4ba8788e-a913-405d-ae2b-79fed7753241');
-            
-            $ch = curl_init("$openwaUrl/sessions/$openwaSession");
-            curl_setopt_array($ch, [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_HTTPHEADER => ['x-api-key: ' . $openwaKey],
-                CURLOPT_TIMEOUT => 5,
-                CURLOPT_CONNECTTIMEOUT => 3,
-            ]);
-            $response = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-            
-            if ($httpCode === 200) {
-                $sessionData = json_decode($response, true);
-                $connectionStatus = ($sessionData['status'] ?? '') === 'ready' ? '1' : '0';
-            } else {
-                $connectionStatus = '0';
+
+        // Real connection status from OpenWA
+        $connectionStatus = false;
+        $devicePhone = null;
+        $lastConnectedAt = null;
+
+        if ($emergencyStop != '1') {
+            try {
+                $service = app(WhatsAppService::class);
+                $device = $service->status();
+                if ($device && ($device['connected'] ?? false)) {
+                    $connectionStatus = true;
+                    $devicePhone = $device['phone'] ?? null;
+                }
+            } catch (\Exception $e) {
+                // OpenWA not reachable — stay as disconnected
             }
-        } catch (\Exception $e) {
-            $connectionStatus = '0';
         }
 
         // Message counts
@@ -68,34 +60,11 @@ class WhatsAppControlCenterController extends Controller
             ->orderBy('created_at', 'desc')
             ->first();
 
-        // Get session details
-        $sessionPhone = null;
-        $sessionLastActive = null;
-        try {
-            $openwaUrl = env('OPENWA_API_URL', 'http://192.168.0.75:2785/api');
-            $openwaKey = env('OPENWA_API_KEY', 'tahseel-2026-secret-key');
-            $openwaSession = env('OPENWA_SESSION_ID', '4ba8788e-a913-405d-ae2b-79fed7753241');
-            
-            $ch = curl_init("$openwaUrl/sessions/$openwaSession");
-            curl_setopt_array($ch, [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_HTTPHEADER => ['x-api-key: ' . $openwaKey],
-                CURLOPT_TIMEOUT => 5,
-            ]);
-            $response = curl_exec($ch);
-            if (curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200) {
-                $sd = json_decode($response, true);
-                $sessionPhone = $sd['phone'] ?? null;
-                $sessionLastActive = isset($sd['lastActive']) ? date('Y-m-d h:i A', strtotime($sd['lastActive'])) : null;
-            }
-            curl_close($ch);
-        } catch (\Exception $e) {}
-
         return view('dashbord.whatsapp.dashboard', compact(
-            'connectionStatus', 'emergencyStop', 'enabled',
+            'connectionStatus', 'emergencyStop',
             'messagesToday', 'messagesThisMonth', 'failuresToday',
             'totalClients', 'clientsWithPhone', 'lastSent',
-            'sessionPhone', 'sessionLastActive'
+            'devicePhone'
         ));
     }
 
@@ -153,13 +122,13 @@ class WhatsAppControlCenterController extends Controller
 
         $message = str_replace(array_keys($sampleData), array_values($sampleData), $body);
 
-        // Send via existing WhatsApp service
+        // Send via WhatsApp service
         $service = app(WhatsAppService::class);
         $result = $service->send($request->phone, $message);
 
         return response()->json([
-            'success' => isset($result['status']) && $result['status'] === 'success',
-            'message' => isset($result['status']) && $result['status'] === 'success'
+            'success' => isset($result['success']) && $result['success'] === true,
+            'message' => isset($result['success']) && $result['success'] === true
                 ? 'تم الإرسال بنجاح'
                 : 'فشل الإرسال: ' . ($result['error'] ?? 'خطأ غير معروف'),
         ]);
@@ -187,7 +156,7 @@ class WhatsAppControlCenterController extends Controller
                   ->orWhere('phone', 'like', "%{$term}%")
                   ->orWhere('id', 'like', "%{$term}%");
             })
-            ->select('id', 'name', 'phone as phone')
+            ->select('id', 'name', 'phone')
             ->limit(20)
             ->get();
 
@@ -204,41 +173,39 @@ class WhatsAppControlCenterController extends Controller
      */
     public function broadcast(Request $request)
     {
-        // Preview mode — return matching clients without sending
+        // 🔍 Filter preview (no actual sending)
         if ($request->boolean('preview')) {
             $query = DB::table('tbl_clients')->whereNull('deleted_at')
                 ->whereNotNull('phone')->where('phone', '!=', '');
 
             if ($request->filled('unpaid')) {
-                $minUnpaid = (int)$request->unpaid;
-                $query->whereIn('id', function ($q) use ($minUnpaid) {
-                    $q->select('client_id')
-                      ->from('tbl_invoices')
-                      ->whereIn('status', ['unpaid', 'partial'])
-                      ->groupBy('client_id')
-                      ->havingRaw('COUNT(*) >= ?', [$minUnpaid]);
+                $unpaidCount = (int) $request->unpaid;
+                $query->whereRaw('(SELECT COUNT(*) FROM tbl_invoices WHERE tbl_invoices.client_id = tbl_clients.id AND tbl_invoices.paid = 0) >= ?', [$unpaidCount]);
+            }
+
+            if ($request->filled('address')) {
+                $addr = $request->address;
+                $query->where(function ($q) use ($addr) {
+                    $q->where('address1', 'like', "%{$addr}%")->orWhere('address2', 'like', "%{$addr}%");
                 });
             }
-            if ($request->filled("address")) {
-                $query->where("address1", "like", "%" . $request->address . "%");
-            }
+
             if ($request->filled('subscription')) {
                 $query->where('subscription_id', $request->subscription);
             }
+
             if ($request->filled('last_payment')) {
-                $query->whereNotIn('id', function ($q) use ($request) {
-                    $q->select('client_id')
-                      ->from('tbl_invoices')
-                      ->where('status', 'paid')
-                      ->where('paid_date', '>=', $request->last_payment);
-                });
+                $query->whereRaw('(SELECT MAX(created_at) FROM tbl_payments WHERE tbl_payments.client_id = tbl_clients.id) <= ?', [$request->last_payment . ' 23:59:59']);
             }
 
-            $clients = $query->limit(500)->get(['id', 'name', 'phone as phone']);
-            return response()->json(['clients' => $clients]);
+            $clients = $query->select('id', 'name', 'phone')->limit(200)->get();
+
+            return response()->json([
+                'clients' => $clients->map(fn($c) => ['id' => $c->id, 'name' => $c->name, 'phone' => $c->phone]),
+            ]);
         }
 
-        // Actual send mode
+        // 📨 Actual send validation
         $request->validate([
             'template_type' => 'required|string',
             'client_ids' => 'required|array',
@@ -246,6 +213,15 @@ class WhatsAppControlCenterController extends Controller
         ]);
 
         $body = WhatsAppTemplateService::getBody($request->template_type);
+
+        // If template body not found, return error
+        if (empty($body)) {
+            return response()->json([
+                'sent' => 0,
+                'failed' => 0,
+                'errors' => [trans('clients.whatsapp_template_not_found') ?? 'القالب غير موجود'],
+            ]);
+        }
 
         // Override template body if custom message provided
         if ($request->template_type === 'custom' && $request->custom_message) {
@@ -262,14 +238,40 @@ class WhatsAppControlCenterController extends Controller
                 continue;
             }
 
-            $message = str_replace(
-                ['{name}', '{message_body}'],
-                [$client->name, $request->custom_message ?? ''],
-                $body
-            );
+            // Build message with dynamic replacements
+            $message = $body;
+
+            // Always replace {name} and {message_body}
+            $message = str_replace('{name}', $client->name, $message);
+            $message = str_replace('{message_body}', $request->custom_message ?? '', $message);
+
+            // Look up unpaid invoices for template variables
+            $unpaidInvoices = DB::table('tbl_invoices')
+                ->where('client_id', $client->id)
+                ->whereIn('status', ['unpaid', 'partial'])
+                ->get();
+
+            $totalAmount = $unpaidInvoices->sum('remaining_amount');
+
+            if ($unpaidInvoices->isNotEmpty()) {
+                $invoiceDetailsList = WhatsAppMessageBuilder::buildInvoiceDetailsList($unpaidInvoices);
+                $message = WhatsAppMessageBuilder::buildMessage($message, $client->name, $totalAmount, $invoiceDetailsList);
+            }
+
+            // Replace remaining common variables (fallback for clients with no unpaid invoices)
+            $message = str_replace('{total_amount}', number_format($totalAmount, 2), $message);
+            $message = str_replace('{invoice_details_list}', 'لا توجد فواتير مستحقة', $message);
+            $message = str_replace('{due_date}', now()->addDays(3)->format('Y-m-d'), $message);
+            $message = str_replace('{support_phone}', '96170781562', $message);
+            $message = str_replace('{amount}', number_format($totalAmount > 0 ? $totalAmount : 0, 2), $message);
+            $message = str_replace('{month}', now()->format('m'), $message);
+            $message = str_replace('{year}', now()->format('Y'), $message);
+            $message = str_replace('{collector}', auth('admin')->user()->name ?? 'الإدارة', $message);
+            $message = str_replace('{datetime}', now()->format('Y-m-d h:i A'), $message);
+            $message = str_replace('{balance_status}', 'الرصيد الحالي: $' . number_format($totalAmount, 2), $message);
 
             $result = $service->send($client->phone, $message);
-            $status = (isset($result['status']) && $result['status'] === 'success') ? 'sent' : 'failed';
+            $status = (isset($result['success']) && $result['success'] === true) ? 'sent' : 'failed';
 
             WhatsAppMessageLog::create([
                 'client_id' => $client->id,
@@ -361,15 +363,15 @@ class WhatsAppControlCenterController extends Controller
     /**
      * 🔄 Resend a failed message.
      */
-    public function resend($id)
+    public function resendMessage($id)
     {
         $log = WhatsAppMessageLog::findOrFail($id);
         $service = app(WhatsAppService::class);
         $result = $service->send($log->phone, $log->message);
 
         $log->update([
-            'status' => (isset($result['status']) && $result['status'] === 'success') ? 'sent' : 'failed',
-            'error' => isset($result['status']) && $result['status'] === 'success' ? null : ($result['error'] ?? 'Unknown'),
+            'status' => (isset($result['success']) && $result['success'] === true) ? 'sent' : 'failed',
+            'error' => isset($result['success']) && $result['success'] === true ? null : ($result['error'] ?? 'Unknown'),
         ]);
 
         return response()->json([
@@ -460,7 +462,7 @@ class WhatsAppControlCenterController extends Controller
 
         foreach ($failed as $log) {
             $result = $service->send($log->phone, $log->message);
-            if (isset($result['status']) && $result['status'] === 'success') {
+            if (isset($result['success']) && $result['success'] === true) {
                 $log->update(['status' => 'sent', 'error' => null]);
                 $results['resent']++;
             } else {

@@ -42,38 +42,35 @@
     {{-- Stat Cards --}}
     <div class="row g-5 g-xl-8 mb-8">
 
-        <!-- Connection Status -->
+        {{-- Connection Status Card --}}
         <div class="col-xl-3 col-md-6">
             <div class="card card-xl-stretch mb-xl-3">
                 <div class="card-body d-flex align-items-center py-6">
                     <div class="symbol symbol-50px me-5">
-                        <span class="symbol-label bg-{{ $emergencyStop == '1' ? 'danger' : 'success' }}-light">
-                            <i class="bi bi-whatsapp fs-2x text-{{ $emergencyStop == '1' ? 'danger' : 'success' }}"></i>
+                        <span class="symbol-label bg-{{ $emergencyStop == '1' ? 'danger' : ($connectionStatus ? 'success' : 'warning') }}-light">
+                            <i class="bi bi-whatsapp fs-2x text-{{ $emergencyStop == '1' ? 'danger' : ($connectionStatus ? 'success' : 'warning') }}"></i>
                         </span>
                     </div>
-                    <div class="d-flex flex-column flex-grow-1">
+                    <div class="d-flex flex-column flex-grow-1 min-w-0">
                         <h6 class="fw-bold text-gray-800 mb-1">{{ trans('clients.whatsapp_connection') ?? 'حالة الاتصال' }}</h6>
-                        <span class="fw-semibold d-block">
-                            @if($emergencyStop == '1')
-                                <span class="badge badge-danger">🔴 {{ trans('clients.whatsapp_disconnected') ?? 'موقوف' }}</span>
-                            @elseif($connectionStatus == '1')
-                                <span class="badge badge-success">🟢 {{ trans('clients.whatsapp_connected') ?? 'متصل' }}</span>
-                            @else
-                                <span class="badge badge-warning">🟡 {{ trans('clients.whatsapp_paused') ?? 'متوقف' }}</span>
-                            @endif
-                        </span>
+                        @if($emergencyStop == '1')
+                            <span class="badge badge-danger fs-7">{{ trans('clients.whatsapp_disconnected') ?? 'موقوف طوارئ' }}</span>
+                        @elseif($connectionStatus)
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <span class="badge badge-success fs-7">{{ trans('clients.whatsapp_connected') ?? 'متصل' }}</span>
+                                @if($devicePhone)
+                                    <span class="text-gray-700 fs-7 fw-semibold lh-1">{{ $devicePhone }}</span>
+                                @endif
+                            </div>
+                        @else
+                            <span class="badge badge-warning fs-7">{{ trans('clients.whatsapp_disconnected') ?? 'غير متصل' }}</span>
+                        @endif
                     </div>
                 </div>
-                                @if($sessionPhone)
-                                <span class="d-block text-muted fs-7 mt-1">📱 {{ $sessionPhone }}</span>
-                                @endif
-                                @if($sessionLastActive)
-                                <span class="d-block text-muted fs-7">⏱ {{ $sessionLastActive }}</span>
-                                @endif
             </div>
         </div>
 
-        <!-- Messages Today -->
+        {{-- Messages Today --}}
         <div class="col-xl-3 col-md-6">
             <div class="card card-xl-stretch mb-xl-3">
                 <div class="card-body d-flex align-items-center py-6">
@@ -95,7 +92,7 @@
             </div>
         </div>
 
-        <!-- This Month -->
+        {{-- This Month --}}
         <div class="col-xl-3 col-md-6">
             <div class="card card-xl-stretch mb-xl-3">
                 <div class="card-body d-flex align-items-center py-6">
@@ -113,7 +110,7 @@
             </div>
         </div>
 
-        <!-- Client Reachability -->
+        {{-- Client Reachability --}}
         <div class="col-xl-3 col-md-6">
             <div class="card card-xl-stretch mb-xl-3">
                 <div class="card-body d-flex align-items-center py-6">
@@ -228,13 +225,13 @@
                 <div class="card-body">
                     <div class="d-flex flex-wrap gap-6">
                         <div class="d-flex align-items-center">
-                            <span class="badge {{ $connectionStatus == '1' ? 'badge-success' : 'badge-secondary' }} me-2">
-                                {{ $connectionStatus == '1' ? '🟢' : '⚪' }}
+                            <span class="badge {{ $connectionStatus ? 'badge-success' : 'badge-secondary' }} me-2 fs-7">
+                                {{ $connectionStatus ? '🟢' : '⚪' }}
                             </span>
                             <span>{{ trans('clients.whatsapp_auto_reminders') ?? 'التذكيرات التلقائية' }}</span>
                         </div>
                         <div class="d-flex align-items-center">
-                            <span class="badge badge-success me-2">🟢</span>
+                            <span class="badge badge-success me-2 fs-7">🟢</span>
                             <span>{{ trans('clients.whatsapp_auto_receipts') ?? 'إيصالات الدفع التلقائية' }}</span>
                         </div>
                     </div>
