@@ -381,16 +381,30 @@ $(document).ready(function() {
     let currentMonth = {{ now()->month }};
     let currentYear = {{ now()->year }};
 
-    // Load initial calendar on tab shown
-    $('#calendar-tab').on('shown.bs.tab', function() {
-        if ($('#calGrid').is(':empty')) {
+    // ═══ Tab switching handler (Bootstrap fires 'shown.bs.tab' on the nav-link) ═══
+    $(document).on('shown.bs.tab', 'a[data-bs-toggle="tab"]', function(e) {
+        const targetId = $(e.target).attr('href');
+
+        if (targetId === '#calendar-tab' && $('#calGrid').is(':empty')) {
             loadCalendar(currentMonth, currentYear);
+        }
+        if (targetId === '#clients-tab' && $('#clientsBody').is(':empty')) {
+            loadClients(1);
+        }
+        if (targetId === '#tasks-tab') {
+            loadTasks();
         }
     });
 
-    // If calendar tab is already active (direct load), render immediately
-    if ($('#calendar-tab').hasClass('active') || !$('#rules-tab').hasClass('active')) {
+    // If a tab is already active on page load, load its content
+    if ($('#calendar-tab').hasClass('active')) {
         loadCalendar(currentMonth, currentYear);
+    }
+    if ($('#clients-tab').hasClass('active')) {
+        loadClients(1);
+    }
+    if ($('#tasks-tab').hasClass('active')) {
+        loadTasks();
     }
 
     // --- Calendar Navigation ---
@@ -702,15 +716,7 @@ $(document).ready(function() {
     $('#filterClientType, #filterStatus, #filterMinUnpaid').on('change', function() { loadClients(1); });
     $('#filterSearch').on('keypress', function(e) { if (e.which === 13) loadClients(1); });
 
-    // --- Initial load on tab shown ---
-    $('#clients-tab').on('shown.bs.tab', function() {
-        if ($('#clientsBody').is(':empty')) {
-            loadClients(1);
-        }
-    });
-    if ($('#clients-tab').hasClass('active')) {
-        loadClients(1);
-    }
+
 
     // --- Select All ---
     $('#selectAllClients, #selectAllClientsBottom').on('change', function() {
@@ -973,10 +979,7 @@ $(document).ready(function() {
         });
     }
 
-    // --- Load tasks on tab shown ---
-    $('#tasks-tab').on('shown.bs.tab', function() {
-        loadTasks();
-    });
+
 
     // --- Toggle Task ---
     $(document).on('click', '.toggle-task', function() {
