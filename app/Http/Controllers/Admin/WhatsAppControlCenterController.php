@@ -746,7 +746,8 @@ class WhatsAppControlCenterController extends Controller
 
         $clientType = $request->input('client_type', 'all');
 
-        $query = DB::table('tbl_invoices as i')
+        // Step 1: Find clients who have unpaid/partial invoices DUE on this date
+        $triggerQuery = DB::table('tbl_invoices as i')
             ->join('tbl_clients as c', 'c.id', '=', 'i.client_id')
             ->whereDate('i.due_date', $date)
             ->whereIn('i.status', ['unpaid', 'partial'])
@@ -756,40 +757,43 @@ class WhatsAppControlCenterController extends Controller
             ->where('c.phone', '!=', '');
 
         if ($clientType !== 'all') {
-            $query->where('c.client_type', $clientType);
+            $triggerQuery->where('c.client_type', $clientType);
         }
 
-        $clients = $query->select(
-                'c.id',
-                'c.name',
-                'c.phone',
-                'c.client_type',
-                DB::raw("COUNT(i.id) as invoice_count"),
-                DB::raw("SUM(i.remaining_amount) as total_amount")
-            )
-            ->groupBy('c.id', 'c.name', 'c.phone', 'c.client_type')
-            ->orderBy('c.name')
+        $clientIds = $triggerQuery->distinct()->pluck('c.id');
+
+        if ($clientIds->isEmpty()) {
+            return response()->json([
+                'date' => $date,
+                'total_clients' => 0,
+                'clients' => [],
+            ]);
+        }
+
+        // Step 2: Get ALL unpaid/partial invoices for those clients (all dates)
+        $clients = DB::table('tbl_clients')
+            ->whereIn('id', $clientIds)
+            ->select('id', 'name', 'phone', 'client_type')
+            ->orderBy('name')
             ->get();
 
-        $clientIds = $clients->pluck('id');
-
-        $invoices = DB::table('tbl_invoices')
+        $allInvoices = DB::table('tbl_invoices')
             ->whereIn('client_id', $clientIds)
-            ->whereDate('due_date', $date)
             ->whereIn('status', ['unpaid', 'partial'])
             ->whereNull('deleted_at')
-            ->select('id', 'client_id', 'amount', 'remaining_amount', 'due_date', 'invoice_type', 'notes')
+            ->orderBy('due_date')
             ->get()
             ->groupBy('client_id');
 
-        $result = $clients->map(function($client) use ($invoices) {
-            $clientInvoices = $invoices->get($client->id, collect());
+        $result = $clients->map(function($client) use ($allInvoices) {
+            $clientInvoices = $allInvoices->get($client->id, collect());
             return [
                 'id' => $client->id,
                 'name' => $client->name,
                 'phone' => $client->phone,
-                'invoice_count' => (int) $client->invoice_count,
-                'total_amount' => (float) $client->total_amount,
+                'client_type' => $client->client_type,
+                'invoice_count' => $clientInvoices->count(),
+                'total_amount' => (float) $clientInvoices->sum('remaining_amount'),
                 'invoices' => $clientInvoices->map(fn($inv) => [
                     'id' => $inv->id,
                     'amount' => (float) $inv->amount,
