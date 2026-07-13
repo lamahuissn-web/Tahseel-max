@@ -20,7 +20,6 @@ class WhatsAppControlCenterController extends Controller
     {
         $emergencyStop = DB::table('app_config')->where('key', 'whatsapp_emergency_stop')->value('value');
 
-        // Real connection status from OpenWA
         $connectionStatus = false;
         $devicePhone = null;
         $lastConnectedAt = null;
@@ -38,7 +37,6 @@ class WhatsAppControlCenterController extends Controller
             }
         }
 
-        // Message counts
         $messagesToday = WhatsAppMessageLog::whereDate('created_at', today())->count();
         $messagesThisMonth = WhatsAppMessageLog::whereMonth('created_at', now()->month)
             ->whereYear('created_at', now()->year)
@@ -47,7 +45,6 @@ class WhatsAppControlCenterController extends Controller
             ->where('status', 'failed')
             ->count();
 
-        // Clients with WhatsApp numbers
         $totalClients = DB::table('tbl_clients')->whereNull('deleted_at')->count();
         $clientsWithPhone = DB::table('tbl_clients')
             ->whereNull('deleted_at')
@@ -55,7 +52,6 @@ class WhatsAppControlCenterController extends Controller
             ->where('phone', '!=', '')
             ->count();
 
-        // Last successful send
         $lastSent = WhatsAppMessageLog::where('status', 'sent')
             ->orderBy('created_at', 'desc')
             ->first();
@@ -104,7 +100,6 @@ class WhatsAppControlCenterController extends Controller
 
         $body = WhatsAppTemplateService::getBody($request->type);
 
-        // Replace placeholders with sample data
         $sampleData = [
             '{name}' => 'زبون تجريبي',
             '{total_amount}' => '50.00',
@@ -122,7 +117,6 @@ class WhatsAppControlCenterController extends Controller
 
         $message = str_replace(array_keys($sampleData), array_values($sampleData), $body);
 
-        // Send via WhatsApp service
         $service = app(WhatsAppService::class);
         $result = $service->send($request->phone, $message);
 
@@ -144,7 +138,7 @@ class WhatsAppControlCenterController extends Controller
     }
 
     /**
-     * 🎯 Search clients for manual selection (Select2/typeahead).
+     * 🎯 Search clients for manual selection.
      */
     public function searchClients(Request $request)
     {
@@ -173,12 +167,10 @@ class WhatsAppControlCenterController extends Controller
      */
     public function broadcast(Request $request)
     {
-        // 🔍 Filter preview (no actual sending)
         if ($request->boolean('preview')) {
             $query = DB::table('tbl_clients')->whereNull('deleted_at')
                 ->whereNotNull('phone')->where('phone', '!=', '');
 
-            // Search query (name, phone, or ID)
             if ($request->filled('q')) {
                 $q = $request->q;
                 $query->where(function ($qry) use ($q) {
@@ -188,28 +180,23 @@ class WhatsAppControlCenterController extends Controller
                 });
             }
 
-            // Client type filter
             if ($request->filled('client_type')) {
                 $query->where('client_type', $request->client_type);
             }
 
-            // Status filter
             if ($request->filled('status')) {
                 $query->where('is_active', $request->status);
             }
 
-            // Unpaid bills filter
             if ($request->filled('unpaid')) {
                 $unpaidCount = (int) $request->unpaid;
                 $query->whereRaw('(SELECT COUNT(*) FROM tbl_invoices WHERE tbl_invoices.client_id = tbl_clients.id AND tbl_invoices.status IN ("unpaid","partial")) >= ?', [$unpaidCount]);
             }
 
-            // Subscription filter
             if ($request->filled('subscription')) {
                 $query->where('subscription_id', $request->subscription);
             }
 
-            // Last payment before
             if ($request->filled('last_payment')) {
                 $query->whereRaw('(SELECT MAX(created_at) FROM tbl_payments WHERE tbl_payments.client_id = tbl_clients.id) <= ?', [$request->last_payment . ' 23:59:59']);
             }
@@ -232,7 +219,6 @@ class WhatsAppControlCenterController extends Controller
             ]);
         }
 
-        // 📨 Actual send validation
         $request->validate([
             'template_type' => 'required|string',
             'client_ids' => 'required|array',
@@ -241,7 +227,6 @@ class WhatsAppControlCenterController extends Controller
 
         $body = WhatsAppTemplateService::getBody($request->template_type);
 
-        // If template body not found, return error
         if (empty($body)) {
             return response()->json([
                 'sent' => 0,
@@ -250,7 +235,6 @@ class WhatsAppControlCenterController extends Controller
             ]);
         }
 
-        // Override template body if custom message provided
         if ($request->template_type === 'custom' && $request->custom_message) {
             $body = $request->custom_message;
         }
@@ -265,14 +249,10 @@ class WhatsAppControlCenterController extends Controller
                 continue;
             }
 
-            // Build message with dynamic replacements
             $message = $body;
-
-            // Always replace {name} and {message_body}
             $message = str_replace('{name}', $client->name, $message);
             $message = str_replace('{message_body}', $request->custom_message ?? '', $message);
 
-            // Look up unpaid invoices for template variables
             $unpaidInvoices = DB::table('tbl_invoices')
                 ->where('client_id', $client->id)
                 ->whereIn('status', ['unpaid', 'partial'])
@@ -285,7 +265,6 @@ class WhatsAppControlCenterController extends Controller
                 $message = WhatsAppMessageBuilder::buildMessage($message, $client->name, $totalAmount, $invoiceDetailsList);
             }
 
-            // Replace remaining common variables (fallback for clients with no unpaid invoices)
             $message = str_replace('{total_amount}', number_format($totalAmount, 2), $message);
             $message = str_replace('{invoice_details_list}', 'لا توجد فواتير مستحقة', $message);
             $message = str_replace('{due_date}', now()->addDays(3)->format('Y-m-d'), $message);
@@ -318,7 +297,6 @@ class WhatsAppControlCenterController extends Controller
                 $results['errors'][] = $client->name . ': ' . ($result['error'] ?? 'Unknown');
             }
 
-            // Rate limit: 1s between sends
             usleep(1000000);
         }
 
@@ -340,12 +318,10 @@ class WhatsAppControlCenterController extends Controller
     {
         $query = WhatsAppMessageLog::query();
 
-        // Search
         if ($request->search) {
             $query->search($request->search);
         }
 
-        // Filters
         if ($request->status) {
             $query->where('status', $request->status);
         }
@@ -361,7 +337,6 @@ class WhatsAppControlCenterController extends Controller
 
         $total = $query->count();
 
-        // Pagination
         $perPage = $request->length ?? 25;
         $page = ($request->start ?? 0) / $perPage + 1;
 
@@ -418,8 +393,9 @@ class WhatsAppControlCenterController extends Controller
     {
         $rules = $this->getAutomationRulesConfig();
         $templates = WhatsAppTemplateService::getAll();
+        $subscriptions = \App\Models\Admin\Subscription::all();
 
-        return view('dashbord.whatsapp.automation', compact('rules', 'templates'));
+        return view('dashbord.whatsapp.automation', compact('rules', 'templates', 'subscriptions'));
     }
 
     /**
@@ -466,6 +442,14 @@ class WhatsAppControlCenterController extends Controller
         $rules[$id]['template'] = $request->template;
         $rules[$id]['days_offset'] = (int) ($request->days_offset ?? $rules[$id]['days_offset'] ?? 0);
 
+        // Filter settings (reminder-specific)
+        if ($id === 'whatsapp_remind_before') {
+            $rules[$id]['filter_client_type'] = $request->filter_client_type ?? 'all';
+            $rules[$id]['filter_subscription_id'] = $request->filter_subscription_id ?? null;
+            $rules[$id]['filter_min_unpaid'] = (int) ($request->filter_min_unpaid ?? 0);
+            $rules[$id]['filter_client_status'] = $request->filter_client_status ?? 'all';
+        }
+
         $this->saveAutomationRulesConfig($rules);
 
         // Build day names summary
@@ -477,10 +461,30 @@ class WhatsAppControlCenterController extends Controller
             $daysSummary = implode('، ', array_map(fn($d) => $dayNames[$d] ?? '', $selectedDays));
         }
 
+        // Build filter summary
+        $filtersSummary = '';
+        if ($id === 'whatsapp_remind_before' && !empty($request->filter_client_type) && $request->filter_client_type !== 'all') {
+            $filtersSummary .= ($request->filter_client_type === 'internet' ? 'إنترنت' : 'ساتلايت');
+        }
+        if ($id === 'whatsapp_remind_before') {
+            $parts = [];
+            if ($request->filter_client_type && $request->filter_client_type !== 'all') {
+                $parts[] = $request->filter_client_type === 'internet' ? 'إنترنت' : 'ساتلايت';
+            }
+            if ($request->filter_client_status && $request->filter_client_status !== 'all') {
+                $parts[] = $request->filter_client_status === 'active' ? 'نشط' : 'غير نشط';
+            }
+            if (!empty($request->filter_min_unpaid) && (int)$request->filter_min_unpaid > 0) {
+                $parts[] = '≥ ' . (int)$request->filter_min_unpaid . ' unpaid';
+            }
+            $filtersSummary = !empty($parts) ? implode('، ', $parts) : 'الكل';
+        }
+
         return response()->json([
             'success' => true,
             'rule' => $rules[$id],
             'days_summary' => $daysSummary,
+            'filters_summary' => $filtersSummary,
         ]);
     }
 
@@ -497,7 +501,7 @@ class WhatsAppControlCenterController extends Controller
         }
 
         try {
-            Artisan::call($command);
+            Artisan::call($command, ['--rule' => $id]);
             return response()->json(['success' => true, 'output' => Artisan::output()]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'error' => $e->getMessage()]);
@@ -510,7 +514,6 @@ class WhatsAppControlCenterController extends Controller
 
     /**
      * Get automation rules config from app_config.
-     * Migrates old keys if this is the first call after upgrade.
      */
     private function getAutomationRulesConfig(): array
     {
@@ -518,16 +521,13 @@ class WhatsAppControlCenterController extends Controller
         $stored = DB::table('app_config')->where('key', 'whatsapp_automation_rules')->value('value');
 
         if ($stored) {
-            // Merge stored with defaults (adds new rules if they were added to defaults)
             $storedRules = json_decode($stored, true) ?? [];
             $rules = array_merge($defaults, $storedRules);
 
-            // Ensure each rule has all expected fields from defaults
             foreach ($defaults as $key => $defaultRule) {
                 if (!isset($rules[$key])) {
                     $rules[$key] = $defaultRule;
                 } else {
-                    // Fill missing fields from defaults
                     foreach ($defaultRule as $field => $value) {
                         if (!array_key_exists($field, $rules[$key])) {
                             $rules[$key][$field] = $value;
@@ -539,7 +539,7 @@ class WhatsAppControlCenterController extends Controller
             return $rules;
         }
 
-        // First run after upgrade — migrate old keys
+        // First run — migrate old keys
         $oldEnabled = DB::table('app_config')->where('key', 'whatsapp_auto_enabled')->value('value');
         $oldRemindBefore = DB::table('app_config')->where('key', 'whatsapp_remind_before')->value('value');
 
@@ -550,7 +550,6 @@ class WhatsAppControlCenterController extends Controller
             $defaults['whatsapp_remind_before']['days_offset'] = -1 * abs((int) $oldRemindBefore);
         }
 
-        // Save initial config
         $this->saveAutomationRulesConfig($defaults);
 
         return $defaults;
@@ -561,16 +560,25 @@ class WhatsAppControlCenterController extends Controller
      */
     private function saveAutomationRulesConfig(array $rules): void
     {
-        // Strip labels and commands from stored config (they're defined in code)
         $lean = [];
         foreach ($rules as $key => $rule) {
-            $lean[$key] = [
+            $entry = [
                 'enabled' => $rule['enabled'] ?? false,
                 'time' => $rule['time'] ?? '09:00',
                 'days' => $rule['days'] ?? [0,1,2,3,4,5,6],
                 'template' => $rule['template'] ?? 'reminder',
                 'days_offset' => $rule['days_offset'] ?? 0,
             ];
+
+            // Save filter settings for reminder rule
+            if ($key === 'whatsapp_remind_before') {
+                $entry['filter_client_type'] = $rule['filter_client_type'] ?? 'all';
+                $entry['filter_subscription_id'] = $rule['filter_subscription_id'] ?? null;
+                $entry['filter_min_unpaid'] = (int) ($rule['filter_min_unpaid'] ?? 0);
+                $entry['filter_client_status'] = $rule['filter_client_status'] ?? 'all';
+            }
+
+            $lean[$key] = $entry;
         }
 
         DB::table('app_config')->updateOrInsert(
@@ -580,7 +588,7 @@ class WhatsAppControlCenterController extends Controller
     }
 
     /**
-     * Default automation rules definitions.
+     * Default automation rules definitions — only cron-based rules.
      */
     private function getDefaultAutomationRules(): array
     {
@@ -599,36 +607,12 @@ class WhatsAppControlCenterController extends Controller
                 'days_offset' => -3,
                 'days_offset_label' => 'قبل القطع بـ',
                 'days_offset_unit' => 'أيام',
-            ],
-            'whatsapp_receipt' => [
-                'id' => 'whatsapp_receipt',
-                'label' => 'إيصال الدفع',
-                'label_en' => 'Payment Receipt',
-                'command' => 'whatsapp:receipt',
-                'icon' => 'bi bi-receipt',
-                'color' => 'success',
-                'enabled' => false,
-                'time' => '12:00',
-                'days' => [0,1,2,3,4,5,6],
-                'template' => 'receipt',
-                'days_offset' => 0,
-                'days_offset_label' => 'بعد الدفع بـ',
-                'days_offset_unit' => 'أيام',
-            ],
-            'whatsapp_disconnection' => [
-                'id' => 'whatsapp_disconnection',
-                'label' => 'إشعار القطع',
-                'label_en' => 'Disconnection Notice',
-                'command' => 'whatsapp:disconnection',
-                'icon' => 'bi bi-plug',
-                'color' => 'danger',
-                'enabled' => false,
-                'time' => '08:00',
-                'days' => [0,1,2,3,4,5,6],
-                'template' => 'disconnection',
-                'days_offset' => -1,
-                'days_offset_label' => 'قبل القطع بـ',
-                'days_offset_unit' => 'أيام',
+                // Filter settings
+                'filter_client_type' => 'all',       // 'all', 'internet', 'satellite'
+                'filter_subscription_id' => null,    // null = all subscriptions
+                'filter_min_unpaid' => 0,            // minimum unpaid invoices
+                'filter_client_status' => 'all',     // 'all', 'active', 'inactive'
+                'filter_summary' => 'الكل',
             ],
             'whatsapp_custom' => [
                 'id' => 'whatsapp_custom',

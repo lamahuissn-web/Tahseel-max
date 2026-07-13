@@ -67,13 +67,18 @@ class WhatsAppRemindersCommand extends Command
         }
 
         // ── Legacy settings (still read from old keys as fallback) ──
-        $clientType = DB::table('app_config')->where('key', 'whatsapp_auto_client_type')->value('value') ?? 'all';
+        // Client filter from rule config (overrides legacy key)
+        $clientType = $rulesConfig['filter_client_type'] ?? DB::table('app_config')->where('key', 'whatsapp_auto_client_type')->value('value') ?? 'all';
         $minAmount = (float) (DB::table('app_config')->where('key', 'whatsapp_auto_min_amount')->value('value') ?? 0);
         $autoStatus = DB::table('app_config')->where('key', 'whatsapp_auto_status')->value('value') ?? 'unpaid,partial';
         $delay = (int) (DB::table('app_config')->where('key', 'whatsapp_auto_delay')->value('value') ?? 10);
         $skipHours = (int) (DB::table('app_config')->where('key', 'whatsapp_auto_skip_hours')->value('value') ?? 24);
 
         $statuses = array_map('trim', explode(',', $autoStatus));
+        
+        // Min unpaid filter from rule config
+        $minUnpaid = (int) ($rulesConfig['filter_min_unpaid'] ?? 0);
+        
         $today = Carbon::today();
         $targetDates = [];
 
@@ -110,12 +115,25 @@ class WhatsAppRemindersCommand extends Command
 
         // ── Build query ──
         $query = Invoice::with(['client'])
+            ->selectRaw('*, (SELECT COUNT(*) FROM tbl_invoices inv2 WHERE inv2.client_id = tbl_invoices.client_id AND inv2.status IN ("unpaid","partial")) as total_unpaid')
             ->whereIn('due_date', $targetDates)
             ->whereIn('status', $statuses)
-            ->whereHas('client', function ($q) use ($clientType) {
+            ->whereHas('client', function ($q) use ($rulesConfig) {
                 $q->whereNotNull('phone')->where('phone', '!=', '');
-                if ($clientType !== 'all') {
-                    $q->where('client_type', $clientType);
+                
+                $fcType = $rulesConfig['filter_client_type'] ?? 'all';
+                if ($fcType !== 'all') {
+                    $q->where('client_type', $fcType);
+                }
+                
+                $fcStatus = $rulesConfig['filter_client_status'] ?? 'all';
+                if ($fcStatus !== 'all') {
+                    $q->where('is_active', $fcStatus === 'active' ? 1 : 0);
+                }
+                
+                $fcSub = $rulesConfig['filter_subscription_id'] ?? null;
+                if ($fcSub) {
+                    $q->where('subscription_id', $fcSub);
                 }
             })
             ->orderBy('due_date')
@@ -135,6 +153,14 @@ class WhatsAppRemindersCommand extends Command
             if (!$client || !$client->phone) continue;
 
             $totalAmount = $clientInvoices->sum('remaining_amount');
+
+            // Min unpaid filter from rule config
+            $clientTotalUnpaid = $clientInvoices->first()->total_unpaid ?? $clientInvoices->count();
+            if ($minUnpaid > 0 && $clientTotalUnpaid < $minUnpaid) {
+                $this->info("Skipped {$client->name}: only {$clientTotalUnpaid} unpaid (min {$minUnpaid})");
+                continue;
+            }
+
             if ($minAmount > 0 && $totalAmount < $minAmount) {
                 $this->info("Skipped {$client->name}: total \${$totalAmount} below minimum \${$minAmount}");
                 continue;
@@ -259,6 +285,11 @@ class WhatsAppRemindersCommand extends Command
             'days' => $rule['days'] ?? [0, 1, 2, 3, 4, 5, 6],
             'template' => $rule['template'] ?? 'reminder',
             'days_offset' => (int) ($rule['days_offset'] ?? -3),
+            // Filter settings
+            'filter_client_type' => $rule['filter_client_type'] ?? 'all',
+            'filter_subscription_id' => $rule['filter_subscription_id'] ?? null,
+            'filter_min_unpaid' => (int) ($rule['filter_min_unpaid'] ?? 0),
+            'filter_client_status' => $rule['filter_client_status'] ?? 'all',
         ];
     }
 

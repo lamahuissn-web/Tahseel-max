@@ -59,6 +59,25 @@
         } else {
             $offsetLabel = 'فوري';
         }
+
+        // Build filter summary
+        $filterParts = [];
+        if ($ruleId === 'whatsapp_remind_before') {
+            $fcType = $rule['filter_client_type'] ?? 'all';
+            $fcStatus = $rule['filter_client_status'] ?? 'all';
+            $fmUnpaid = (int) ($rule['filter_min_unpaid'] ?? 0);
+
+            if ($fcType !== 'all') {
+                $filterParts[] = $fcType === 'internet' ? 'إنترنت' : 'ساتلايت';
+            }
+            if ($fcStatus !== 'all') {
+                $filterParts[] = $fcStatus === 'active' ? 'نشط' : 'غير نشط';
+            }
+            if ($fmUnpaid > 0) {
+                $filterParts[] = '≥ ' . $fmUnpaid . ' unpaid';
+            }
+        }
+        $filtersSummary = !empty($filterParts) ? implode('، ', $filterParts) : 'الكل';
         @endphp
 
         <div class="card" id="rule-card-{{ $ruleId }}">
@@ -128,6 +147,19 @@
                         </div>
                     </div>
                 </div>
+                @if($ruleId === 'whatsapp_remind_before')
+                <div class="row g-4 mt-2">
+                    <div class="col-12">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-funnel text-muted me-2 fs-5"></i>
+                            <div>
+                                <div class="text-muted fs-8">{{ trans('clients.whatsapp_filters') ?? 'فلترة الزبائن' }}</div>
+                                <div class="fw-semibold" id="summary-filters-{{ $ruleId }}">{{ $filtersSummary }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                @endif
             </div>
 
             {{-- Inline Edit Form (hidden by default) --}}
@@ -168,6 +200,48 @@
                                    title="{{ trans('clients.whatsapp_offset_help') ?? 'قبل (-) أو بعد (+) الأيام' }}">
                         </div>
                     </div>
+
+                    @if($ruleId === 'whatsapp_remind_before')
+                    {{-- ── Advanced Filters for Reminder Rule ── --}}
+                    <div class="separator separator-dashed my-4"></div>
+                    <div class="fw-bold fs-7 mb-3">
+                        <i class="bi bi-funnel me-1"></i>
+                        {{ trans('clients.whatsapp_client_filters') ?? 'فلترة الزبائن المراد تذكيرهم' }}
+                    </div>
+                    <div class="row g-4">
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold fs-7">{{ trans('clients.client_type') ?? 'نوع العميل' }}</label>
+                            <select class="form-select form-select-sm" name="filter_client_type">
+                                <option value="all" {{ ($rule['filter_client_type'] ?? 'all') == 'all' ? 'selected' : '' }}>{{ trans('clients.all') ?? 'الكل' }}</option>
+                                <option value="internet" {{ ($rule['filter_client_type'] ?? 'all') == 'internet' ? 'selected' : '' }}>{{ trans('clients.whatsapp_internet') ?? 'إنترنت' }}</option>
+                                <option value="satellite" {{ ($rule['filter_client_type'] ?? 'all') == 'satellite' ? 'selected' : '' }}>{{ trans('clients.whatsapp_satellite') ?? 'ساتلايت' }}</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold fs-7">{{ trans('clients.whatsapp_subscription') ?? 'الاشتراك' }}</label>
+                            <select class="form-select form-select-sm" name="filter_subscription_id">
+                                <option value="">{{ trans('clients.all') ?? 'الكل' }}</option>
+                                @foreach($subscriptions as $sub)
+                                <option value="{{ $sub->id }}" {{ ($rule['filter_subscription_id'] ?? '') == $sub->id ? 'selected' : '' }}>{{ $sub->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold fs-7">{{ trans('clients.whatsapp_min_unpaid') ?? 'حد أدنى unpaid' }}</label>
+                            <input type="number" class="form-control form-control-sm" name="filter_min_unpaid"
+                                   value="{{ $rule['filter_min_unpaid'] ?? 0 }}" min="0" max="50">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold fs-7">{{ trans('clients.status') ?? 'الحالة' }}</label>
+                            <select class="form-select form-select-sm" name="filter_client_status">
+                                <option value="all" {{ ($rule['filter_client_status'] ?? 'all') == 'all' ? 'selected' : '' }}>{{ trans('clients.all') ?? 'الكل' }}</option>
+                                <option value="active" {{ ($rule['filter_client_status'] ?? 'all') == 'active' ? 'selected' : '' }}>{{ trans('clients.active') ?? 'نشط' }}</option>
+                                <option value="inactive" {{ ($rule['filter_client_status'] ?? 'all') == 'inactive' ? 'selected' : '' }}>{{ trans('clients.inactive') ?? 'غير نشط' }}</option>
+                            </select>
+                        </div>
+                    </div>
+                    @endif
+
                     <div class="d-flex justify-content-end gap-2 mt-4">
                         <button type="button" class="btn btn-light cancel-edit-btn" data-id="{{ $ruleId }}">
                             <i class="bi bi-x-lg"></i> {{ trans('clients.whatsapp_cancel') ?? 'إلغاء' }}
@@ -194,7 +268,6 @@
 @section('js')
 <script>
 $(document).ready(function() {
-    // ── Track which card is in edit mode ──
     let currentEditId = null;
 
     // ── Toggle rule on/off ──
@@ -210,15 +283,13 @@ $(document).ready(function() {
             if (res.enabled) {
                 badge.removeClass('badge-light-secondary').addClass('badge-light-success')
                     .text('🟢 {{ trans("clients.active") ?? "مفعل" }}');
-                btn.removeClass('btn-light-{{ $color }}').addClass('btn-light-{{ $color }}')
+                btn.removeClass('btn-light-secondary').addClass('btn-light-success')
                     .html('<i class="bi bi-pause-circle"></i> {{ trans("clients.whatsapp_disable") ?? "تعطيل" }}');
-                // Update toggle button color dynamically
-                btn.attr('class', btn.attr('class').replace(/btn-light-\w+/g, 'btn-light-success'));
             } else {
                 badge.removeClass('badge-light-success').addClass('badge-light-secondary')
                     .text('⚪ {{ trans("clients.inactive") ?? "معطل" }}');
-                btn.attr('class', btn.attr('class').replace(/btn-light-\w+/g, 'btn-light-secondary'));
-                btn.html('<i class="bi bi-play-circle"></i> {{ trans("clients.whatsapp_enable") ?? "تفعيل" }}');
+                btn.removeClass('btn-light-success').addClass('btn-light-secondary')
+                    .html('<i class="bi bi-play-circle"></i> {{ trans("clients.whatsapp_enable") ?? "تفعيل" }}');
             }
         }).fail(function() {
             Swal.fire({ icon: 'error', text: '{{ trans("clients.whatsapp_test_error") ?? "حدث خطأ" }}' });
@@ -227,13 +298,12 @@ $(document).ready(function() {
         });
     });
 
-    // ── Toggle edit mode ──
+    // ── Edit / Cancel toggle ──
     $(document).on('click', '.edit-rule-btn', function() {
         const id = $(this).data('id');
         toggleEdit(id);
     });
 
-    // ── Cancel edit ──
     $(document).on('click', '.cancel-edit-btn', function() {
         const id = $(this).closest('.rule-edit-form').data('id');
         toggleEdit(id);
@@ -244,7 +314,6 @@ $(document).ready(function() {
         const summary = $('#summary-' + id);
         const editBtn = $('.edit-rule-btn[data-id="' + id + '"]');
 
-        // If clicking the same card that's open, close it
         if (currentEditId === id) {
             editForm.addClass('d-none');
             summary.removeClass('d-none');
@@ -253,7 +322,6 @@ $(document).ready(function() {
             return;
         }
 
-        // Close any other open card first
         if (currentEditId !== null) {
             const prev = $('#edit-form-' + currentEditId);
             const prevSummary = $('#summary-' + currentEditId);
@@ -263,7 +331,6 @@ $(document).ready(function() {
             prevBtn.html('<i class="bi bi-pencil"></i> {{ trans("clients.whatsapp_edit") ?? "تعديل" }}');
         }
 
-        // Open this card's edit form
         editForm.removeClass('d-none');
         summary.addClass('d-none');
         editBtn.html('<i class="bi bi-x-lg"></i> {{ trans("clients.whatsapp_cancel_edit") ?? "إلغاء" }}');
@@ -279,22 +346,18 @@ $(document).ready(function() {
         submitBtn.prop('disabled', true).html('<i class="bi bi-arrow-repeat spinner"></i>');
 
         const formData = form.serializeArray();
-        // Ensure days[] array is sent properly
         const days = [];
         form.find('.day-cb:checked').each(function() {
             days.push($(this).val());
         });
-        formData.push({ name: 'days', value: days });
 
-        // Send as regular POST with _token
         const postData = {};
         formData.forEach(function(item) {
-            if (item.name === 'days' && Array.isArray(item.value)) {
-                postData[item.name] = item.value;
-            } else if (item.name !== 'days[]') {
+            if (item.name !== 'days[]') {
                 postData[item.name] = item.value;
             }
         });
+        postData.days = days;
         postData._token = '{{ csrf_token() }}';
 
         $.ajax({
@@ -304,7 +367,6 @@ $(document).ready(function() {
             traditional: true
         }).done(function(res) {
             if (res.success) {
-                // Update summary fields
                 $('#summary-time-' + id).text(res.rule.time);
                 $('#summary-days-' + id).text(res.days_summary);
                 $('#summary-template-' + id).text(
@@ -321,7 +383,11 @@ $(document).ready(function() {
                 }
                 $('#summary-offset-' + id).text(offsetText);
 
-                // Close edit mode
+                // Update filter summary if present
+                if ($('#summary-filters-' + id).length) {
+                    $('#summary-filters-' + id).text(res.filters_summary || '{{ trans("clients.all") ?? "الكل" }}');
+                }
+
                 toggleEdit(id);
 
                 Swal.fire({
