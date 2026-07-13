@@ -407,62 +407,250 @@ class WhatsAppControlCenterController extends Controller
         ]);
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    //  🤖 AUTOMATION RULES
+    // ═══════════════════════════════════════════════════════════════
+
     /**
-     * 🤖 Automation — List and manage rules. (P2)
+     * 🤖 Automation — List and manage rules.
      */
     public function automation()
     {
-        // Read automation rules from app_config
-        $rules = [];
+        $rules = $this->getAutomationRulesConfig();
+        $templates = WhatsAppTemplateService::getAll();
 
-        $ruleNames = [
-            'whatsapp_remind_before' => [
-                'label' => 'تذكير قبل القطع',
-                'label_en' => 'Reminder Before Disconnection',
-                'command' => 'whatsapp:reminders',
-            ],
-        ];
-
-        foreach ($ruleNames as $key => $config) {
-            $value = DB::table('app_config')->where('key', $key)->value('value');
-            $enabled = DB::table('app_config')->where('key', 'whatsapp_auto_enabled')->value('value');
-            $rules[] = [
-                'id' => $key,
-                'label' => $config['label'],
-                'label_en' => $config['label_en'],
-                'command' => $config['command'],
-                'enabled' => $enabled == '1',
-                'value' => $value,
-            ];
-        }
-
-        return view('dashbord.whatsapp.automation', compact('rules'));
+        return view('dashbord.whatsapp.automation', compact('rules', 'templates'));
     }
 
     /**
-     * 🔄 Toggle automation rule on/off. (P2)
+     * 🔄 Toggle a single automation rule on/off.
      */
     public function toggleAutomationRule($id)
     {
-        $current = DB::table('app_config')->where('key', 'whatsapp_auto_enabled')->value('value');
-        $new = $current == '1' ? '0' : '1';
-        DB::table('app_config')->where('key', 'whatsapp_auto_enabled')->update(['value' => $new]);
+        $rules = $this->getAutomationRulesConfig();
 
-        return response()->json(['success' => true, 'enabled' => $new == '1']);
+        if (!isset($rules[$id])) {
+            return response()->json(['success' => false, 'error' => 'Rule not found'], 404);
+        }
+
+        $rules[$id]['enabled'] = !($rules[$id]['enabled'] ?? false);
+        $this->saveAutomationRulesConfig($rules);
+
+        return response()->json([
+            'success' => true,
+            'enabled' => $rules[$id]['enabled'],
+        ]);
     }
 
     /**
-     * ▶️ Run an automation rule immediately. (P2)
+     * 💾 Save settings for a single automation rule.
+     */
+    public function saveAutomationRule(Request $request, $id)
+    {
+        $rules = $this->getAutomationRulesConfig();
+
+        if (!isset($rules[$id])) {
+            return response()->json(['success' => false, 'error' => 'Rule not found'], 404);
+        }
+
+        $request->validate([
+            'time' => 'required|date_format:H:i',
+            'days' => 'required|array',
+            'days.*' => 'integer|between:0,6',
+            'template' => 'required|string',
+            'days_offset' => 'nullable|integer|min:-30|max:30',
+        ]);
+
+        $rules[$id]['time'] = $request->time;
+        $rules[$id]['days'] = $request->days;
+        $rules[$id]['template'] = $request->template;
+        $rules[$id]['days_offset'] = (int) ($request->days_offset ?? $rules[$id]['days_offset'] ?? 0);
+
+        $this->saveAutomationRulesConfig($rules);
+
+        // Build day names summary
+        $dayNames = ['سبت', 'أحد', 'اثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة'];
+        $selectedDays = array_intersect($request->days, [0,1,2,3,4,5,6]);
+        if (count($selectedDays) === 7) {
+            $daysSummary = 'كل الأيام';
+        } else {
+            $daysSummary = implode('، ', array_map(fn($d) => $dayNames[$d] ?? '', $selectedDays));
+        }
+
+        return response()->json([
+            'success' => true,
+            'rule' => $rules[$id],
+            'days_summary' => $daysSummary,
+        ]);
+    }
+
+    /**
+     * ▶️ Run an automation rule immediately.
      */
     public function runAutomationRule($id)
     {
+        $rules = $this->getAutomationRulesConfig();
+        $command = $rules[$id]['command'] ?? null;
+
+        if (!$command) {
+            return response()->json(['success' => false, 'error' => 'No command configured for this rule']);
+        }
+
         try {
-            Artisan::call($id);
+            Artisan::call($command);
             return response()->json(['success' => true, 'output' => Artisan::output()]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'error' => $e->getMessage()]);
         }
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  🛠️ HELPERS
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * Get automation rules config from app_config.
+     * Migrates old keys if this is the first call after upgrade.
+     */
+    private function getAutomationRulesConfig(): array
+    {
+        $defaults = $this->getDefaultAutomationRules();
+        $stored = DB::table('app_config')->where('key', 'whatsapp_automation_rules')->value('value');
+
+        if ($stored) {
+            // Merge stored with defaults (adds new rules if they were added to defaults)
+            $storedRules = json_decode($stored, true) ?? [];
+            $rules = array_merge($defaults, $storedRules);
+
+            // Ensure each rule has all expected fields from defaults
+            foreach ($defaults as $key => $defaultRule) {
+                if (!isset($rules[$key])) {
+                    $rules[$key] = $defaultRule;
+                } else {
+                    // Fill missing fields from defaults
+                    foreach ($defaultRule as $field => $value) {
+                        if (!array_key_exists($field, $rules[$key])) {
+                            $rules[$key][$field] = $value;
+                        }
+                    }
+                }
+            }
+
+            return $rules;
+        }
+
+        // First run after upgrade — migrate old keys
+        $oldEnabled = DB::table('app_config')->where('key', 'whatsapp_auto_enabled')->value('value');
+        $oldRemindBefore = DB::table('app_config')->where('key', 'whatsapp_remind_before')->value('value');
+
+        if ($oldEnabled !== null) {
+            $defaults['whatsapp_remind_before']['enabled'] = ($oldEnabled == '1');
+        }
+        if ($oldRemindBefore !== null) {
+            $defaults['whatsapp_remind_before']['days_offset'] = -1 * abs((int) $oldRemindBefore);
+        }
+
+        // Save initial config
+        $this->saveAutomationRulesConfig($defaults);
+
+        return $defaults;
+    }
+
+    /**
+     * Save automation rules config to app_config.
+     */
+    private function saveAutomationRulesConfig(array $rules): void
+    {
+        // Strip labels and commands from stored config (they're defined in code)
+        $lean = [];
+        foreach ($rules as $key => $rule) {
+            $lean[$key] = [
+                'enabled' => $rule['enabled'] ?? false,
+                'time' => $rule['time'] ?? '09:00',
+                'days' => $rule['days'] ?? [0,1,2,3,4,5,6],
+                'template' => $rule['template'] ?? 'reminder',
+                'days_offset' => $rule['days_offset'] ?? 0,
+            ];
+        }
+
+        DB::table('app_config')->updateOrInsert(
+            ['key' => 'whatsapp_automation_rules'],
+            ['value' => json_encode($lean, JSON_UNESCAPED_UNICODE)]
+        );
+    }
+
+    /**
+     * Default automation rules definitions.
+     */
+    private function getDefaultAutomationRules(): array
+    {
+        return [
+            'whatsapp_remind_before' => [
+                'id' => 'whatsapp_remind_before',
+                'label' => 'تذكير قبل القطع',
+                'label_en' => 'Reminder Before Disconnection',
+                'command' => 'whatsapp:reminders',
+                'icon' => 'bi bi-bell',
+                'color' => 'warning',
+                'enabled' => false,
+                'time' => '09:00',
+                'days' => [0,1,2,3,4,5,6],
+                'template' => 'reminder',
+                'days_offset' => -3,
+                'days_offset_label' => 'قبل القطع بـ',
+                'days_offset_unit' => 'أيام',
+            ],
+            'whatsapp_receipt' => [
+                'id' => 'whatsapp_receipt',
+                'label' => 'إيصال الدفع',
+                'label_en' => 'Payment Receipt',
+                'command' => 'whatsapp:receipt',
+                'icon' => 'bi bi-receipt',
+                'color' => 'success',
+                'enabled' => false,
+                'time' => '12:00',
+                'days' => [0,1,2,3,4,5,6],
+                'template' => 'receipt',
+                'days_offset' => 0,
+                'days_offset_label' => 'بعد الدفع بـ',
+                'days_offset_unit' => 'أيام',
+            ],
+            'whatsapp_disconnection' => [
+                'id' => 'whatsapp_disconnection',
+                'label' => 'إشعار القطع',
+                'label_en' => 'Disconnection Notice',
+                'command' => 'whatsapp:disconnection',
+                'icon' => 'bi bi-plug',
+                'color' => 'danger',
+                'enabled' => false,
+                'time' => '08:00',
+                'days' => [0,1,2,3,4,5,6],
+                'template' => 'disconnection',
+                'days_offset' => -1,
+                'days_offset_label' => 'قبل القطع بـ',
+                'days_offset_unit' => 'أيام',
+            ],
+            'whatsapp_custom' => [
+                'id' => 'whatsapp_custom',
+                'label' => 'رسالة مخصصة',
+                'label_en' => 'Custom Message',
+                'command' => 'whatsapp:custom',
+                'icon' => 'bi bi-envelope',
+                'color' => 'info',
+                'enabled' => false,
+                'time' => '10:00',
+                'days' => [0,1,2,3,4,5,6],
+                'template' => 'custom',
+                'days_offset' => 0,
+                'days_offset_label' => 'كل',
+                'days_offset_unit' => 'أيام',
+            ],
+        ];
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  ⏳ QUEUE
+    // ═══════════════════════════════════════════════════════════════
 
     /**
      * ⏳ Queue — View pending/recent messages. (P2)

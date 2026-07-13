@@ -20,54 +20,173 @@
 
 @section('content')
 <div id="kt_app_content_container" class="app-container container-xxxl">
-    <div class="card">
-        <div class="card-header">
-            <h3 class="card-title">{{ trans('clients.whatsapp_automation_rules') ?? 'قواعد التشغيل الآلي' }}</h3>
-        </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-row-bordered table-align-middle">
-                    <thead>
-                        <tr class="fw-bold fs-6 text-gray-800">
-                            <th>{{ trans('clients.whatsapp_rule') ?? 'القاعدة' }}</th>
-                            <th>{{ trans('clients.whatsapp_command') ?? 'الأمر' }}</th>
-                            <th>{{ trans('clients.status') ?? 'الحالة' }}</th>
-                            <th>{{ trans('clients.whatsapp_actions') ?? 'إجراءات' }}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse($rules as $rule)
-                        <tr>
-                            <td>
-                                <span class="fw-bold">{{ app()->getLocale() == 'ar' ? $rule['label'] : $rule['label_en'] }}</span>
-                            </td>
-                            <td><code>{{ $rule['command'] }}</code></td>
-                            <td>
-                                <span class="badge {{ $rule['enabled'] ? 'badge-success' : 'badge-secondary' }}" id="status-{{ $rule['id'] }}">
-                                    {{ $rule['enabled'] ? '🟢 ' . (trans('clients.active') ?? 'مفعل') : '⚪ ' . (trans('clients.inactive') ?? 'معطل') }}
-                                </span>
-                            </td>
-                            <td>
-                                <button class="btn btn-sm {{ $rule['enabled'] ? 'btn-warning' : 'btn-success' }} toggle-rule"
-                                        data-id="{{ $rule['id'] }}">
-                                    {{ $rule['enabled'] ? (trans('clients.whatsapp_disable') ?? 'تعطيل') : (trans('clients.whatsapp_enable') ?? 'تفعيل') }}
-                                </button>
-                                <button class="btn btn-sm btn-primary run-rule" data-id="{{ $rule['command'] }}">
-                                    <i class="bi bi-play-fill"></i> {{ trans('clients.whatsapp_run_now') ?? 'تشغيل الآن' }}
-                                </button>
-                            </td>
-                        </tr>
-                        @empty
-                        <tr>
-                            <td colspan="4" class="text-center text-muted py-6">
-                                {{ trans('clients.whatsapp_no_rules') ?? 'لا توجد قواعد تشغيل آلي' }}
-                            </td>
-                        </tr>
-                        @endforelse
-                    </tbody>
-                </table>
+    <div class="d-flex flex-column gap-6">
+        @php
+        $dayNames = ['سبت', 'أحد', 'اثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة'];
+        $dayNamesShort = ['س', 'ح', 'ن', 'ث', 'ر', 'خ', 'ج'];
+        $templateLabels = [];
+        foreach ($templates as $type => $tmpl) {
+            $templateLabels[$type] = app()->getLocale() == 'ar' ? ($tmpl['label'] ?? $type) : ($tmpl['label_en'] ?? $type);
+        }
+        @endphp
+
+        @forelse($rules as $rule)
+        @php
+        $ruleId = $rule['id'];
+        $isEnabled = $rule['enabled'] ?? false;
+        $color = $rule['color'] ?? 'primary';
+        $icon = $rule['icon'] ?? 'bi bi-gear';
+        $days = $rule['days'] ?? [];
+        $daysCount = count($days);
+        $daysSummary = '';
+        if ($daysCount === 7) {
+            $daysSummary = 'كل الأيام';
+        } elseif ($daysCount === 0) {
+            $daysSummary = '-';
+        } else {
+            $parts = [];
+            foreach ($days as $d) {
+                $parts[] = $dayNamesShort[$d] ?? $d;
+            }
+            $daysSummary = implode('، ', $parts);
+        }
+        $templateName = $templateLabels[$rule['template']] ?? $rule['template'] ?? '-';
+        $offset = (int) ($rule['days_offset'] ?? 0);
+        if ($offset < 0) {
+            $offsetLabel = ($rule['days_offset_label'] ?? 'قبل') . ' ' . abs($offset) . ' ' . ($rule['days_offset_unit'] ?? 'أيام');
+        } elseif ($offset > 0) {
+            $offsetLabel = ($rule['days_offset_label'] ?? 'بعد') . ' ' . $offset . ' ' . ($rule['days_offset_unit'] ?? 'أيام');
+        } else {
+            $offsetLabel = 'فوري';
+        }
+        @endphp
+
+        <div class="card" id="rule-card-{{ $ruleId }}">
+            <div class="card-header d-flex flex-wrap align-items-center gap-3" style="min-height: 60px;">
+                <div class="d-flex align-items-center gap-3">
+                    <i class="{{ $icon }} fs-2x text-{{ $color }}"></i>
+                    <div>
+                        <span class="card-title fw-bold fs-6 mb-0">
+                            {{ app()->getLocale() == 'ar' ? $rule['label'] : $rule['label_en'] }}
+                        </span>
+                        <span class="badge badge-light-{{ $isEnabled ? 'success' : 'secondary' }} fs-8 ms-2" id="status-badge-{{ $ruleId }}">
+                            {{ $isEnabled ? '🟢 ' . (trans('clients.active') ?? 'مفعل') : '⚪ ' . (trans('clients.inactive') ?? 'معطل') }}
+                        </span>
+                    </div>
+                </div>
+                <div class="ms-auto d-flex gap-2 flex-wrap">
+                    <button class="btn btn-sm btn-light-{{ $color }} toggle-rule-btn" data-id="{{ $ruleId }}">
+                        <i class="bi {{ $isEnabled ? 'bi-pause-circle' : 'bi-play-circle' }}"></i>
+                        {{ $isEnabled ? (trans('clients.whatsapp_disable') ?? 'تعطيل') : (trans('clients.whatsapp_enable') ?? 'تفعيل') }}
+                    </button>
+                    <button class="btn btn-sm btn-primary edit-rule-btn" data-id="{{ $ruleId }}">
+                        <i class="bi bi-pencil"></i> {{ trans('clients.whatsapp_edit') ?? 'تعديل' }}
+                    </button>
+                    <button class="btn btn-sm btn-success run-rule-btn" data-id="{{ $ruleId }}">
+                        <i class="bi bi-play-fill"></i> {{ trans('clients.whatsapp_run_now') ?? 'تشغيل الآن' }}
+                    </button>
+                </div>
+            </div>
+
+            {{-- Summary View --}}
+            <div class="card-body" id="summary-{{ $ruleId }}">
+                <div class="row g-4">
+                    <div class="col-md-3 col-6">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-clock text-muted me-2 fs-5"></i>
+                            <div>
+                                <div class="text-muted fs-8">{{ trans('clients.whatsapp_time') ?? 'وقت التشغيل' }}</div>
+                                <div class="fw-semibold" id="summary-time-{{ $ruleId }}">{{ $rule['time'] ?? '09:00' }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-6">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-calendar-week text-muted me-2 fs-5"></i>
+                            <div>
+                                <div class="text-muted fs-8">{{ trans('clients.whatsapp_days') ?? 'الأيام' }}</div>
+                                <div class="fw-semibold" id="summary-days-{{ $ruleId }}">{{ $daysSummary }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-6">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-file-text text-muted me-2 fs-5"></i>
+                            <div>
+                                <div class="text-muted fs-8">{{ trans('clients.whatsapp_template') ?? 'القالب' }}</div>
+                                <div class="fw-semibold" id="summary-template-{{ $ruleId }}">{{ $templateName }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-6">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-hourglass-split text-muted me-2 fs-5"></i>
+                            <div>
+                                <div class="text-muted fs-8">{{ trans('clients.whatsapp_offset') ?? 'التوقيت' }}</div>
+                                <div class="fw-semibold" id="summary-offset-{{ $ruleId }}">{{ $offsetLabel }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Inline Edit Form (hidden by default) --}}
+            <div class="card-body d-none border-top" id="edit-form-{{ $ruleId }}">
+                <form class="rule-edit-form" data-id="{{ $ruleId }}">
+                    @csrf
+                    <div class="row g-4">
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold fs-7">{{ trans('clients.whatsapp_time') ?? 'وقت التشغيل' }}</label>
+                            <input type="time" class="form-control" name="time" value="{{ $rule['time'] ?? '09:00' }}">
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label fw-bold fs-7">{{ trans('clients.whatsapp_days') ?? 'أيام التشغيل' }}</label>
+                            <div class="d-flex flex-wrap gap-2">
+                                @foreach($dayNames as $i => $dname)
+                                <div class="form-check form-check-sm form-check-custom form-check-solid">
+                                    <input class="form-check-input day-cb" type="checkbox" name="days[]" value="{{ $i }}"
+                                        {{ in_array($i, $days) ? 'checked' : '' }}>
+                                    <label class="form-check-label fs-7">{{ $dname }}</label>
+                                </div>
+                                @endforeach
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold fs-7">{{ trans('clients.whatsapp_template') ?? 'القالب' }}</label>
+                            <select class="form-select form-select-sm" name="template">
+                                @foreach($templates as $type => $tmpl)
+                                <option value="{{ $type }}" {{ $rule['template'] == $type ? 'selected' : '' }}>
+                                    {{ $templateLabels[$type] ?? $type }}
+                                </option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold fs-7">{{ $rule['days_offset_label'] ?? trans('clients.whatsapp_offset') ?? 'الأيام' }}</label>
+                            <input type="number" class="form-control" name="days_offset" value="{{ $offset }}"
+                                   min="-30" max="30"
+                                   title="{{ trans('clients.whatsapp_offset_help') ?? 'قبل (-) أو بعد (+) الأيام' }}">
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                        <button type="button" class="btn btn-light cancel-edit-btn" data-id="{{ $ruleId }}">
+                            <i class="bi bi-x-lg"></i> {{ trans('clients.whatsapp_cancel') ?? 'إلغاء' }}
+                        </button>
+                        <button type="submit" class="btn btn-primary save-rule-btn" data-id="{{ $ruleId }}">
+                            <i class="bi bi-check-lg"></i> {{ trans('clients.whatsapp_save') ?? 'حفظ' }}
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
+        @empty
+        <div class="card">
+            <div class="card-body text-center py-10">
+                <i class="bi bi-gear fs-3x text-muted d-block mb-3"></i>
+                <p class="text-muted">{{ trans('clients.whatsapp_no_rules') ?? 'لا توجد قواعد تشغيل آلي' }}</p>
+            </div>
+        </div>
+        @endforelse
     </div>
 </div>
 @endsection
@@ -75,23 +194,31 @@
 @section('js')
 <script>
 $(document).ready(function() {
-    $('.toggle-rule').on('click', function() {
-        const id = $(this).data('id');
+    // ── Track which card is in edit mode ──
+    let currentEditId = null;
+
+    // ── Toggle rule on/off ──
+    $(document).on('click', '.toggle-rule-btn', function() {
         const btn = $(this);
+        const id = btn.data('id');
         btn.prop('disabled', true).html('<i class="bi bi-arrow-repeat spinner"></i>');
+
         $.post('{{ url("admin/whatsapp/automation") }}/' + id + '/toggle', {
             _token: '{{ csrf_token() }}'
         }).done(function(res) {
+            const badge = $('#status-badge-' + id);
             if (res.enabled) {
-                $('#status-' + id).removeClass('badge-secondary').addClass('badge-success')
+                badge.removeClass('badge-light-secondary').addClass('badge-light-success')
                     .text('🟢 {{ trans("clients.active") ?? "مفعل" }}');
-                btn.removeClass('btn-success').addClass('btn-warning')
-                    .text('{{ trans("clients.whatsapp_disable") ?? "تعطيل" }}');
+                btn.removeClass('btn-light-{{ $color }}').addClass('btn-light-{{ $color }}')
+                    .html('<i class="bi bi-pause-circle"></i> {{ trans("clients.whatsapp_disable") ?? "تعطيل" }}');
+                // Update toggle button color dynamically
+                btn.attr('class', btn.attr('class').replace(/btn-light-\w+/g, 'btn-light-success'));
             } else {
-                $('#status-' + id).removeClass('badge-success').addClass('badge-secondary')
+                badge.removeClass('badge-light-success').addClass('badge-light-secondary')
                     .text('⚪ {{ trans("clients.inactive") ?? "معطل" }}');
-                btn.removeClass('btn-warning').addClass('btn-success')
-                    .text('{{ trans("clients.whatsapp_enable") ?? "تفعيل" }}');
+                btn.attr('class', btn.attr('class').replace(/btn-light-\w+/g, 'btn-light-secondary'));
+                btn.html('<i class="bi bi-play-circle"></i> {{ trans("clients.whatsapp_enable") ?? "تفعيل" }}');
             }
         }).fail(function() {
             Swal.fire({ icon: 'error', text: '{{ trans("clients.whatsapp_test_error") ?? "حدث خطأ" }}' });
@@ -100,15 +227,141 @@ $(document).ready(function() {
         });
     });
 
-    $('.run-rule').on('click', function() {
+    // ── Toggle edit mode ──
+    $(document).on('click', '.edit-rule-btn', function() {
         const id = $(this).data('id');
+        toggleEdit(id);
+    });
+
+    // ── Cancel edit ──
+    $(document).on('click', '.cancel-edit-btn', function() {
+        const id = $(this).closest('.rule-edit-form').data('id');
+        toggleEdit(id);
+    });
+
+    function toggleEdit(id) {
+        const editForm = $('#edit-form-' + id);
+        const summary = $('#summary-' + id);
+        const editBtn = $('.edit-rule-btn[data-id="' + id + '"]');
+
+        // If clicking the same card that's open, close it
+        if (currentEditId === id) {
+            editForm.addClass('d-none');
+            summary.removeClass('d-none');
+            editBtn.html('<i class="bi bi-pencil"></i> {{ trans("clients.whatsapp_edit") ?? "تعديل" }}');
+            currentEditId = null;
+            return;
+        }
+
+        // Close any other open card first
+        if (currentEditId !== null) {
+            const prev = $('#edit-form-' + currentEditId);
+            const prevSummary = $('#summary-' + currentEditId);
+            const prevBtn = $('.edit-rule-btn[data-id="' + currentEditId + '"]');
+            prev.addClass('d-none');
+            prevSummary.removeClass('d-none');
+            prevBtn.html('<i class="bi bi-pencil"></i> {{ trans("clients.whatsapp_edit") ?? "تعديل" }}');
+        }
+
+        // Open this card's edit form
+        editForm.removeClass('d-none');
+        summary.addClass('d-none');
+        editBtn.html('<i class="bi bi-x-lg"></i> {{ trans("clients.whatsapp_cancel_edit") ?? "إلغاء" }}');
+        currentEditId = id;
+    }
+
+    // ── Save rule settings ──
+    $(document).on('submit', '.rule-edit-form', function(e) {
+        e.preventDefault();
+        const form = $(this);
+        const id = form.data('id');
+        const submitBtn = form.find('.save-rule-btn');
+        submitBtn.prop('disabled', true).html('<i class="bi bi-arrow-repeat spinner"></i>');
+
+        const formData = form.serializeArray();
+        // Ensure days[] array is sent properly
+        const days = [];
+        form.find('.day-cb:checked').each(function() {
+            days.push($(this).val());
+        });
+        formData.push({ name: 'days', value: days });
+
+        // Send as regular POST with _token
+        const postData = {};
+        formData.forEach(function(item) {
+            if (item.name === 'days' && Array.isArray(item.value)) {
+                postData[item.name] = item.value;
+            } else if (item.name !== 'days[]') {
+                postData[item.name] = item.value;
+            }
+        });
+        postData._token = '{{ csrf_token() }}';
+
+        $.ajax({
+            url: '{{ url("admin/whatsapp/automation") }}/' + id + '/save',
+            method: 'POST',
+            data: postData,
+            traditional: true
+        }).done(function(res) {
+            if (res.success) {
+                // Update summary fields
+                $('#summary-time-' + id).text(res.rule.time);
+                $('#summary-days-' + id).text(res.days_summary);
+                $('#summary-template-' + id).text(
+                    form.find('select[name="template"] option:selected').text()
+                );
+                const offsetVal = parseInt(form.find('input[name="days_offset"]').val()) || 0;
+                let offsetText = '';
+                if (offsetVal < 0) {
+                    offsetText = '{{ trans("clients.whatsapp_before") ?? "قبل" }} ' + Math.abs(offsetVal) + ' {{ trans("clients.whatsapp_days_unit") ?? "أيام" }}';
+                } else if (offsetVal > 0) {
+                    offsetText = '{{ trans("clients.whatsapp_after") ?? "بعد" }} ' + offsetVal + ' {{ trans("clients.whatsapp_days_unit") ?? "أيام" }}';
+                } else {
+                    offsetText = 'فوري';
+                }
+                $('#summary-offset-' + id).text(offsetText);
+
+                // Close edit mode
+                toggleEdit(id);
+
+                Swal.fire({
+                    icon: 'success',
+                    text: '{{ trans("clients.whatsapp_settings_saved") ?? "تم الحفظ" }}',
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+            }
+        }).fail(function(xhr) {
+            let msg = '{{ trans("clients.whatsapp_test_error") ?? "حدث خطأ" }}';
+            if (xhr.responseJSON && xhr.responseJSON.errors) {
+                const errs = Object.values(xhr.responseJSON.errors).flat();
+                msg = errs.join('<br>');
+            }
+            Swal.fire({ icon: 'error', html: msg });
+        }).always(function() {
+            submitBtn.prop('disabled', false).html('<i class="bi bi-check-lg"></i> {{ trans("clients.whatsapp_save") ?? "حفظ" }}');
+        });
+    });
+
+    // ── Run rule now ──
+    $(document).on('click', '.run-rule-btn', function() {
         const btn = $(this);
+        const id = btn.data('id');
         btn.prop('disabled', true).html('<i class="bi bi-arrow-repeat spinner"></i>');
-        Swal.fire({ icon: 'info', text: '{{ trans("clients.whatsapp_running") ?? "جارٍ التشغيل..." }}', showConfirmButton: false });
+
         $.post('{{ url("admin/whatsapp/automation") }}/' + id + '/run', {
             _token: '{{ csrf_token() }}'
         }).done(function(res) {
-            Swal.fire({ icon: res.success ? 'success' : 'error', text: res.output || res.error });
+            if (res.success) {
+                Swal.fire({
+                    icon: 'success',
+                    text: '{{ trans("clients.whatsapp_rule_executed") ?? "تم تشغيل القاعدة بنجاح" }}',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+            } else {
+                Swal.fire({ icon: 'error', text: res.error || '{{ trans("clients.whatsapp_test_error") ?? "حدث خطأ" }}' });
+            }
         }).fail(function() {
             Swal.fire({ icon: 'error', text: '{{ trans("clients.whatsapp_test_error") ?? "حدث خطأ" }}' });
         }).always(function() {
@@ -117,4 +370,29 @@ $(document).ready(function() {
     });
 });
 </script>
+
+<style>
+.spinner {
+    animation: spin 1s linear infinite;
+}
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+.card {
+    transition: box-shadow 0.15s ease;
+}
+.card:hover {
+    box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.08);
+}
+.form-check-input.day-cb {
+    width: 1.1em;
+    height: 1.1em;
+    cursor: pointer;
+}
+.form-check-label {
+    cursor: pointer;
+    user-select: none;
+}
+</style>
 @endsection
