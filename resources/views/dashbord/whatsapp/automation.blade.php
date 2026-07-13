@@ -352,14 +352,18 @@ $(document).ready(function() {
         const monthNames = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
         const monthName = monthNames[month - 1];
         const dayNames = ['سبت', 'أحد', 'اثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة'];
+        const dayNamesShort = ['سب', 'أح', 'اث', 'ثل', 'أر', 'خم', 'جم'];
+        const isMobile = window.innerWidth < 768;
+        const useShortNames = isMobile;
+        const names = useShortNames ? dayNamesShort : dayNames;
 
         // Update title
         $('#calTitle').text(monthName + ' ' + year);
 
         // Build grid
         let html = '<table class="table table-bordered text-center calendar-grid mb-0"><thead><tr>';
-        dayNames.forEach(function(d) {
-            html += '<th class="text-muted fw-bold py-2">' + d + '</th>';
+        dayNames.forEach(function(d, i) {
+            html += '<th class="text-muted fw-bold py-1 py-md-2 fs-8 fs-md-7">' + names[i] + '</th>';
         });
         html += '</tr></thead><tbody>';
 
@@ -384,12 +388,13 @@ $(document).ready(function() {
                         (isToday ? ' today' : '') +
                         '" data-date="' + dateStr + '"' +
                         (hasBills ? ' data-has-bills="1"' : ' data-has-bills="0"') +
-                        ' style="cursor:' + (hasBills ? 'pointer' : 'default') + '; height:75px; vertical-align:top; padding:6px;">';
+                        ' style="cursor:' + (hasBills ? 'pointer' : 'default') + '; height:' + (isMobile ? '55px' : '75px') + '; vertical-align:top; padding:' + (isMobile ? '3px' : '6px') + ';">';
 
-                    html += '<div class="fw-bold day-number" style="font-size:1rem;">' + dayCount + '</div>';
+                    html += '<div class="fw-bold day-number" style="font-size:' + (isMobile ? '0.85rem' : '1rem') + ';">' + dayCount + '</div>';
                     if (hasBills) {
-                        html += '<div class="small badge badge-success mt-1">' + calMap[dayCount] + ' ' +
-                            "{{ trans('clients.clients') ?? 'زبون' }}" + '</div>';
+                        const countLabel = isMobile ? calMap[dayCount] : calMap[dayCount] + ' ' +
+                            "{{ trans('clients.clients') ?? 'زبون' }}";
+                        html += '<div class="small badge badge-success mt-1" style="font-size:' + (isMobile ? '0.6rem' : '0.7rem') + ';padding:' + (isMobile ? '2px 4px' : '') + ';">' + countLabel + '</div>';
                     } else if (isToday) {
                         html += '<div class="small text-muted" style="font-size:0.7rem;">اليوم</div>';
                     }
@@ -564,6 +569,12 @@ $(document).ready(function() {
 </script>
 
 <style>
+/* Font size helpers */
+.fs-8 { font-size: 0.75rem !important; }
+@media (min-width: 768px) {
+    .fs-md-7 { font-size: 0.85rem !important; }
+}
+
 .calendar-grid th {
     background: #f8f9fa;
     font-size: 0.85rem;
@@ -600,5 +611,177 @@ $(document).ready(function() {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
 }
+
+/* ════════════════════════════════════════════════════
+   📱 RESPONSIVE — Calendar & Modal
+   ════════════════════════════════════════════════════ */
+
+/* --- Calendar Grid --- */
+.calendar-grid {
+    table-layout: fixed;
+    width: 100%;
+}
+.calendar-grid th, 
+.calendar-grid td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Small screens (<768px) */
+@media (max-width: 767.98px) {
+    .calendar-grid th {
+        font-size: 0.7rem !important;
+        padding: 6px 2px !important;
+    }
+    .calendar-grid td {
+        padding: 2px !important;
+        height: auto !important;
+        min-height: 45px;
+    }
+    .calendar-grid td .day-number {
+        font-size: 0.75rem !important;
+    }
+    .calendar-grid td .badge {
+        font-size: 0.55rem !important;
+        padding: 1px 3px !important;
+        line-height: 1.2;
+    }
+    .calendar-grid td.has-bills:hover {
+        transform: none !important;
+    }
+
+    /* Month navigation */
+    .monthly-calendar h3 {
+        font-size: 1rem !important;
+    }
+    .monthly-calendar .btn-sm {
+        font-size: 0.7rem;
+        padding: 0.25rem 0.5rem;
+    }
+
+    /* Filter bar */
+    #monthlyCalendar .row.mb-3 > div {
+        margin-bottom: 0.5rem;
+    }
+    #monthlyCalendar .row.mb-3 > div:last-child {
+        margin-bottom: 0;
+    }
+    #monthlyCalendar .d-flex.justify-content-end small {
+        font-size: 0.7rem;
+    }
+
+    /* Legend */
+    .monthly-calendar .d-flex.gap-4 {
+        gap: 0.75rem !important;
+        flex-wrap: wrap;
+    }
+    .monthly-calendar .d-flex.gap-4 span {
+        font-size: 0.65rem;
+    }
+}
+
+/* --- Modal Client Cards --- */
+.client-card .card-header {
+    min-height: auto;
+}
+.client-card .card-header .d-flex {
+    flex-wrap: wrap;
+    gap: 0.5rem !important;
+}
+
+@media (max-width: 767.98px) {
+    .client-card .card-header .d-flex.align-items-center.gap-3 {
+        flex-direction: column;
+        align-items: flex-start !important;
+    }
+    .client-card .card-header .text-end {
+        text-align: left !important;
+        width: 100%;
+    }
+    .client-card .card-header .text-end .d-flex {
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+    .client-card .card-header .text-end .d-flex span {
+        font-size: 0.75rem;
+    }
+    .client-card .card-header .text-end .d-flex .badge {
+        font-size: 0.65rem;
+        padding: 0.2rem 0.5rem;
+    }
+
+    /* Invoice rows in modal */
+    .client-card .card-body .d-flex.align-items-center {
+        flex-wrap: wrap;
+        padding-top: 0.5rem !important;
+        padding-bottom: 0.5rem !important;
+    }
+    .client-card .card-body .d-flex.align-items-center > div {
+        margin-bottom: 0.15rem;
+    }
+    .client-card .card-body .d-flex.align-items-center .fs-6 {
+        font-size: 0.75rem !important;
+    }
+    .client-card .card-body .d-flex.align-items-center .badge {
+        font-size: 0.6rem !important;
+    }
+
+    /* Column headers in card body */
+    .client-card .card-body .d-flex.align-items-center.py-1 {
+        font-size: 0.65rem !important;
+    }
+
+    /* Modal footer */
+    #dayDetailModal .modal-footer .d-flex {
+        flex-direction: column;
+        gap: 0.5rem !important;
+    }
+    #dayDetailModal .modal-footer .d-flex .form-check {
+        margin-bottom: 0;
+    }
+    #dayDetailModal .modal-footer .d-flex button {
+        width: 100%;
+    }
+
+    /* Modal header */
+    #dayDetailModal .modal-header {
+        padding: 0.75rem !important;
+    }
+    #dayDetailModal .modal-header .modal-title {
+        font-size: 0.9rem !important;
+    }
+    #dayDetailModal .modal-header .badge {
+        font-size: 0.65rem !important;
+        padding: 0.2rem 0.5rem !important;
+    }
+
+    /* Modal body */
+    #dayDetailModal .modal-body {
+        padding: 0.75rem !important;
+    }
+}
+
+/* Medium screens (768-991px) */
+@media (min-width: 768px) and (max-width: 991.98px) {
+    .calendar-grid td {
+        height: 60px !important;
+        padding: 4px !important;
+    }
+    .calendar-grid td .day-number {
+        font-size: 0.85rem !important;
+    }
+    .monthly-calendar h3 {
+        font-size: 1.2rem !important;
+    }
+}
+
+/* Print */
+@media print {
+    .calendar-grid td.has-bills {
+        background: #f0f0f0 !important;
+    }
+}
+
 </style>
 @endsection
