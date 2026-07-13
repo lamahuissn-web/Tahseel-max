@@ -263,6 +263,11 @@ Route::group(
                 Route::get('/automation/calendar-data', [WhatsAppControlCenterController::class, 'calendarData'])->name('automation.calendar_data');
                 Route::get('/automation/calendar-day', [WhatsAppControlCenterController::class, 'calendarDay'])->name('automation.calendar_day');
                 Route::post('/automation/calendar-send', [WhatsAppControlCenterController::class, 'calendarSend'])->name('automation.calendar_send');
+                Route::get('/automation/clients', [WhatsAppControlCenterController::class, 'getAutomationClients'])->name('automation.clients');
+                Route::post('/automation/send-now', [WhatsAppControlCenterController::class, 'sendNow'])->name('automation.send_now');
+                Route::post('/automation/schedule-task', [WhatsAppControlCenterController::class, 'scheduleTask'])->name('automation.schedule_task');
+                Route::get('/automation/tasks', [WhatsAppControlCenterController::class, 'getAutomationTasks'])->name('automation.tasks');
+                Route::delete('/automation/tasks/{id}', [WhatsAppControlCenterController::class, 'deleteTask'])->name('automation.delete_task');
             });
 
  
