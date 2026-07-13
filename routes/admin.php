@@ -260,6 +260,9 @@ Route::group(
                 Route::get('/queue', [WhatsAppControlCenterController::class, 'queue'])->name('queue');
                 Route::post('/queue/resend-failed', [WhatsAppControlCenterController::class, 'resendAllFailed'])->name('queue.resend_failed');
                 Route::post('/queue/pause', [WhatsAppControlCenterController::class, 'toggleQueuePause'])->name('queue.pause');
+                Route::get('/automation/calendar-data', [WhatsAppControlCenterController::class, 'calendarData'])->name('automation.calendar_data');
+                Route::get('/automation/calendar-day', [WhatsAppControlCenterController::class, 'calendarDay'])->name('automation.calendar_day');
+                Route::post('/automation/calendar-send', [WhatsAppControlCenterController::class, 'calendarSend'])->name('automation.calendar_send');
             });
 
  

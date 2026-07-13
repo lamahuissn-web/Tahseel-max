@@ -395,7 +395,17 @@ class WhatsAppControlCenterController extends Controller
         $templates = WhatsAppTemplateService::getAll();
         $subscriptions = \App\Models\Admin\Subscription::all();
 
-        return view('dashbord.whatsapp.automation', compact('rules', 'templates', 'subscriptions'));
+        $calendarData = DB::table('tbl_invoices')
+            ->selectRaw("DATE(due_date) as due_day, COUNT(DISTINCT client_id) as client_count")
+            ->whereMonth('due_date', now()->month)
+            ->whereYear('due_date', now()->year)
+            ->whereIn('status', ['unpaid', 'partial'])
+            ->whereNull('deleted_at')
+            ->groupByRaw("DATE(due_date)")
+            ->orderBy('due_day')
+            ->get();
+
+        return view('dashbord.whatsapp.automation', compact('rules', 'templates', 'subscriptions', 'calendarData'));
     }
 
     /**
@@ -535,6 +545,9 @@ class WhatsAppControlCenterController extends Controller
                     }
                 }
             }
+
+            // Strip rules that are no longer in defaults (e.g. removed receipt/disconnection)
+            $rules = array_intersect_key($rules, $defaults);
 
             return $rules;
         }
@@ -685,4 +698,189 @@ class WhatsAppControlCenterController extends Controller
 
         return response()->json(['success' => true, 'paused' => $new == '0']);
     }
+
+
+    // ═══════════════════════════════════════════════════════════════
+    //  📅 CALENDAR — Monthly unpaid invoice calendar
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * 📅 Calendar — Get month data (days with unpaid bills).
+     */
+    public function calendarData(Request $request)
+    {
+        $month = $request->input('month', now()->month);
+        $year = $request->input('year', now()->year);
+
+        $data = DB::table('tbl_invoices')
+            ->selectRaw("DATE(due_date) as due_day, COUNT(DISTINCT client_id) as client_count")
+            ->whereMonth('due_date', $month)
+            ->whereYear('due_date', $year)
+            ->whereIn('status', ['unpaid', 'partial'])
+            ->whereNull('deleted_at')
+            ->groupByRaw("DATE(due_date)")
+            ->orderBy('due_day')
+            ->get();
+
+        return response()->json($data);
+    }
+
+    /**
+     * 📅 Calendar — Get customers with unpaid bills on a specific day.
+     */
+    public function calendarDay(Request $request)
+    {
+        $date = $request->input('date');
+
+        if (!$date) {
+            return response()->json(['error' => 'Date is required'], 400);
+        }
+
+        $clients = DB::table('tbl_invoices as i')
+            ->join('tbl_clients as c', 'c.id', '=', 'i.client_id')
+            ->whereDate('i.due_date', $date)
+            ->whereIn('i.status', ['unpaid', 'partial'])
+            ->whereNull('i.deleted_at')
+            ->whereNull('c.deleted_at')
+            ->whereNotNull('c.phone')
+            ->where('c.phone', '!=', '')
+            ->select(
+                'c.id',
+                'c.name',
+                'c.phone',
+                DB::raw("COUNT(i.id) as invoice_count"),
+                DB::raw("SUM(i.remaining_amount) as total_amount")
+            )
+            ->groupBy('c.id', 'c.name', 'c.phone')
+            ->orderBy('c.name')
+            ->get();
+
+        $clientIds = $clients->pluck('id');
+
+        $invoices = DB::table('tbl_invoices')
+            ->whereIn('client_id', $clientIds)
+            ->whereDate('due_date', $date)
+            ->whereIn('status', ['unpaid', 'partial'])
+            ->whereNull('deleted_at')
+            ->select('id', 'client_id', 'amount', 'remaining_amount', 'due_date', 'invoice_type', 'notes')
+            ->get()
+            ->groupBy('client_id');
+
+        $result = $clients->map(function($client) use ($invoices) {
+            $clientInvoices = $invoices->get($client->id, collect());
+            return [
+                'id' => $client->id,
+                'name' => $client->name,
+                'phone' => $client->phone,
+                'invoice_count' => (int) $client->invoice_count,
+                'total_amount' => (float) $client->total_amount,
+                'invoices' => $clientInvoices->map(fn($inv) => [
+                    'id' => $inv->id,
+                    'amount' => (float) $inv->amount,
+                    'remaining_amount' => (float) $inv->remaining_amount,
+                    'due_date' => $inv->due_date,
+                    'type' => $inv->invoice_type === 'subscription' ? 'اشتراك' : 'خدمة',
+                    'notes' => $inv->notes ?? '',
+                ])->values()->toArray(),
+            ];
+        })->values()->toArray();
+
+        return response()->json([
+            'date' => $date,
+            'total_clients' => count($result),
+            'clients' => $result,
+        ]);
+    }
+
+    /**
+     * 📅 Calendar — Send reminders to selected customers.
+     */
+    public function calendarSend(Request $request)
+    {
+        $request->validate([
+            'client_ids' => 'required|array',
+            'client_ids.*' => 'integer|exists:tbl_clients,id',
+            'template_type' => 'nullable|string',
+        ]);
+
+        $templateType = $request->template_type ?? 'reminder';
+        $body = WhatsAppTemplateService::getBody($templateType);
+
+        if (empty($body)) {
+            return response()->json([
+                'sent' => 0,
+                'failed' => 0,
+                'errors' => ['القالب غير موجود'],
+            ]);
+        }
+
+        $service = app(WhatsAppService::class);
+        $results = ['sent' => 0, 'failed' => 0, 'errors' => []];
+        $failCount = 0;
+
+        foreach ($request->client_ids as $clientId) {
+            $client = DB::table('tbl_clients')->find($clientId);
+            if (!$client || empty($client->phone)) {
+                $results['failed']++;
+                continue;
+            }
+
+            $message = $body;
+            $message = str_replace('{name}', $client->name, $message);
+            $message = str_replace('{message_body}', '', $message);
+
+            $unpaidInvoices = DB::table('tbl_invoices')
+                ->where('client_id', $client->id)
+                ->whereIn('status', ['unpaid', 'partial'])
+                ->whereNull('deleted_at')
+                ->get();
+
+            $totalAmount = $unpaidInvoices->sum('remaining_amount');
+
+            if ($unpaidInvoices->isNotEmpty()) {
+                $invoiceDetailsList = WhatsAppMessageBuilder::buildInvoiceDetailsList($unpaidInvoices);
+                $message = WhatsAppMessageBuilder::buildMessage($message, $client->name, $totalAmount, $invoiceDetailsList);
+            }
+
+            $message = str_replace('{total_amount}', number_format($totalAmount, 2), $message);
+            $message = str_replace('{invoice_details_list}', 'لا توجد فواتير مستحقة', $message);
+            $message = str_replace('{due_date}', now()->addDays(3)->format('Y-m-d'), $message);
+            $message = str_replace('{support_phone}', '96170781562', $message);
+            $message = str_replace('{amount}', number_format($totalAmount > 0 ? $totalAmount : 0, 2), $message);
+            $message = str_replace('{month}', now()->format('m'), $message);
+            $message = str_replace('{year}', now()->format('Y'), $message);
+            $message = str_replace('{collector}', auth('admin')->user()->name ?? 'الإدارة', $message);
+            $message = str_replace('{datetime}', now()->format('Y-m-d h:i A'), $message);
+            $message = str_replace('{balance_status}', 'الرصيد الحالي: $' . number_format($totalAmount, 2), $message);
+
+            $result = $service->send($client->phone, $message);
+            $status = (isset($result['success']) && $result['success'] === true) ? 'sent' : 'failed';
+
+            WhatsAppMessageLog::create([
+                'client_id' => $client->id,
+                'client_name' => $client->name,
+                'phone' => $client->phone,
+                'message' => $message,
+                'template_type' => $templateType,
+                'status' => $status,
+                'error' => $status === 'failed' ? ($result['error'] ?? 'Unknown') : null,
+                'sent_by' => 'calendar:' . auth('admin')->id(),
+            ]);
+
+            if ($status === 'sent') {
+                $results['sent']++;
+            } else {
+                $results['failed']++;
+                if ($failCount < 5) {
+                    $results['errors'][] = $client->name . ': ' . ($result['error'] ?? 'Unknown');
+                    $failCount++;
+                }
+            }
+
+            usleep(1000000);
+        }
+
+        return response()->json($results);
+    }
+
 }
