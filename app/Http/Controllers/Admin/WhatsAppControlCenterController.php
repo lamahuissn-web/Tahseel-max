@@ -711,14 +711,22 @@ class WhatsAppControlCenterController extends Controller
     {
         $month = $request->input('month', now()->month);
         $year = $request->input('year', now()->year);
+        $clientType = $request->input('client_type', 'all');
 
-        $data = DB::table('tbl_invoices')
-            ->selectRaw("DATE(due_date) as due_day, COUNT(DISTINCT client_id) as client_count")
+        $query = DB::table('tbl_invoices')
+            ->selectRaw("DATE(due_date) as due_day, COUNT(DISTINCT tbl_invoices.client_id) as client_count")
             ->whereMonth('due_date', $month)
             ->whereYear('due_date', $year)
             ->whereIn('status', ['unpaid', 'partial'])
-            ->whereNull('deleted_at')
-            ->groupByRaw("DATE(due_date)")
+            ->whereNull('tbl_invoices.deleted_at');
+
+        if ($clientType !== 'all') {
+            $query->join('tbl_clients', 'tbl_clients.id', '=', 'tbl_invoices.client_id')
+                  ->where('tbl_clients.client_type', $clientType)
+                  ->whereNull('tbl_clients.deleted_at');
+        }
+
+        $data = $query->groupByRaw("DATE(due_date)")
             ->orderBy('due_day')
             ->get();
 
@@ -736,22 +744,30 @@ class WhatsAppControlCenterController extends Controller
             return response()->json(['error' => 'Date is required'], 400);
         }
 
-        $clients = DB::table('tbl_invoices as i')
+        $clientType = $request->input('client_type', 'all');
+
+        $query = DB::table('tbl_invoices as i')
             ->join('tbl_clients as c', 'c.id', '=', 'i.client_id')
             ->whereDate('i.due_date', $date)
             ->whereIn('i.status', ['unpaid', 'partial'])
             ->whereNull('i.deleted_at')
             ->whereNull('c.deleted_at')
             ->whereNotNull('c.phone')
-            ->where('c.phone', '!=', '')
-            ->select(
+            ->where('c.phone', '!=', '');
+
+        if ($clientType !== 'all') {
+            $query->where('c.client_type', $clientType);
+        }
+
+        $clients = $query->select(
                 'c.id',
                 'c.name',
                 'c.phone',
+                'c.client_type',
                 DB::raw("COUNT(i.id) as invoice_count"),
                 DB::raw("SUM(i.remaining_amount) as total_amount")
             )
-            ->groupBy('c.id', 'c.name', 'c.phone')
+            ->groupBy('c.id', 'c.name', 'c.phone', 'c.client_type')
             ->orderBy('c.name')
             ->get();
 

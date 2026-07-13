@@ -104,6 +104,23 @@
                             </button>
                         </div>
 
+                        {{-- Filter Bar --}}
+                        <div class="row mb-3 align-items-end">
+                            <div class="col-md-3">
+                                <label class="form-label fw-bold fs-7">{{ trans('clients.client_type') ?? 'نوع العميل' }}</label>
+                                <select class="form-select form-select-sm" id="calClientType">
+                                    <option value="all">{{ trans('clients.all') ?? 'الكل' }}</option>
+                                    <option value="internet">{{ trans('clients.internet') ?? 'إنترنت' }}</option>
+                                    <option value="satellite">{{ trans('clients.satellite') ?? 'ساتلايت' }}</option>
+                                </select>
+                            </div>
+                            <div class="col-md-9 d-flex align-items-end justify-content-end">
+                                <small class="text-muted" id="calFilterInfo">
+                                    <i class="bi bi-info-circle"></i> عرض كل الزبائن غير المدفوعين
+                                </small>
+                            </div>
+                        </div>
+
                         {{-- Loading Spinner --}}
                         <div class="text-center py-4 d-none" id="calLoading">
                             <div class="spinner-border text-primary" role="status">
@@ -262,6 +279,15 @@ $(document).ready(function() {
         loadCalendar(currentMonth, currentYear);
     });
 
+    // --- Filter Change ---
+    $(document).on('change', '#calClientType', function() {
+        var val = $(this).val();
+        var label = val === 'all' ? 'الكل' : (val === 'internet' ? 'إنترنت' : 'ساتلايت');
+        $('#calFilterInfo').html('<i class="bi bi-funnel"></i> تصفية: ' + label);
+        $('#calGrid').empty();
+        loadCalendar(currentMonth, currentYear);
+    });
+
     // --- Click on Day ---
     $(document).on('click', '.calendar-day.has-bills', function() {
         const date = $(this).data('date');
@@ -297,9 +323,11 @@ $(document).ready(function() {
         $('#calLoading').removeClass('d-none');
         $('#calTitle').text('...');
 
+        let calClientType = $('#calClientType').val();
         $.get('{{ route("admin.whatsapp.automation.calendar_data") }}', {
             month: month,
-            year: year
+            year: year,
+            client_type: calClientType
         }).done(function(data) {
             // Build calendar map from response
             const calMap = {};
@@ -385,8 +413,10 @@ $(document).ready(function() {
         $('#selectAllDayClients').prop('checked', false);
         $('#sendDayReminders').prop('disabled', true);
 
+        let calClientType = $('#calClientType').val();
         $.get('{{ route("admin.whatsapp.automation.calendar_day") }}', {
-            date: date
+            date: date,
+            client_type: calClientType
         }).done(function(res) {
             $('#dayModalLoading').addClass('d-none');
             $('#dayModalContent').removeClass('d-none');
@@ -400,17 +430,29 @@ $(document).ready(function() {
 
                 let html = '';
                 res.clients.forEach(function(c) {
+                    const monthNames = ['', 'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+                    let invoiceMonths = '';
+                    if (c.invoices.length > 0) {
+                        const months = c.invoices.map(function(inv) {
+                            const parts = inv.due_date.split('-');
+                            return monthNames[parseInt(parts[1])] + ' ' + parts[0];
+                        });
+                        invoiceMonths = months.join(', ');
+                    }
                     const invoiceList = c.invoices.map(function(inv) {
-                        return inv.type + ': ' + inv.remaining_amount.toFixed(2) + '$';
+                        const parts = inv.due_date.split('-');
+                        return inv.type + ' ' + monthNames[parseInt(parts[1])] + ': ' + inv.remaining_amount.toFixed(2) + '$';
                     }).join('<br>');
+                    const typeIcon = c.client_type === 'satellite' ? '🛰️' : '🌐';
                     html += '<tr>' +
                         '<td><div class="form-check"><input class="form-check-input client-checkbox" type="checkbox" value="' + c.id + '"></div></td>' +
-                        '<td class="fw-bold">' + c.name + '</td>' +
-                        '<td dir="ltr">' + c.phone + '</td>' +
+                        '<td class="fw-bold">' + typeIcon + ' ' + c.name + '</td>' +
+                        '<td dir="ltr"><small>' + c.phone + '</small></td>' +
                         '<td><span class="badge badge-warning">' + c.invoice_count + '</span></td>' +
                         '<td class="fw-bold">' + c.total_amount.toFixed(2) + ' $</td>' +
-                        '<td><button class="btn btn-sm btn-light" data-bs-toggle="tooltip" title="' + invoiceList.replace(/<br>/g, '\n') + '" onclick="Swal.fire({icon:\'info\',title:\'تفاصيل الفواتير\',html:\'' + invoiceList.replace(/'/g, "\\'") + '\'})"><i class="bi bi-eye"></i></button></td>' +
-                        '</tr>';
+                        '<td><button class="btn btn-sm btn-light" title="' + invoiceList.replace(/<br>/g, '\n') + '" onclick="Swal.fire({icon:\'info\',title:\'تفاصيل الفواتير\',html:\'' + invoiceList.replace(/'/g, "\\'") + '\'})"><i class="bi bi-eye"></i></button></td>' +
+                        '</tr>' +
+                        (c.invoices.length > 1 ? '<tr class="no-border"><td></td><td colspan="5" class="text-muted small py-0">📄 ' + invoiceMonths + '</td></tr>' : '');
                 });
                 $('#dayClientsBody').html(html);
                 updateSendButton();
@@ -485,6 +527,12 @@ $(document).ready(function() {
 }
 .calendar-grid .day-badge {
     font-size: 0.7rem;
+}
+.calendar-grid tr.no-border td {
+    border-top: none !important;
+    border-bottom: none !important;
+    padding-top: 0 !important;
+    background: transparent;
 }
 .spinner {
     animation: spin 1s linear infinite;
