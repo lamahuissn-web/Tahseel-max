@@ -144,56 +144,58 @@
 </div>
 
 {{-- ════════════════════════════════════════════════ --}}
-{{--  MODAL: Day Customer Details                   --}}
+{{--  MODAL: Day Customer Details (Keen Design)     --}}
 {{-- ════════════════════════════════════════════════ --}}
 <div class="modal fade" id="dayDetailModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="dayModalTitle">📅 زبائن</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <div class="modal-header py-3">
+                <h5 class="modal-title fw-bold" id="dayModalTitle">
+                    <i class="bi bi-calendar-event text-primary ms-1"></i> 
+                    {{ trans('clients.whatsapp_monthly_calendar') ?? 'التقويم الشهري' }}
+                </h5>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge badge-light-primary fs-7 px-3 py-2 d-none" id="dayModalStats">
+                        <i class="bi bi-people"></i> <span id="dayModalTotal">0</span> 
+                        {{ trans('clients.clients') ?? 'زبون' }}
+                    </span>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
             </div>
-            <div class="modal-body">
-                <div class="text-center py-4 d-none" id="dayModalLoading">
-                    <div class="spinner-border text-primary" role="status">
+            <div class="modal-body py-4">
+                <div class="text-center py-8 d-none" id="dayModalLoading">
+                    <div class="spinner-border text-primary" role="status" style="width:3rem;height:3rem;">
                         <span class="visually-hidden">Loading...</span>
                     </div>
+                    <p class="text-muted mt-3">{{ trans('clients.whatsapp_loading') ?? 'جاري تحميل البيانات...' }}</p>
                 </div>
-                <div id="dayModalContent">
-                    <div class="table-responsive">
-                        <table class="table table-row-bordered table-align-middle" id="dayClientsTable">
-                            <thead>
-                                <tr class="fw-bold fs-6 text-gray-800">
-                                    <th width="40">
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" id="selectAllDayClients">
-                                        </div>
-                                    </th>
-                                    <th>{{ trans('clients.name') ?? 'الاسم' }}</th>
-                                    <th>{{ trans('clients.phone') ?? 'الهاتف' }}</th>
-                                    <th>{{ trans('clients.whatsapp_unpaid_bills_short') ?? 'عدد الفواتير' }}</th>
-                                    <th>{{ trans('clients.total_amount') ?? 'المبلغ' }}</th>
-                                    <th>{{ trans('clients.whatsapp_actions') ?? 'إجراءات' }}</th>
-                                </tr>
-                            </thead>
-                            <tbody id="dayClientsBody">
-                                {{-- Filled by JS --}}
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="text-center text-muted py-4 d-none" id="dayNoClients">
-                        <i class="bi bi-emoji-frown fs-1"></i>
-                        <p class="mt-2">{{ trans('clients.whatsapp_no_clients') ?? 'لا يوجد زبائن غير مدفوعين في هذا التاريخ' }}</p>
+                <div id="dayModalContent" class="d-none">
+                    {{-- Client Cards Container --}}
+                    <div id="dayClientsContainer"></div>
+                    
+                    {{-- Empty State --}}
+                    <div class="text-center text-muted py-8 d-none" id="dayNoClients">
+                        <i class="bi bi-emoji-frown fs-3x text-gray-400"></i>
+                        <p class="mt-3 fs-6">{{ trans('clients.whatsapp_no_clients') ?? 'لا يوجد زبائن غير مدفوعين في هذا التاريخ' }}</p>
                     </div>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    {{ trans('clients.close') ?? 'إغلاق' }}
-                </button>
-                <button type="button" class="btn btn-primary" id="sendDayReminders" disabled>
-                    <i class="bi bi-send"></i> {{ trans('clients.whatsapp_send_reminder') ?? 'إرسال تذكير للمحددين' }}
-                </button>
+            <div class="modal-footer py-3">
+                <div class="d-flex align-items-center gap-2 w-100">
+                    <div class="form-check mb-0">
+                        <input class="form-check-input" type="checkbox" id="selectAllDayClients">
+                        <label class="form-check-label text-muted" for="selectAllDayClients">
+                            {{ trans('clients.select_all') ?? 'تحديد الكل' }}
+                        </label>
+                    </div>
+                    <div class="flex-grow-1"></div>
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+                        {{ trans('clients.close') ?? 'إغلاق' }}
+                    </button>
+                    <button type="button" class="btn btn-primary" id="sendDayReminders" disabled>
+                        <i class="bi bi-send"></i> {{ trans('clients.whatsapp_send_reminder') ?? 'إرسال تذكير للمحددين' }}
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -296,7 +298,7 @@ $(document).ready(function() {
 
     // --- Select All Toggle ---
     $('#selectAllDayClients').on('change', function() {
-        $('#dayClientsBody .client-checkbox').prop('checked', $(this).is(':checked'));
+        $('#dayClientsContainer .client-checkbox').prop('checked', $(this).is(':checked'));
         updateSendButton();
     });
 
@@ -307,7 +309,7 @@ $(document).ready(function() {
     // --- Send Reminders ---
     $('#sendDayReminders').on('click', function() {
         const selectedIds = [];
-        $('#dayClientsBody .client-checkbox:checked').each(function() {
+        $('#dayClientsContainer .client-checkbox:checked').each(function() {
             selectedIds.push($(this).val());
         });
         if (selectedIds.length === 0) return;
@@ -408,8 +410,9 @@ $(document).ready(function() {
     function loadDayDetails(date) {
         $('#dayModalContent').addClass('d-none');
         $('#dayModalLoading').removeClass('d-none');
-        $('#dayModalTitle').text('📅 ' + date);
-        $('#dayClientsBody').empty();
+        $('#dayModalTitle').html('<i class="bi bi-calendar-event text-primary ms-1"></i> ' + date);
+        $('#dayModalStats').addClass('d-none');
+        $('#dayClientsContainer').empty();
         $('#selectAllDayClients').prop('checked', false);
         $('#sendDayReminders').prop('disabled', true);
 
@@ -423,38 +426,94 @@ $(document).ready(function() {
 
             if (res.clients.length === 0) {
                 $('#dayNoClients').removeClass('d-none');
-                $('#dayClientsTable').addClass('d-none');
+                $('#dayModalStats').addClass('d-none');
             } else {
                 $('#dayNoClients').addClass('d-none');
-                $('#dayClientsTable').removeClass('d-none');
+                $('#dayModalStats').removeClass('d-none');
+                $('#dayModalTotal').text(res.clients.length);
 
+                const monthNames = ['', 'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+                const monthNamesShort = ['', 'ينا', 'فبر', 'مار', 'أبر', 'ماي', 'يون', 'يول', 'أغس', 'سبت', 'أكت', 'نوف', 'ديس'];
                 let html = '';
+
                 res.clients.forEach(function(c) {
-                    const monthNames = ['', 'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
-                    let invoiceMonths = '';
-                    if (c.invoices.length > 0) {
-                        const months = c.invoices.map(function(inv) {
-                            const parts = inv.due_date.split('-');
-                            return monthNames[parseInt(parts[1])] + ' ' + parts[0];
-                        });
-                        invoiceMonths = months.join(', ');
-                    }
-                    const invoiceList = c.invoices.map(function(inv) {
-                        const parts = inv.due_date.split('-');
-                        return inv.type + ' ' + monthNames[parseInt(parts[1])] + ': ' + inv.remaining_amount.toFixed(2) + '$';
-                    }).join('<br>');
                     const typeIcon = c.client_type === 'satellite' ? '🛰️' : '🌐';
-                    html += '<tr>' +
-                        '<td><div class="form-check"><input class="form-check-input client-checkbox" type="checkbox" value="' + c.id + '"></div></td>' +
-                        '<td class="fw-bold">' + typeIcon + ' ' + c.name + '</td>' +
-                        '<td dir="ltr"><small>' + c.phone + '</small></td>' +
-                        '<td><span class="badge badge-warning">' + c.invoice_count + '</span></td>' +
-                        '<td class="fw-bold">' + c.total_amount.toFixed(2) + ' $</td>' +
-                        '<td><button class="btn btn-sm btn-light" title="' + invoiceList.replace(/<br>/g, '\n') + '" onclick="Swal.fire({icon:\'info\',title:\'تفاصيل الفواتير\',html:\'' + invoiceList.replace(/'/g, "\\'") + '\'})"><i class="bi bi-eye"></i></button></td>' +
-                        '</tr>' +
-                        (c.invoices.length > 1 ? '<tr class="no-border"><td></td><td colspan="5" class="text-muted small py-0">📄 ' + invoiceMonths + '</td></tr>' : '');
+                    const typeLabel = c.client_type === 'satellite' ? 'ساتلايت' : 'إنترنت';
+                    const typeColor = c.client_type === 'satellite' ? 'badge-light-info' : 'badge-light-success';
+
+                    // Build invoice rows
+                    let invRows = '';
+                    c.invoices.forEach(function(inv) {
+                        const parts = inv.due_date.split('-');
+                        const monthNum = parseInt(parts[1]);
+                        const monthLabel = monthNames[monthNum];
+                        const invTypeBadge = inv.type === 'اشتراك'
+                            ? '<span class="badge badge-light-primary fs-8">📡 اشتراك</span>'
+                            : '<span class="badge badge-light-warning fs-8">🔧 خدمة</span>';
+                        const amountColor = parseFloat(inv.remaining_amount) > 0 ? 'text-danger' : 'text-success';
+                        invRows += '<div class="d-flex align-items-center py-2 border-bottom border-gray-200">' +
+                            '<div class="col-4 col-md-3">' +
+                                '<span class="fw-semibold text-gray-800 fs-7">' + monthLabel + ' ' + parts[0] + '</span>' +
+                            '</div>' +
+                            '<div class="col-4 col-md-3">' +
+                                invTypeBadge +
+                            '</div>' +
+                            '<div class="col-4 col-md-3 text-end">' +
+                                '<span class="fw-bold ' + amountColor + ' fs-6">$' + parseFloat(inv.remaining_amount).toFixed(2) + '</span>' +
+                            '</div>' +
+                            '<div class="d-none d-md-block col-md-3 text-end text-muted small">' +
+                                (inv.notes ? inv.notes : '') +
+                            '</div>' +
+                        '</div>';
+                    });
+
+                    // Client card
+                    html +=
+                    '<div class="card card-flush shadow-sm mb-3 client-card" data-client-id="' + c.id + '">' +
+                        '<div class="card-header bg-light py-3">' +
+                            '<div class="d-flex align-items-center gap-3 w-100">' +
+                                '<div class="form-check mb-0">' +
+                                    '<input class="form-check-input client-checkbox" type="checkbox" value="' + c.id + '" id="client_' + c.id + '">' +
+                                '</div>' +
+                                '<div class="flex-grow-1">' +
+                                    '<div class="d-flex align-items-center gap-2">' +
+                                        '<span class="fs-5">' + typeIcon + '</span>' +
+                                        '<label for="client_' + c.id + '" class="fw-bold text-gray-800 mb-0 cursor-pointer" style="cursor:pointer;">' + c.name + '</label>' +
+                                        '<span class="badge ' + typeColor + ' fs-8">' + typeLabel + '</span>' +
+                                    '</div>' +
+                                '</div>' +
+                                '<div class="text-end">' +
+                                    '<div class="d-flex align-items-center gap-3">' +
+                                        '<span class="text-muted small d-none d-md-inline"><i class="bi bi-telephone"></i> ' + c.phone + '</span>' +
+                                        '<span class="badge badge-light-warning rounded-pill fs-7 px-3 py-2">' +
+                                            '<i class="bi bi-receipt"></i> ' + c.invoice_count +
+                                        '</span>' +
+                                        '<span class="fw-bold text-danger fs-6">$' + c.total_amount.toFixed(2) + '</span>' +
+                                    '</div>' +
+                                '</div>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="card-body py-2 px-4">' +
+                            '<div class="d-flex align-items-center py-1 border-bottom border-gray-300 mb-1">' +
+                                '<div class="col-4 col-md-3"><span class="text-muted fs-8 fw-semibold">' +
+                                    "{{ trans('clients.invoice_month') ?? 'الشهر' }}" +
+                                '</span></div>' +
+                                '<div class="col-4 col-md-3"><span class="text-muted fs-8 fw-semibold">' +
+                                    "{{ trans('clients.invoice_type') ?? 'النوع' }}" +
+                                '</span></div>' +
+                                '<div class="col-4 col-md-3 text-end"><span class="text-muted fs-8 fw-semibold">' +
+                                    "{{ trans('clients.total_amount') ?? 'المبلغ' }}" +
+                                '</span></div>' +
+                                '<div class="d-none d-md-block col-md-3 text-end text-muted fs-8 fw-semibold">' +
+                                    "{{ trans('clients.notes') ?? 'ملاحظات' }}" +
+                                '</span></div>' +
+                            '</div>' +
+                            invRows +
+                        '</div>' +
+                    '</div>';
                 });
-                $('#dayClientsBody').html(html);
+
+                $('#dayClientsContainer').html(html);
                 updateSendButton();
             }
 
@@ -467,10 +526,10 @@ $(document).ready(function() {
     }
 
     function updateSendButton() {
-        const checked = $('#dayClientsBody .client-checkbox:checked').length;
+        const checked = $('#dayClientsContainer .client-checkbox:checked').length;
         $('#sendDayReminders').prop('disabled', checked === 0);
         if (checked > 0) {
-            $('#sendDayReminders').text('{{ trans("clients.whatsapp_send_reminder") ?? "إرسال تذكير" }} (' + checked + ')');
+            $('#sendDayReminders').html('<i class="bi bi-send"></i> {{ trans("clients.whatsapp_send_reminder") ?? "إرسال تذكير" }} <span class="badge badge-light ms-1">' + checked + '</span>');
         } else {
             $('#sendDayReminders').html('<i class="bi bi-send"></i> {{ trans("clients.whatsapp_send_reminder") ?? "إرسال تذكير للمحددين" }}');
         }
@@ -484,11 +543,11 @@ $(document).ready(function() {
             client_ids: clientIds,
             template_type: 'reminder'
         }).done(function(res) {
-            let msg = '✅ تم الإرسال: ' + res.sent + '<br>';
+            let msg = '✅ {{ trans("clients.whatsapp_sent_ok") ?? "تم الإرسال" }}: ' + res.sent + '<br>';
             if (res.failed > 0) {
-                msg += '❌ فشل: ' + res.failed + '<br>';
+                msg += '❌ {{ trans("clients.whatsapp_failed") ?? "فشل" }}: ' + res.failed + '<br>';
                 if (res.errors && res.errors.length > 0) {
-                    msg += '<br>الأخطاء:<br>';
+                    msg += '<br>{{ trans("clients.errors") ?? "الأخطاء" }}:<br>';
                     res.errors.forEach(function(e) { msg += '• ' + e + '<br>'; });
                 }
             }
