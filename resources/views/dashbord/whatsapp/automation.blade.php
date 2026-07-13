@@ -24,8 +24,8 @@
         <div class="card-header">
             <ul class="nav nav-tabs card-header-tabs" role="tablist">
                 <li class="nav-item">
-                    <a class="nav-link active" data-bs-toggle="tab" href="#clients-tab" role="tab">
-                        👥 {{ trans('clients.whatsapp_clients') ?? 'الزبائن' }}
+                    <a class="nav-link active" data-bs-toggle="tab" href="#rules-tab" role="tab">
+                        📋 {{ trans('clients.whatsapp_automation_rules') ?? 'قواعد التشغيل الآلي' }}
                     </a>
                 </li>
                 <li class="nav-item">
@@ -33,104 +33,58 @@
                         📅 {{ trans('clients.whatsapp_monthly_calendar') ?? 'التقويم الشهري' }}
                     </a>
                 </li>
-                <li class="nav-item">
-                    <a class="nav-link" data-bs-toggle="tab" href="#tasks-tab" role="tab">
-                        ⏰ {{ trans('clients.whatsapp_scheduled_tasks') ?? 'المهام المجدولة' }}
-                    </a>
-                </li>
             </ul>
         </div>
         <div class="card-body">
             <div class="tab-content">
                 {{-- ════════════════════════════════════════════════ --}}
-                {{--  TAB 1: CLIENTS                           --}}
+                {{--  TAB 1: RULES TABLE                           --}}
                 {{-- ════════════════════════════════════════════════ --}}
-                <div class="tab-pane active" id="clients-tab" role="tabpanel">
-                    {{-- Filter Bar --}}
-                    <div class="row mb-4 g-3 align-items-end">
-                        <div class="col-md-3">
-                            <label class="form-label fw-bold fs-7">{{ trans('clients.client_type') ?? 'نوع العميل' }}</label>
-                            <select class="form-select form-select-sm" id="filterClientType">
-                                <option value="all">{{ trans('clients.all') ?? 'الكل' }}</option>
-                                <option value="internet">{{ trans('clients.internet') ?? 'إنترنت' }}</option>
-                                <option value="satellite">{{ trans('clients.satellite') ?? 'ساتلايت' }}</option>
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label fw-bold fs-7">{{ trans('clients.status') ?? 'الحالة' }}</label>
-                            <select class="form-select form-select-sm" id="filterStatus">
-                                <option value="all">{{ trans('clients.all') ?? 'الكل' }}</option>
-                                <option value="active">{{ trans('clients.active') ?? 'نشط' }}</option>
-                                <option value="inactive">{{ trans('clients.inactive') ?? 'غير نشط' }}</option>
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label fw-bold fs-7">{{ trans('clients.whatsapp_min_unpaid') ?? 'حد أدنى' }}</label>
-                            <input type="number" class="form-control form-control-sm" id="filterMinUnpaid" value="0" min="0">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-bold fs-7">{{ trans('clients.search') ?? 'بحث' }}</label>
-                            <input type="text" class="form-control form-control-sm" id="filterSearch" placeholder="{{ trans('clients.search_name_phone') ?? 'اسم أو هاتف...' }}">
-                        </div>
-                        <div class="col-md-2 d-flex gap-2">
-                            <label class="form-label fw-bold fs-7">&nbsp;</label>
-                            <button class="btn btn-sm btn-primary w-100" id="filterClientsBtn">
-                                <i class="bi bi-search"></i> {{ trans('clients.search') ?? 'بحث' }}
-                            </button>
-                        </div>
-                    </div>
-
-                    {{-- Loading --}}
-                    <div class="text-center py-6 d-none" id="clientsLoading">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">Loading...</span>
-                        </div>
-                    </div>
-
-                    {{-- Clients Table --}}
-                    <div class="table-responsive d-none" id="clientsTableWrapper">
-                        <table class="table table-row-bordered table-align-middle" id="clientsTable">
+                <div class="tab-pane active" id="rules-tab" role="tabpanel">
+                    <div class="table-responsive">
+                        <table class="table table-row-bordered table-align-middle">
                             <thead>
                                 <tr class="fw-bold fs-6 text-gray-800">
-                                    <th width="40"><div class="form-check"><input class="form-check-input" type="checkbox" id="selectAllClients"></div></th>
-                                    <th>{{ trans('clients.name') ?? 'الاسم' }}</th>
-                                    <th>{{ trans('clients.phone') ?? 'الهاتف' }}</th>
-                                    <th>{{ trans('clients.whatsapp_unpaid_bills_short') ?? 'فواتير' }}</th>
-                                    <th>{{ trans('clients.total_amount') ?? 'المبلغ' }}</th>
-                                    <th>{{ trans('clients.last_due') ?? 'آخر استحقاق' }}</th>
+                                    <th>{{ trans('clients.whatsapp_rule') ?? 'القاعدة' }}</th>
+                                    <th>{{ trans('clients.whatsapp_command') ?? 'الأمر' }}</th>
+                                    <th>{{ trans('clients.status') ?? 'الحالة' }}</th>
+                                    <th>{{ trans('clients.whatsapp_actions') ?? 'إجراءات' }}</th>
                                 </tr>
                             </thead>
-                            <tbody id="clientsBody">
+                            <tbody>
+                                @forelse($rules as $rule)
+                                <tr>
+                                    <td>
+                                        <span class="fw-bold">{{ app()->getLocale() == 'ar' ? $rule['label'] : $rule['label_en'] }}</span>
+                                        @if(!empty($rule['filter_summary']) && $rule['filter_summary'] !== 'الكل')
+                                            <br><small class="text-muted">{{ $rule['filter_summary'] }}</small>
+                                        @endif
+                                    </td>
+                                    <td><code>{{ $rule['command'] }}</code></td>
+                                    <td>
+                                        <span class="badge {{ $rule['enabled'] ? 'badge-success' : 'badge-secondary' }}" id="status-{{ $rule['id'] }}">
+                                            {{ $rule['enabled'] ? '🟢 ' . (trans('clients.active') ?? 'مفعل') : '⚪ ' . (trans('clients.inactive') ?? 'معطل') }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm {{ $rule['enabled'] ? 'btn-warning' : 'btn-success' }} toggle-rule"
+                                                data-id="{{ $rule['id'] }}">
+                                            {{ $rule['enabled'] ? (trans('clients.whatsapp_disable') ?? 'تعطيل') : (trans('clients.whatsapp_enable') ?? 'تفعيل') }}
+                                        </button>
+                                        <button class="btn btn-sm btn-primary run-rule" data-id="{{ $rule['command'] }}">
+                                            <i class="bi bi-play-fill"></i> {{ trans('clients.whatsapp_run_now') ?? 'تشغيل الآن' }}
+                                        </button>
+                                    </td>
+                                </tr>
+                                @empty
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted py-6">
+                                        {{ trans('clients.whatsapp_no_rules') ?? 'لا توجد قواعد تشغيل آلي' }}
+                                    </td>
+                                </tr>
+                                @endforelse
                             </tbody>
                         </table>
-                    </div>
-
-                    {{-- Empty State --}}
-                    <div class="text-center text-muted py-8 d-none" id="clientsEmpty">
-                        <i class="bi bi-emoji-frown fs-3x text-gray-400"></i>
-                        <p class="mt-3">{{ trans('clients.whatsapp_no_clients') ?? 'لا يوجد زبائن بالفلاتر المحددة' }}</p>
-                    </div>
-
-                    {{-- Pagination --}}
-                    <div class="d-flex justify-content-between align-items-center mt-3 d-none" id="clientsPagination">
-                        <small class="text-muted" id="clientsCount">0 {{ trans('clients.clients') ?? 'زبون' }}</small>
-                        <div class="d-flex gap-2" id="clientsPages"></div>
-                    </div>
-
-                    {{-- Action Bar --}}
-                    <div class="d-flex justify-content-between align-items-center mt-4 pt-3 border-top d-none" id="clientsActions">
-                        <div class="form-check mb-0">
-                            <input class="form-check-input" type="checkbox" id="selectAllClientsBottom">
-                            <label class="form-check-label text-muted" for="selectAllClientsBottom">{{ trans('clients.select_all') ?? 'تحديد الكل' }}</label>
-                        </div>
-                        <div class="d-flex gap-2">
-                            <button class="btn btn-primary btn-sm" id="clientsSendNow" disabled>
-                                <i class="bi bi-send"></i> {{ trans('clients.whatsapp_send_reminder') ?? 'إرسال تذكير' }}
-                            </button>
-                            <button class="btn btn-outline-primary btn-sm" id="clientsScheduleTask" disabled>
-                                <i class="bi bi-clock"></i> {{ trans('clients.whatsapp_schedule') ?? 'جدولة مهمة' }}
-                            </button>
-                        </div>
                     </div>
                 </div>
 
@@ -184,32 +138,13 @@
                         </div>
                     </div>
                 </div>
-                {{-- ════════════════════════════════════════════════ --}}
-                {{--  TAB 3: SCHEDULED TASKS                      --}}
-                {{-- ════════════════════════════════════════════════ --}}
-                <div class="tab-pane" id="tasks-tab" role="tabpanel">
-                    <div class="text-center py-6" id="tasksLoading">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">Loading...</span>
-                        </div>
-                    </div>
-                    <div id="tasksContainer" class="d-none">
-                        {{-- Task cards rendered by JS --}}
-                    </div>
-                    <div class="text-center text-muted py-8 d-none" id="tasksEmpty">
-                        <i class="bi bi-inbox fs-3x text-gray-400"></i>
-                        <p class="mt-3">{{ trans('clients.whatsapp_no_tasks') ?? 'لا توجد مهام مجدولة' }}</p>
-                        <p class="small">{{ trans('clients.whatsapp_no_tasks_hint') ?? 'اذهب إلى تبويب الزبائن، اختر زبائنك، وجدول مهمة جديدة' }}</p>
-                    </div>
-                </div>
             </div>
         </div>
     </div>
 </div>
 
 {{-- ════════════════════════════════════════════════ --}}
-{{--  MODAL: Day Customer Details                   --}}
-{{-- ════════════════════════════════════════════════ --}} (Keen Design)     --}}
+{{--  MODAL: Day Customer Details (Keen Design)     --}}
 {{-- ════════════════════════════════════════════════ --}}
 <div class="modal fade" id="dayDetailModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
@@ -265,114 +200,54 @@
         </div>
     </div>
 </div>
-
-{{-- Send Reminder Modal --}}
-<div class="modal fade" id="sendModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-sm modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header py-3">
-                <h5 class="modal-title fw-bold fs-6">
-                    <i class="bi bi-send text-primary ms-1"></i>
-                    {{ trans('clients.whatsapp_send_reminder') ?? 'إرسال تذكير' }}
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="sendModalClientIds">
-                <div class="text-center mb-4">
-                    <span class="badge badge-light-primary fs-6 px-4 py-2">
-                        <i class="bi bi-people"></i>
-                        <span id="sendModalClientCount">0</span> {{ trans('clients.clients') ?? 'زبون' }}
-                    </span>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label fw-bold fs-7">{{ trans('clients.whatsapp_template') ?? 'القالب' }}</label>
-                    <select class="form-select" id="sendModalTemplate">
-                        @foreach($templates as $key => $tpl)
-                            <option value="{{ $key }}">{{ $tpl['label'] ?? $key }}</option>
-                        @endforeach
-                    </select>
-                </div>
-            </div>
-            <div class="modal-footer py-3">
-                <button type="button" class="btn btn-light" data-bs-dismiss="modal">{{ trans('clients.cancel') ?? 'إلغاء' }}</button>
-                <button type="button" class="btn btn-primary" id="confirmSendBtn">
-                    <i class="bi bi-send"></i> {{ trans('clients.whatsapp_confirm_send') ?? 'تأكيد الإرسال' }}
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-{{-- Schedule Task Modal --}}
-<div class="modal fade" id="scheduleModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-md modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header py-3">
-                <h5 class="modal-title fw-bold fs-6">
-                    <i class="bi bi-clock text-primary ms-1"></i>
-                    {{ trans('clients.whatsapp_schedule_task') ?? 'جدولة مهمة جديدة' }}
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="scheduleClientIds">
-                <div class="text-center mb-3">
-                    <span class="badge badge-light-primary fs-6 px-4 py-2">
-                        <i class="bi bi-people"></i>
-                        <span id="scheduleClientCount">0</span> {{ trans('clients.clients') ?? 'زبون' }}
-                    </span>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label fw-bold fs-7">{{ trans('clients.name') ?? 'اسم المهمة' }} *</label>
-                    <input type="text" class="form-control" id="scheduleName" placeholder="{{ trans('clients.whatsapp_task_name_placeholder') ?? 'مثلاً: تذكير زبائن الإنترنت' }}">
-                </div>
-                <div class="row mb-3">
-                    <div class="col-6">
-                        <label class="form-label fw-bold fs-7">{{ trans('clients.whatsapp_time') ?? 'الوقت' }} *</label>
-                        <input type="time" class="form-control" id="scheduleTime" value="09:00">
-                    </div>
-                    <div class="col-6">
-                        <label class="form-label fw-bold fs-7">{{ trans('clients.whatsapp_template') ?? 'القالب' }}</label>
-                        <select class="form-select" id="scheduleTemplate">
-                            @foreach($templates as $key => $tpl)
-                                <option value="{{ $key }}">{{ $tpl['label'] ?? $key }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label fw-bold fs-7">{{ trans('clients.whatsapp_days') ?? 'أيام التشغيل' }} *</label>
-                    <div class="d-flex gap-2 flex-wrap" id="scheduleDays">
-                        @php $dayNames = ['سبت', 'أحد', 'اثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة']; @endphp
-                        @foreach($dayNames as $i => $day)
-                        <div class="form-check form-check-inline">
-                            <input class="form-check-input" type="checkbox" value="{{ $i }}" id="day{{ $i }}" {{ $i < 5 ? 'checked' : '' }}>
-                            <label class="form-check-label" for="day{{ $i }}">{{ $day }}</label>
-                        </div>
-                        @endforeach
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer py-3">
-                <button type="button" class="btn btn-light" data-bs-dismiss="modal">{{ trans('clients.cancel') ?? 'إلغاء' }}</button>
-                <button type="button" class="btn btn-primary" id="confirmScheduleBtn">
-                    <i class="bi bi-clock"></i> {{ trans('clients.whatsapp_schedule') ?? 'جدولة' }}
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
 @endsection
 
 @section('js')
 <script>
 $(document).ready(function() {
     // ═══════════════════════════════════════════════════════════════
-    //  
+    //  TAB 1: RULES — Toggle & Run
     // ═══════════════════════════════════════════════════════════════
+    $('.toggle-rule').on('click', function() {
+        const id = $(this).data('id');
+        const btn = $(this);
+        btn.prop('disabled', true).html('<i class="bi bi-arrow-repeat spinner"></i>');
+        $.post('{{ url("admin/whatsapp/automation") }}/' + id + '/toggle', {
+            _token: '{{ csrf_token() }}'
+        }).done(function(res) {
+            if (res.enabled) {
+                $('#status-' + id).removeClass('badge-secondary').addClass('badge-success')
+                    .text('🟢 {{ trans("clients.active") ?? "مفعل" }}');
+                btn.removeClass('btn-success').addClass('btn-warning')
+                    .text('{{ trans("clients.whatsapp_disable") ?? "تعطيل" }}');
+            } else {
+                $('#status-' + id).removeClass('badge-success').addClass('badge-secondary')
+                    .text('⚪ {{ trans("clients.inactive") ?? "معطل" }}');
+                btn.removeClass('btn-warning').addClass('btn-success')
+                    .text('{{ trans("clients.whatsapp_enable") ?? "تفعيل" }}');
+            }
+        }).fail(function() {
+            Swal.fire({ icon: 'error', text: '{{ trans("clients.whatsapp_test_error") ?? "حدث خطأ" }}' });
+        }).always(function() {
+            btn.prop('disabled', false);
+        });
+    });
 
+    $('.run-rule').on('click', function() {
+        const id = $(this).data('id');
+        const btn = $(this);
+        btn.prop('disabled', true).html('<i class="bi bi-arrow-repeat spinner"></i>');
+        Swal.fire({ icon: 'info', text: '{{ trans("clients.whatsapp_running") ?? "جارٍ التشغيل..." }}', showConfirmButton: false });
+        $.post('{{ url("admin/whatsapp/automation") }}/' + id + '/run', {
+            _token: '{{ csrf_token() }}'
+        }).done(function(res) {
+            Swal.fire({ icon: res.success ? 'success' : 'error', text: res.output || res.error });
+        }).fail(function() {
+            Swal.fire({ icon: 'error', text: '{{ trans("clients.whatsapp_test_error") ?? "حدث خطأ" }}' });
+        }).always(function() {
+            btn.prop('disabled', false).html('<i class="bi bi-play-fill"></i> {{ trans("clients.whatsapp_run_now") ?? "تشغيل الآن" }}');
+        });
+    });
 
     // ═══════════════════════════════════════════════════════════════
     //  TAB 2: MONTHLY CALENDAR
@@ -381,30 +256,16 @@ $(document).ready(function() {
     let currentMonth = {{ now()->month }};
     let currentYear = {{ now()->year }};
 
-    // ═══ Tab switching handler (Bootstrap fires 'shown.bs.tab' on the nav-link) ═══
-    $(document).on('shown.bs.tab', 'a[data-bs-toggle="tab"]', function(e) {
-        const targetId = $(e.target).attr('href');
-
-        if (targetId === '#calendar-tab' && $('#calGrid').is(':empty')) {
+    // Load initial calendar on tab shown
+    $('#calendar-tab').on('shown.bs.tab', function() {
+        if ($('#calGrid').is(':empty')) {
             loadCalendar(currentMonth, currentYear);
-        }
-        if (targetId === '#clients-tab' && $('#clientsBody').is(':empty')) {
-            loadClients(1);
-        }
-        if (targetId === '#tasks-tab') {
-            loadTasks();
         }
     });
 
-    // If a tab is already active on page load, load its content
-    if ($('#calendar-tab').hasClass('active')) {
+    // If calendar tab is already active (direct load), render immediately
+    if ($('#calendar-tab').hasClass('active') || !$('#rules-tab').hasClass('active')) {
         loadCalendar(currentMonth, currentYear);
-    }
-    if ($('#clients-tab').hasClass('active')) {
-        loadClients(1);
-    }
-    if ($('#tasks-tab').hasClass('active')) {
-        loadTasks();
     }
 
     // --- Calendar Navigation ---
@@ -704,344 +565,7 @@ $(document).ready(function() {
                 .html('<i class="bi bi-send"></i> {{ trans("clients.whatsapp_send_reminder") ?? "إرسال تذكير للمحددين" }}');
         });
     }
-
-    // ═══════════════════════════════════════════════════════════════
-    //  TAB 1: CLIENTS — Filter, Load, Send, Schedule
-    // ═══════════════════════════════════════════════════════════════
-    let currentPage = 1;
-    let selectedClientIds = [];
-
-    // --- Load clients on filter ---
-    $('#filterClientsBtn').on('click', function() { loadClients(1); });
-    $('#filterClientType, #filterStatus, #filterMinUnpaid').on('change', function() { loadClients(1); });
-    $('#filterSearch').on('keypress', function(e) { if (e.which === 13) loadClients(1); });
-
-
-
-    // --- Select All ---
-    $('#selectAllClients, #selectAllClientsBottom').on('change', function() {
-        const checked = $(this).is(':checked');
-        $('#clientsBody .client-checkbox').prop('checked', checked);
-        $('#selectAllClients, #selectAllClientsBottom').prop('checked', checked);
-        updateClientActions();
-    });
-    $(document).on('change', '.client-checkbox', function() {
-        updateClientActions();
-    });
-
-    // --- Send Now ---
-    $('#clientsSendNow').on('click', function() {
-        const ids = getSelectedClientIds();
-        if (ids.length === 0) return;
-        // Show template selection modal
-        $('#sendModalClientIds').val(JSON.stringify(ids));
-        $('#sendModalClientCount').text(ids.length);
-        $('#sendModal').modal('show');
-    });
-
-    // --- Schedule Task ---
-    $('#clientsScheduleTask').on('click', function() {
-        const ids = getSelectedClientIds();
-        if (ids.length === 0) return;
-        $('#scheduleClientIds').val(JSON.stringify(ids));
-        $('#scheduleClientCount').text(ids.length);
-        $('#scheduleModal').modal('show');
-    });
-
-    // --- Confirm Send ---
-    $('#confirmSendBtn').on('click', function() {
-        const ids = JSON.parse($('#sendModalClientIds').val());
-        const template = $('#sendModalTemplate').val();
-        const btn = $(this);
-        btn.prop('disabled', true).html('<i class="bi bi-arrow-repeat spinner"></i> {{ trans("clients.whatsapp_sending") ?? "جارٍ الإرسال..." }}');
-
-        $.post('{{ route("admin.whatsapp.automation.send_now") }}', {
-            _token: '{{ csrf_token() }}',
-            client_ids: ids,
-            template_type: template
-        }).done(function(res) {
-            let html = '✅ {{ trans("clients.whatsapp_sent_ok") ?? "تم الإرسال" }}: ' + res.sent + '<br>';
-            if (res.failed > 0) {
-                html += '❌ {{ trans("clients.whatsapp_failed") ?? "فشل" }}: ' + res.failed + '<br>';
-                if (res.errors && res.errors.length > 0) {
-                    html += '<br>{{ trans("clients.errors") ?? "الأخطاء" }}:<br>';
-                    res.errors.forEach(function(e) { html += '• ' + e + '<br>'; });
-                }
-            }
-            Swal.fire({ icon: (res.failed > 0 && res.sent === 0) ? 'error' : 'success', html: html });
-            $('#sendModal').modal('hide');
-        }).fail(function() {
-            Swal.fire({ icon: 'error', text: '{{ trans("clients.whatsapp_test_error") ?? "حدث خطأ في الإرسال" }}' });
-        }).always(function() {
-            btn.prop('disabled', false).html('<i class="bi bi-send"></i> {{ trans("clients.whatsapp_confirm_send") ?? "تأكيد الإرسال" }}');
-        });
-    });
-
-    // --- Confirm Schedule ---
-    $('#confirmScheduleBtn').on('click', function() {
-        const ids = JSON.parse($('#scheduleClientIds').val());
-        const name = $('#scheduleName').val();
-        const time = $('#scheduleTime').val();
-        const template = $('#scheduleTemplate').val();
-        const days = [];
-        $('#scheduleDays input:checked').each(function() { days.push(parseInt($(this).val())); });
-        const btn = $(this);
-
-        if (!name || !time || days.length === 0) {
-            Swal.fire({ icon: 'warning', text: '{{ trans("clients.whatsapp_fill_required") ?? "يرجى تعبئة الحقول المطلوبة" }}' });
-            return;
-        }
-
-        btn.prop('disabled', true).html('<i class="bi bi-arrow-repeat spinner"></i> {{ trans("clients.whatsapp_saving") ?? "جارٍ الحفظ..." }}');
-
-        $.post('{{ route("admin.whatsapp.automation.schedule_task") }}', {
-            _token: '{{ csrf_token() }}',
-            name: name,
-            client_ids: ids,
-            time: time,
-            days: days,
-            template_type: template
-        }).done(function(res) {
-            Swal.fire({ icon: 'success', text: res.message });
-            $('#scheduleModal').modal('hide');
-        }).fail(function() {
-            Swal.fire({ icon: 'error', text: '{{ trans("clients.whatsapp_test_error") ?? "حدث خطأ" }}' });
-        }).always(function() {
-            btn.prop('disabled', false).html('<i class="bi bi-clock"></i> {{ trans("clients.whatsapp_schedule") ?? "جدولة" }}');
-        });
-    });
-
-    // --- Helper: Get selected client IDs ---
-    function getSelectedClientIds() {
-        const ids = [];
-        $('#clientsBody .client-checkbox:checked').each(function() {
-            ids.push(parseInt($(this).val()));
-        });
-        return ids;
-    }
-
-    function updateClientActions() {
-        const checked = $('#clientsBody .client-checkbox:checked').length;
-        $('#clientsSendNow').prop('disabled', checked === 0);
-        $('#clientsScheduleTask').prop('disabled', checked === 0);
-        const label = checked > 0 ? ' (' + checked + ')' : '';
-        $('#clientsSendNow').html('<i class="bi bi-send"></i> {{ trans("clients.whatsapp_send_reminder") ?? "إرسال تذكير" }}' + label);
-        $('#clientsScheduleTask').html('<i class="bi bi-clock"></i> {{ trans("clients.whatsapp_schedule") ?? "جدولة مهمة" }}' + label);
-    }
-
-    function loadClients(page) {
-        currentPage = page;
-        $('#clientsTableWrapper').addClass('d-none');
-        $('#clientsEmpty').addClass('d-none');
-        $('#clientsPagination').addClass('d-none');
-        $('#clientsActions').addClass('d-none');
-        $('#clientsLoading').removeClass('d-none');
-
-        const params = {
-            page: page,
-            client_type: $('#filterClientType').val(),
-            status: $('#filterStatus').val(),
-            min_unpaid: $('#filterMinUnpaid').val(),
-            search: $('#filterSearch').val(),
-        };
-
-        $.get('{{ route("admin.whatsapp.automation.clients") }}', params)
-        .done(function(res) {
-            $('#clientsLoading').addClass('d-none');
-
-            if (res.data.length === 0) {
-                $('#clientsEmpty').removeClass('d-none');
-                return;
-            }
-
-            $('#clientsTableWrapper').removeClass('d-none');
-            $('#clientsPagination').removeClass('d-none');
-            $('#clientsActions').removeClass('d-none');
-
-            let html = '';
-            res.data.forEach(function(c) {
-                const icon = c.client_type === 'satellite' ? '🛰️' : '🌐';
-                const statusBadge = c.is_active === '1'
-                    ? '<span class="badge badge-light-success fs-8">{{ trans("clients.active") ?? "نشط" }}</span>'
-                    : '<span class="badge badge-light-secondary fs-8">{{ trans("clients.inactive") ?? "غير نشط" }}</span>';
-                html += '<tr>' +
-                    '<td><div class="form-check"><input class="form-check-input client-checkbox" type="checkbox" value="' + c.id + '"></div></td>' +
-                    '<td><span class="fw-bold">' + icon + ' ' + c.name + '</span><br>' + statusBadge + '</td>' +
-                    '<td dir="ltr"><small>' + c.phone + '</small></td>' +
-                    '<td><span class="badge badge-warning">' + c.invoice_count + '</span></td>' +
-                    '<td class="fw-bold text-danger">$' + c.total_unpaid.toFixed(2) + '</td>' +
-                    '<td><small class="text-muted">' + (c.last_due_date || '-') + '</small></td>' +
-                    '</tr>';
-            });
-            $('#clientsBody').html(html);
-            $('#clientsCount').text(res.total + ' {{ trans("clients.clients") ?? "زبون" }}');
-
-            // Pagination
-            let pagesHtml = '';
-            const lastPage = res.last_page;
-            for (let i = 1; i <= lastPage; i++) {
-                pagesHtml += '<button class="btn btn-sm ' + (i === res.current_page ? 'btn-primary' : 'btn-light') + ' page-btn" data-page="' + i + '">' + i + '</button>';
-            }
-            $('#clientsPages').html(pagesHtml);
-            $('#selectAllClients, #selectAllClientsBottom').prop('checked', false);
-            updateClientActions();
-        }).fail(function() {
-            $('#clientsLoading').addClass('d-none');
-            Swal.fire({ icon: 'error', text: '{{ trans("clients.whatsapp_test_error") ?? "حدث خطأ في تحميل البيانات" }}' });
-        });
-    }
-
-    $(document).on('click', '.page-btn', function() {
-        loadClients(parseInt($(this).data('page')));
-    });
-
-    // ═══════════════════════════════════════════════════════════════
-    //  TAB 3: TASKS — Load, Toggle, Edit, Delete
-    // ═══════════════════════════════════════════════════════════════
-    function loadTasks() {
-        $('#tasksLoading').removeClass('d-none');
-        $('#tasksContainer').addClass('d-none');
-        $('#tasksEmpty').addClass('d-none');
-
-        $.get('{{ route("admin.whatsapp.automation.tasks") }}')
-        .done(function(res) {
-            $('#tasksLoading').addClass('d-none');
-
-            if (res.tasks.length === 0) {
-                $('#tasksEmpty').removeClass('d-none');
-                return;
-            }
-
-            const dayNames = ['سبت', 'أحد', 'اثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة'];
-            let html = '';
-
-            res.tasks.forEach(function(task) {
-                const daysLabels = task.days.map(function(d) { return dayNames[d]; });
-                const daysStr = daysLabels.length === 7 ? '{{ trans("clients.every_day") ?? "كل يوم" }}' : daysLabels.join('، ');
-                const filterStr = task.filter_client_type !== 'all'
-                    ? (task.filter_client_type === 'internet' ? '🌐 إنترنت' : '🛰️ ساتلايت')
-                    : '{{ trans("clients.all") ?? "الكل" }}';
-
-                const templateLabel = task.template;
-                let infoHtml = '<span class="text-muted"><i class="bi bi-clock"></i> ' + task.time + '</span>';
-                infoHtml += ' | <span class="text-muted"><i class="bi bi-calendar"></i> ' + daysStr + '</span>';
-                infoHtml += ' | <span class="text-muted"><i class="bi bi-funnel"></i> ' + filterStr + '</span>';
-                infoHtml += ' | <span class="text-muted"><i class="bi bi-file-text"></i> ' + templateLabel + '</span>';
-
-                let statsHtml = '';
-                if (task.last_run) {
-                    statsHtml += '<span class="text-muted small"><i class="bi bi-clock-history"></i> {{ trans("clients.last_run") ?? "آخر تشغيل" }}: ' + task.last_run + '</span>';
-                } else {
-                    statsHtml += '<span class="text-muted small">{{ trans("clients.whatsapp_never_run") ?? "لم يتم تشغيلها بعد" }}</span>';
-                }
-                statsHtml += ' | <span class="small text-success">✅ ' + task.total_sent + '</span>';
-                if (task.total_failed > 0) {
-                    statsHtml += ' <span class="small text-danger">❌ ' + task.total_failed + '</span>';
-                }
-
-                const isRemindBefore = task.id === 'whatsapp_remind_before';
-
-                html += '<div class="card card-flush shadow-sm mb-3 task-card" data-task-id="' + task.id + '">' +
-                    '<div class="card-header py-3">' +
-                    '<div class="d-flex align-items-center gap-3 w-100">' +
-                    '<div class="flex-grow-1">' +
-                    '<div class="d-flex align-items-center gap-2">' +
-                    '<span class="fw-bold text-gray-800">' + task.label + '</span>' +
-                    '<span class="badge ' + (task.enabled ? 'badge-success' : 'badge-secondary') + ' task-status-badge">' +
-                    (task.enabled ? '🟢 {{ trans("clients.active") ?? "مفعل" }}' : '⚪ {{ trans("clients.inactive") ?? "معطل" }}') +
-                    '</span>' +
-                    '</div>' +
-                    '</div>' +
-                    '<div class="d-flex gap-1">' +
-                    '<button class="btn btn-sm btn-light toggle-task" data-id="' + task.id + '">' +
-                    (task.enabled ? '<i class="bi bi-pause"></i>' : '<i class="bi bi-play"></i>') +
-                    '</button>' +
-                    '<button class="btn btn-sm btn-light-primary run-task" data-id="' + task.id + '" data-command="' + (task.id === 'whatsapp_remind_before' ? 'whatsapp:reminders' : 'whatsapp:reminders') + '">' +
-                    '<i class="bi bi-play-fill"></i>' +
-                    '</button>' +
-                    (!isRemindBefore ? '<button class="btn btn-sm btn-light-danger delete-task" data-id="' + task.id + '"><i class="bi bi-trash"></i></button>' : '') +
-                    '</div>' +
-                    '</div>' +
-                    '</div>' +
-                    '<div class="card-body py-3">' +
-                    '<div class="d-flex justify-content-between align-items-center">' +
-                    '<div>' + infoHtml + '</div>' +
-                    '<div class="text-end">' + statsHtml + '</div>' +
-                    '</div>' +
-                    '</div>' +
-                    '</div>';
-            });
-
-            $('#tasksContainer').html(html).removeClass('d-none');
-        }).fail(function() {
-            $('#tasksLoading').addClass('d-none');
-            Swal.fire({ icon: 'error', text: '{{ trans("clients.whatsapp_test_error") ?? "حدث خطأ في تحميل المهام" }}' });
-        });
-    }
-
-
-
-    // --- Toggle Task ---
-    $(document).on('click', '.toggle-task', function() {
-        const id = $(this).data('id');
-        const btn = $(this);
-        btn.prop('disabled', true).html('<i class="bi bi-arrow-repeat spinner"></i>');
-
-        $.post('{{ url("admin/whatsapp/automation") }}/' + id + '/toggle', {
-            _token: '{{ csrf_token() }}'
-        }).done(function(res) {
-            loadTasks();
-        }).fail(function() {
-            Swal.fire({ icon: 'error', text: '{{ trans("clients.whatsapp_test_error") ?? "حدث خطأ" }}' });
-            btn.prop('disabled', false);
-        });
-    });
-
-    // --- Run Task ---
-    $(document).on('click', '.run-task', function() {
-        const id = $(this).data('id');
-        const btn = $(this);
-        btn.prop('disabled', true).html('<i class="bi bi-arrow-repeat spinner"></i>');
-
-        $.post('{{ url("admin/whatsapp/automation") }}/' + id + '/run', {
-            _token: '{{ csrf_token() }}'
-        }).done(function(res) {
-            Swal.fire({ icon: res.success ? 'success' : 'error', text: res.output || res.error });
-        }).fail(function() {
-            Swal.fire({ icon: 'error', text: '{{ trans("clients.whatsapp_test_error") ?? "حدث خطأ" }}' });
-        }).always(function() {
-            btn.prop('disabled', false).html('<i class="bi bi-play-fill"></i>');
-        });
-    });
-
-    // --- Delete Task ---
-    $(document).on('click', '.delete-task', function() {
-        const id = $(this).data('id');
-        const card = $(this).closest('.task-card');
-
-        Swal.fire({
-            title: '{{ trans("clients.whatsapp_confirm_delete") ?? "تأكيد الحذف" }}',
-            text: '{{ trans("clients.whatsapp_delete_task_confirm") ?? "هل أنت متأكد من حذف هذه المهمة؟" }}',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: '{{ trans("clients.yes") ?? "نعم" }}',
-            cancelButtonText: '{{ trans("clients.cancel") ?? "إلغاء" }}',
-        }).then(function(result) {
-            if (!result.isConfirmed) return;
-
-            $.ajax({
-                url: '{{ url("admin/whatsapp/automation/tasks") }}/' + id,
-                method: 'DELETE',
-                data: { _token: '{{ csrf_token() }}' }
-            }).done(function() {
-                card.fadeOut(300, function() { $(this).remove(); });
-                Swal.fire({ icon: 'success', text: '{{ trans("clients.whatsapp_task_deleted") ?? "تم حذف المهمة" }}' });
-            }).fail(function() {
-                Swal.fire({ icon: 'error', text: '{{ trans("clients.whatsapp_test_error") ?? "حدث خطأ" }}' });
-            });
-        });
-    });
-
+});
 </script>
 
 <style>
