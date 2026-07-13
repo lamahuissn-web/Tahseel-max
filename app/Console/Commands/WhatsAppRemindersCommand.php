@@ -5,14 +5,16 @@ namespace App\Console\Commands;
 use App\Models\Admin\Invoice;
 use App\Services\WhatsAppMessageBuilder;
 use App\Services\WhatsAppService;
+use App\Services\WhatsApp\WhatsAppTemplateService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
 class WhatsAppRemindersCommand extends Command
 {
-    protected $signature = 'whatsapp:reminders {--send : Actually send messages}';
-    protected $description = 'Preview or send aggregated WhatsApp reminders for unpaid invoices';
+    protected $signature = 'whatsapp:reminders {--send : Actually send messages}' . "\n"
+        . '                           {--rule=whatsapp_remind_before : Automation rule ID to use}';
+    protected $description = 'Send WhatsApp reminders using automation rule config';
 
     protected $whatsapp;
     protected $sentCount = 0;
@@ -24,25 +26,47 @@ class WhatsAppRemindersCommand extends Command
         $this->whatsapp = app(WhatsAppService::class);
 
         if ($enabled != '1') {
-            $this->error('WhatsApp reminders are disabled.');
+            $this->error('WhatsApp reminders are disabled (whatsapp_enabled).');
             return Command::FAILURE;
         }
 
-        $autoEnabled = DB::table('app_config')->where('key', 'whatsapp_auto_enabled')->value('value');
-        if ($autoEnabled != '1') {
-            $this->error('WhatsApp auto-send is disabled.');
+        // ── Read per-rule config from new JSON ──
+        $ruleId = $this->option('rule');
+        $rulesConfig = $this->getAutomationRuleConfig($ruleId);
+
+        if (!$rulesConfig) {
+            $this->error("Rule '{$ruleId}' not found in automation config.");
             return Command::FAILURE;
         }
 
+        if (!$rulesConfig['enabled']) {
+            $this->error("Rule '{$ruleId}' is disabled in automation settings.");
+            return Command::FAILURE;
+        }
+
+        // Check day of week (our config: 0=سبت, 1=أحد, ..., 6=جمعة)
+        $ourDay = (now()->dayOfWeek + 1) % 7; // Convert Carbon (0=Sun) to our (0=Sat)
+        if (!in_array($ourDay, $rulesConfig['days'])) {
+            $this->info('Today is not in the configured days for this rule. Skipping.');
+            return Command::SUCCESS;
+        }
+
+        // ── Connection check ──
         $status = $this->whatsapp->status();
         if (!$status['connected']) {
             $this->error('WhatsApp is not connected.');
             return Command::FAILURE;
         }
 
-        $template = DB::table('app_config')->where('key', 'whatsapp_message_template')->value('value')
-            ?? WhatsAppMessageBuilder::defaultTemplate();
+        // ── Template from rule config (fallback to old key) ──
+        $templateType = $rulesConfig['template'] ?? 'reminder';
+        $template = WhatsAppTemplateService::getBody($templateType);
+        if (empty($template)) {
+            $template = DB::table('app_config')->where('key', 'whatsapp_message_template')->value('value')
+                ?? WhatsAppMessageBuilder::defaultTemplate();
+        }
 
+        // ── Legacy settings (still read from old keys as fallback) ──
         $clientType = DB::table('app_config')->where('key', 'whatsapp_auto_client_type')->value('value') ?? 'all';
         $minAmount = (float) (DB::table('app_config')->where('key', 'whatsapp_auto_min_amount')->value('value') ?? 0);
         $autoStatus = DB::table('app_config')->where('key', 'whatsapp_auto_status')->value('value') ?? 'unpaid,partial';
@@ -53,26 +77,38 @@ class WhatsAppRemindersCommand extends Command
         $today = Carbon::today();
         $targetDates = [];
 
-        $beforeDays = (int) (DB::table('app_config')->where('key', 'whatsapp_remind_before')->value('value') ?? 3);
-        if ($beforeDays > 0) {
-            $targetDates[] = $today->copy()->addDays($beforeDays)->format('Y-m-d');
+        // ── Days offset from rule config ──
+        $daysOffset = (int) ($rulesConfig['days_offset'] ?? -3);
+        if ($daysOffset < 0) {
+            // Negative = before due date (reminder)
+            $targetDates[] = $today->copy()->addDays(abs($daysOffset))->format('Y-m-d');
+        } elseif ($daysOffset > 0) {
+            // Positive = after due date (follow-up)
+            $targetDates[] = $today->copy()->subDays($daysOffset)->format('Y-m-d');
+        } else {
+            // Zero = due today
+            $targetDates[] = $today->format('Y-m-d');
         }
 
+        // Also check legacy remind_on_due / remind_after (keep for backward compat)
         $onDue = DB::table('app_config')->where('key', 'whatsapp_remind_on_due')->value('value');
         if ($onDue == '1') {
             $targetDates[] = $today->format('Y-m-d');
         }
 
-        $afterDays = DB::table('app_config')->where('key', 'whatsapp_remind_after')->value('value') ?? '1,3,7';
-        $afterDaysArray = array_map('intval', array_filter(explode(',', $afterDays)));
-        foreach ($afterDaysArray as $days) {
-            if ($days > 0) {
-                $targetDates[] = $today->copy()->subDays($days)->format('Y-m-d');
+        $afterDays = DB::table('app_config')->where('key', 'whatsapp_remind_after')->value('value') ?? '';
+        if (!empty($afterDays)) {
+            $afterDaysArray = array_map('intval', array_filter(explode(',', $afterDays)));
+            foreach ($afterDaysArray as $days) {
+                if ($days > 0) {
+                    $targetDates[] = $today->copy()->subDays($days)->format('Y-m-d');
+                }
             }
         }
 
         $targetDates = array_unique($targetDates);
 
+        // ── Build query ──
         $query = Invoice::with(['client'])
             ->whereIn('due_date', $targetDates)
             ->whereIn('status', $statuses)
@@ -87,10 +123,11 @@ class WhatsAppRemindersCommand extends Command
             ->groupBy('client_id');
 
         if ($query->isEmpty()) {
-            $this->info('No unpaid invoices found for the configured reminder dates.');
+            $this->info('No unpaid invoices found for the configured dates.');
             return Command::SUCCESS;
         }
 
+        // ── Build preview ──
         $previewData = [];
 
         foreach ($query as $clientId => $clientInvoices) {
@@ -119,8 +156,7 @@ class WhatsAppRemindersCommand extends Command
             $phone = preg_replace('/[^0-9]/', '', $client->phone);
 
             $invoiceSummary = $clientInvoices->map(function ($inv) {
-                $monthFormatted = Carbon::parse($inv->due_date)->format("m / Y");
-                return "{$monthFormatted}";
+                return Carbon::parse($inv->due_date)->format("m / Y");
             })->join(', ');
 
             $previewData[] = [
@@ -148,6 +184,7 @@ class WhatsAppRemindersCommand extends Command
             return Command::SUCCESS;
         }
 
+        // ── Send ──
         $this->info('');
         $this->info('=== ' . $this->getTrans('sending') . ' ===');
 
@@ -167,7 +204,7 @@ class WhatsAppRemindersCommand extends Command
                 'invoice_ids' => json_encode($invoiceIds),
                 'phone' => $data['phone'],
                 'message' => $data['message'],
-                'template_type' => 'reminder',
+                'template_type' => $templateType,
                 'status' => $result['success'] ? 'sent' : 'failed',
                 'error' => $result['error'] ?? null,
                 'sent_by' => 'system:cron',
@@ -197,6 +234,34 @@ class WhatsAppRemindersCommand extends Command
         return Command::SUCCESS;
     }
 
+    /**
+     * Get a single automation rule's config from the JSON blob.
+     */
+    protected function getAutomationRuleConfig(string $ruleId): ?array
+    {
+        $stored = DB::table('app_config')->where('key', 'whatsapp_automation_rules')->value('value');
+
+        if (!$stored) {
+            return null;
+        }
+
+        $rules = json_decode($stored, true);
+        $rule = $rules[$ruleId] ?? null;
+
+        if (!$rule) {
+            return null;
+        }
+
+        // Ensure defaults
+        return [
+            'enabled' => $rule['enabled'] ?? false,
+            'time' => $rule['time'] ?? '09:00',
+            'days' => $rule['days'] ?? [0, 1, 2, 3, 4, 5, 6],
+            'template' => $rule['template'] ?? 'reminder',
+            'days_offset' => (int) ($rule['days_offset'] ?? -3),
+        ];
+    }
+
     protected function displayPreview($previewData)
     {
         $isArabic = app()->getLocale() === 'ar';
@@ -213,7 +278,7 @@ class WhatsAppRemindersCommand extends Command
             $invoiceLines = $data['invoices']->map(function ($inv) {
                 $monthFormatted = Carbon::parse($inv->due_date)->format("m / Y");
                 $amt = number_format($inv->remaining_amount, 2);
-                return "{$monthFormatted} - {$amt}$";
+                return "{$monthFormatted} - {$amt}\$";
             })->toArray();
             $rows[] = [
                 $data['client_name'],
@@ -227,9 +292,9 @@ class WhatsAppRemindersCommand extends Command
 
         $clientCount = count($previewData);
         if ($isArabic) {
-            $this->info("العملاء المراد إرسالهم: {$clientCount} | الإجمالي المستحق: $" . number_format($grandTotal, 2));
+            $this->info("العملاء المراد إرسالهم: {$clientCount} | الإجمالي المستحق: \$" . number_format($grandTotal, 2));
         } else {
-            $this->info("Clients to notify: {$clientCount} | Total outstanding: $" . number_format($grandTotal, 2));
+            $this->info("Clients to notify: {$clientCount} | Total outstanding: \$" . number_format($grandTotal, 2));
         }
     }
 

@@ -2,77 +2,81 @@
 
 namespace App\Console;
 
-use App\Console\Commands\AddNewInvoices;
-use App\Console\Commands\AutoBackupCommand;
 use App\Console\Commands\SendOverdueReminders;
-use App\Models\AppConfig;
+use App\Console\Commands\WhatsAppRemindersCommand;
+use App\Models\Admin\AppConfig;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 
 class Kernel extends ConsoleKernel
 {
     /**
+     * The Artisan commands provided by your application.
+     *
+     * @var array
+     */
+    protected $commands = [
+        WhatsAppRemindersCommand::class,
+    ];
+
+    /**
      * Define the application's command schedule.
      */
     protected function schedule(Schedule $schedule): void
     {
-        // $schedule->command('inspire')->hourly();
-        // $schedule->command(AddNewInvoices::class)->monthlyOn(1, '00:00');
-        
-        // جدولة النسخ الاحتياطي التلقائي بناءً على الإعدادات
-        try {
-            $autoBackupEnabled = AppConfig::where('key', 'auto_backup_enabled')->value('value');
-            $backupFrequency = AppConfig::where('key', 'backup_frequency')->value('value');
-            
-            if ($autoBackupEnabled == '1') {
-                $backupCommand = $schedule->command(AutoBackupCommand::class);
-                
-                switch ($backupFrequency) {
-                    case 'daily':
-                        $backupCommand->dailyAt('17:44'); // الساعة 2 صباحاً
-                        break;
-                    case 'weekly':
-                        $backupCommand->weeklyOn(1, '02:00'); // يوم الاثنين الساعة 2 صباحاً
-                        break;
-                    case 'monthly':
-                        $backupCommand->monthlyOn(1, '02:00'); // أول يوم من الشهر الساعة 2 صباحاً
-                        break;
-                    default:
-                        $backupCommand->dailyAt('02:00');
-                }
-            }
-        } catch (\Exception $e) {
-            // في حالة عدم وجود الإعدادات، لا تفعل شيئاً
-        }
+        // في حالة عدم وجود الإعدادات، لا تفعل شيئاً
+        // }
 
         $schedule->command('telegram:send-backup')->everyMinute();
         $schedule->command(SendOverdueReminders::class)->dailyAt('08:00');
 
+        // ── WhatsApp Automation Rules (new per-rule JSON config) ──
         try {
-            $autoEnabled = AppConfig::where('key', 'whatsapp_auto_enabled')->value('value');
-            $autoTime = AppConfig::where('key', 'whatsapp_auto_time')->value('value') ?? '09:00';
-            $autoDays = AppConfig::where('key', 'whatsapp_auto_days')->value('value') ?? '1,2,3,4,5,6,7';
+            $stored = AppConfig::where('key', 'whatsapp_automation_rules')->value('value');
+            if ($stored) {
+                $rules = json_decode($stored, true) ?? [];
+            } else {
+                // Fallback to old config if new one doesn't exist yet
+                $oldEnabled = AppConfig::where('key', 'whatsapp_auto_enabled')->value('value');
+                if ($oldEnabled == '1') {
+                    $oldTime = AppConfig::where('key', 'whatsapp_auto_time')->value('value') ?? '09:00';
+                    $schedule->command('whatsapp:reminders --send')->dailyAt($oldTime);
+                }
+                return;
+            }
 
-            if ($autoEnabled == '1') {
-                $days = array_map('intval', array_filter(explode(',', $autoDays)));
+            // Schedule each enabled rule
+            foreach ($rules as $ruleId => $rule) {
+                if (!($rule['enabled'] ?? false)) {
+                    continue;
+                }
+
+                $time = $rule['time'] ?? '09:00';
+                $days = $rule['days'] ?? [0, 1, 2, 3, 4, 5, 6];
+
+                $parts = explode(':', $time);
+                $hour = (int) ($parts[0] ?? 9);
+                $minute = (int) ($parts[1] ?? 0);
 
                 if (count($days) === 7) {
-                    $schedule->command('whatsapp:reminders --send')->dailyAt($autoTime);
-                } elseif (!empty($days)) {
-                    $dayMap = [1 => 6, 2 => 0, 3 => 1, 4 => 2, 5 => 3, 6 => 4, 7 => 5];
-                    $cronDays = [];
-                    foreach ($days as $d) {
-                        if (isset($dayMap[$d])) {
-                            $cronDays[] = $dayMap[$d];
-                        }
-                    }
-                    if (!empty($cronDays)) {
-                        $parts = explode(':', $autoTime);
-                        $hour = (int) ($parts[0] ?? 9);
-                        $minute = (int) ($parts[1] ?? 0);
-                        $schedule->command('whatsapp:reminders --send')
-                            ->cron("{$minute} {$hour} * * " . implode(',', array_unique($cronDays)));
-                    }
+                    // Every day → use dailyAt for cleaner schedule
+                    $schedule->command("whatsapp:reminders --send --rule={$ruleId}")->dailyAt($time);
+                } else {
+                    // Specific days → use cron expression
+                    // Our config: 0=سبت(Sat), 1=أحد(Sun), ..., 6=جمعة(Fri)
+                    // Cron: 0=Sun, 1=Mon, ..., 6=Sat
+                    // Our 0(Sat) → cron 6
+                    // Our 1(Sun) → cron 0
+                    // Our 2(Mon) → cron 1
+                    // Our 3(Tue) → cron 2
+                    // Our 4(Wed) → cron 3
+                    // Our 5(Thu) → cron 4
+                    // Our 6(Fri) → cron 5
+                    // Mapping: cronDay = (ourDay + 6) % 7
+                    $cronDays = array_map(fn($d) => ($d + 6) % 7, $days);
+                    sort($cronDays);
+                    $schedule->command("whatsapp:reminders --send --rule={$ruleId}")
+                        ->cron("{$minute} {$hour} * * " . implode(',', array_unique($cronDays)));
                 }
             }
         } catch (\Exception $e) {
@@ -85,7 +89,7 @@ class Kernel extends ConsoleKernel
      */
     protected function commands(): void
     {
-        $this->load(__DIR__.'/Commands');
+        $this->load(__DIR__ . '/Commands');
 
         require base_path('routes/console.php');
     }
