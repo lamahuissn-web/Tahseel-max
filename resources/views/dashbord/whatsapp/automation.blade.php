@@ -203,7 +203,7 @@ $(document).ready(function() {
         const id = btn.data('id');
         btn.prop('disabled', true).html('<i class="bi bi-arrow-repeat spinner"></i>');
 
-        $.post('{{ url("admin/whatsapp/automation") }}/' + id + '/toggle', {
+        $.post('{{ route("admin.whatsapp.automation.toggle", ["id" => "RULE_ID"]) }}'.replace("RULE_ID", id), {
             _token: '{{ csrf_token() }}'
         }).done(function(res) {
             const badge = $('#status-badge-' + id);
@@ -298,7 +298,7 @@ $(document).ready(function() {
         postData._token = '{{ csrf_token() }}';
 
         $.ajax({
-            url: '{{ url("admin/whatsapp/automation") }}/' + id + '/save',
+            url: '{{ route("admin.whatsapp.automation.save", ["id" => "RULE_ID"]) }}'.replace("RULE_ID", id),
             method: 'POST',
             data: postData,
             traditional: true
@@ -349,7 +349,7 @@ $(document).ready(function() {
         const id = btn.data('id');
         btn.prop('disabled', true).html('<i class="bi bi-arrow-repeat spinner"></i>');
 
-        $.post('{{ url("admin/whatsapp/automation") }}/' + id + '/run', {
+        $.post('{{ route("admin.whatsapp.automation.run", ["id" => "RULE_ID"]) }}'.replace("RULE_ID", id), {
             _token: '{{ csrf_token() }}'
         }).done(function(res) {
             if (res.success) {
