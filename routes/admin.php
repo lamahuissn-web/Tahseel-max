@@ -263,6 +263,8 @@ Route::group(
                 Route::get('/automation/calendar-data', [WhatsAppControlCenterController::class, 'calendarData'])->name('automation.calendar_data');
                 Route::get('/automation/calendar-day', [WhatsAppControlCenterController::class, 'calendarDay'])->name('automation.calendar_day');
                 Route::post('/automation/calendar-send', [WhatsAppControlCenterController::class, 'calendarSend'])->name('automation.calendar_send');
+                Route::get('/qr-code', [WhatsAppControlCenterController::class, 'getQRCode'])->name('qr_code');
+                Route::get('/check-connection', [WhatsAppControlCenterController::class, 'checkConnection'])->name('check_connection');
             });
 
  

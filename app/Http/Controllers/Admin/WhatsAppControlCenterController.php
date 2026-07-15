@@ -393,6 +393,73 @@ class WhatsAppControlCenterController extends Controller
     // ═══════════════════════════════════════════════════════════════
 
     /**
+     * 📱 QR Code — Fetch QR from OpenWA for re-authentication.
+     */
+    public function getQRCode()
+    {
+        try {
+            $service = app(WhatsAppService::class);
+
+            // First check if already connected
+            $status = $service->status();
+            if ($status['connected']) {
+                return response()->json([
+                    'success' => true,
+                    'connected' => true,
+                    'phone' => $status['phone'] ?? null,
+                    'message' => 'Session already connected',
+                ]);
+            }
+
+            // Fetch QR code from OpenWA
+            $qr = $service->getQR();
+
+            if (!empty($qr['qr'])) {
+                return response()->json([
+                    'success' => true,
+                    'connected' => false,
+                    'qr' => $qr['qr'],
+                ]);
+            }
+
+            return response()->json([
+                'success' => false,
+                'connected' => false,
+                'message' => 'QR code not available. The session may need to be restarted.',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'connected' => false,
+                'message' => 'Failed to fetch QR code: ' . $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * 📱 QR Code — Check connection status (for polling).
+     */
+    public function checkConnection()
+    {
+        try {
+            $service = app(WhatsAppService::class);
+            $status = $service->status();
+
+            return response()->json([
+                'connected' => $status['connected'] ?? false,
+                'phone' => $status['phone'] ?? null,
+                'status' => $status['status'] ?? 'unknown',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'connected' => false,
+                'phone' => null,
+                'status' => 'error',
+            ]);
+        }
+    }
+
+    /**
      * 🤖 Automation — List and manage rules.
      */
     public function automation()

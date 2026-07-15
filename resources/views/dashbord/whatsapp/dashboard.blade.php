@@ -135,6 +135,48 @@
         </div>
     </div>
 
+    {{-- QR Code Section (shown when disconnected) --}}
+    @if(!$connectionStatus && $emergencyStop != '1')
+    <div class="row g-5 g-xl-8 mb-8" id="qr-section">
+        <div class="col-12">
+            <div class="card card-xl-stretch">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <i class="bi bi-qr-code-scan me-2 text-warning"></i>
+                        📱 رمز QR لإعادة الاتصال
+                    </h3>
+                    <div class="card-toolbar">
+                        <button type="button" class="btn btn-sm btn-light-primary" id="refresh-qr-btn" onclick="fetchQRCode()">
+                            <i class="bi bi-arrow-clockwise me-1"></i> تحديث
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="text-center" id="qr-container">
+                        <div class="spinner-border text-primary mb-3" role="status" id="qr-loading">
+                            <span class="visually-hidden">جاري تحميل رمز QR...</span>
+                        </div>
+                        <p class="text-muted" id="qr-loading-text">جاري تحميل رمز QR من OpenWA...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
+
+    {{-- Connection Success Banner (hidden by default, shown after scan) --}}
+    <div class="row g-5 g-xl-8 mb-8" id="connection-success" style="display:none">
+        <div class="col-12">
+            <div class="alert alert-success d-flex align-items-center p-5">
+                <i class="bi bi-check-circle-fill fs-2x me-4"></i>
+                <div class="d-flex flex-column">
+                    <h4 class="mb-1">✅ تم الاتصال بنجاح!</h4>
+                    <span>يمكنك الآن إرسال رسائل الواتساب</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {{-- Quick Actions + Last Activity Row --}}
     <div class="row g-5 g-xl-8">
 
@@ -241,4 +283,157 @@
     </div>
 
 </div>
+
+<script>
+    // QR Code polling configuration
+    var qrPollInterval = null;
+    var connectionPollInterval = null;
+    var qrBaseUrl = '{{ route("admin.whatsapp.qr_code") }}';
+    var checkConnectionUrl = '{{ route("admin.whatsapp.check_connection") }}';
+
+    // Fetch QR code from OpenWA
+    function fetchQRCode() {
+        var $container = $('#qr-container');
+        var $loading = $('#qr-loading');
+        var $loadingText = $('#qr-loading-text');
+
+        // Show loading
+        $container.html(
+            '<div class="spinner-border text-primary mb-3" role="status">' +
+            '<span class="visually-hidden">جاري تحميل...</span>' +
+            '</div>' +
+            '<p class="text-muted">جاري تحميل رمز QR من OpenWA...</p>'
+        );
+
+        $.ajax({
+            url: qrBaseUrl,
+            type: 'GET',
+            timeout: 10000,
+            success: function(res) {
+                if (res.connected) {
+                    // Already connected!
+                    showConnected(res.phone);
+                    return;
+                }
+
+                if (res.success && res.qr) {
+                    // Show QR code
+                    var qrHtml = '';
+                    if (res.qr.startsWith('data:')) {
+                        // Base64 data URL
+                        qrHtml = '<img src="' + res.qr + '" alt="QR Code" style="max-width:280px; width:100%;" class="img-fluid rounded border p-2 mb-3">';
+                    } else if (res.qr.startsWith('http')) {
+                        // URL
+                        qrHtml = '<img src="' + res.qr + '" alt="QR Code" style="max-width:280px; width:100%;" class="img-fluid rounded border p-2 mb-3">';
+                    } else if (res.qr.length > 100) {
+                        // Likely base64 without prefix
+                        qrHtml = '<img src="data:image/png;base64,' + res.qr + '" alt="QR Code" style="max-width:280px; width:100%;" class="img-fluid rounded border p-2 mb-3">';
+                    } else {
+                        // Text QR code
+                        qrHtml = '<pre style="font-size:12px; line-height:1.2; display:inline-block; text-align:left; direction:ltr;" class="border p-3 bg-white rounded">' + res.qr + '</pre>';
+                    }
+
+                    $container.html(
+                        qrHtml +
+                        '<p class="text-muted mt-3 mb-1"><i class="bi bi-info-circle me-1"></i> افتح واتساب على هاتفك وامسح الرمز</p>' +
+                        '<p class="text-muted fs-7">الرمز صالح لمدة محدودة — امسحه قبل انتهاء الصلاحية</p>' +
+                        '<p class="text-muted fs-7 mt-1">🔄 تحديث تلقائي بعد <span id="qr-countdown" class="fw-bold text-primary">18s</span></p>' +
+                        '<button class="btn btn-sm btn-outline-primary mt-2" onclick="fetchQRCode()">' +
+                        '<i class="bi bi-arrow-clockwise me-1"></i> رمز جديد</button>'
+                    );
+
+                    // Start polling for connection status
+                    startConnectionPolling();
+                } else {
+                    // QR not available
+                    $container.html(
+                        '<i class="bi bi-exclamation-triangle fs-3x text-warning mb-3 d-block"></i>' +
+                        '<p class="text-muted">' + (res.message || 'رمز QR غير متاح حالياً') + '</p>' +
+                        '<button class="btn btn-sm btn-outline-primary mt-2" onclick="fetchQRCode()">' +
+                        '<i class="bi bi-arrow-clockwise me-1"></i> إعادة المحاولة</button>'
+                    );
+                }
+            },
+            error: function() {
+                $container.html(
+                    '<i class="bi bi-exclamation-triangle fs-3x text-danger mb-3 d-block"></i>' +
+                    '<p class="text-muted">فشل الاتصال بـ OpenWA</p>' +
+                    '<button class="btn btn-sm btn-outline-primary mt-2" onclick="fetchQRCode()">' +
+                    '<i class="bi bi-arrow-clockwise me-1"></i> إعادة المحاولة</button>'
+                );
+            }
+        });
+    }
+
+    // Poll connection status after QR scan
+    function startConnectionPolling() {
+        if (connectionPollInterval) clearInterval(connectionPollInterval);
+
+        connectionPollInterval = setInterval(function() {
+            $.ajax({
+                url: checkConnectionUrl,
+                type: 'GET',
+                timeout: 5000,
+                success: function(res) {
+                    if (res.connected) {
+                        clearInterval(connectionPollInterval);
+                        showConnected(res.phone);
+                    }
+                }
+            });
+        }, 3000); // Check every 3 seconds
+    }
+
+    // Show connected state
+    function showConnected(phone) {
+        if (connectionPollInterval) clearInterval(connectionPollInterval);
+
+        $('#qr-section').slideUp(300, function() {
+            $(this).remove();
+        });
+        $('#connection-success').slideDown(300);
+
+        // Update the connection status card
+        setTimeout(function() {
+            location.reload();
+        }, 2000);
+    }
+
+    // Start QR auto-refresh (every 18 seconds — QR expires in ~20s)
+    function startQrAutoRefresh() {
+        if (qrPollInterval) clearInterval(qrPollInterval);
+        var secondsLeft = 18;
+
+        // Show countdown
+        function updateCountdown() {
+            var $timer = $('#qr-countdown');
+            if ($timer.length) {
+                if (secondsLeft > 0) {
+                    $timer.text(secondsLeft + 's');
+                    secondsLeft--;
+                } else {
+                    $timer.text('...');
+                }
+            }
+        }
+
+        qrPollInterval = setInterval(function() {
+            secondsLeft = 18;
+            fetchQRCode();
+        }, 18000);
+
+        // Countdown display
+        setInterval(updateCountdown, 1000);
+    }
+
+    // Auto-fetch QR on page load if disconnected
+    $(document).ready(function() {
+        if ($('#qr-section').length) {
+            setTimeout(function() {
+                fetchQRCode();
+                startQrAutoRefresh();
+            }, 500);
+        }
+    });
+</script>
 @endsection

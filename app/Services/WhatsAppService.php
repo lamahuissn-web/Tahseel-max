@@ -41,7 +41,7 @@ class WhatsAppService
             }
 
             $status = $data['status'] ?? '';
-            $connected = in_array(strtolower($status), ['connected', 'ready', 'scan_qr', 'qr_ready']);
+            $connected = in_array(strtolower($status), ['connected', 'ready']);
 
             return [
                 'connected' => $connected,
@@ -69,7 +69,7 @@ class WhatsAppService
 
             $qrCode = $data['qrCode'] ?? $data['qr'] ?? null;
             $status = $data['status'] ?? '';
-            $connected = in_array(strtolower($status), ['connected', 'ready', 'scan_qr', 'qr_ready']);
+            $connected = in_array(strtolower($status), ['connected', 'ready']);
 
             return [
                 'qr' => $qrCode,
