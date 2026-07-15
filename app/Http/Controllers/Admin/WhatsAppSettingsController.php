@@ -7,6 +7,7 @@ use App\Models\Admin\Invoice;
 use App\Models\Clients;
 use App\Services\WhatsAppMessageBuilder;
 use App\Services\WhatsAppService;
+use App\Services\WhatsApp\InvoiceEligibilityService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -224,6 +225,7 @@ class WhatsAppSettingsController extends Controller
 
         $invoices = Invoice::with(['client'])
             ->whereIn('due_date', $targetDates)
+            ->where('due_date', '<=', Carbon::today())  // Only include due/overdue invoices
             ->whereIn('status', ['unpaid', 'partial'])
             ->whereHas('client', function ($q) {
                 $q->whereNotNull('phone')->where('phone', '!=', '');
@@ -348,6 +350,7 @@ class WhatsAppSettingsController extends Controller
 
         $invoices = Invoice::with(['client'])
             ->whereIn('due_date', $targetDates)
+            ->where('due_date', '<=', Carbon::today())  // Only include due/overdue invoices
             ->whereIn('status', ['unpaid', 'partial'])
             ->whereHas('client', function ($q) {
                 $q->whereNotNull('phone')->where('phone', '!=', '');
@@ -1019,7 +1022,7 @@ class WhatsAppSettingsController extends Controller
         ]);
     }
 
-    public function sendClientReminder($id)
+    public function sendClientReminder($id, Request $request)
     {
         $enabled = DB::table('app_config')->where('key', 'whatsapp_enabled')->value('value');
         if ($enabled != '1') {
@@ -1044,10 +1047,11 @@ class WhatsAppSettingsController extends Controller
             return response()->json(['success' => false, 'error' => trans('clients.whatsapp_invalid_phone')]);
         }
 
-        $unpaidInvoices = Invoice::where('client_id', $id)
-            ->whereIn('status', ['unpaid', 'partial'])
-            ->orderBy('due_date', 'asc')
-            ->get();
+        // filter_due=1 → only due/overdue invoices; filter_due=0 → all unpaid
+        $filterDue = $request->input('filter_due', 1);
+        $unpaidInvoices = $filterDue
+            ? InvoiceEligibilityService::getEligibleInvoices($id)
+            : InvoiceEligibilityService::getAllUnpaid($id);
 
         if ($unpaidInvoices->isEmpty()) {
             return response()->json(['success' => false, 'error' => trans('clients.no_unpaid_invoices')]);

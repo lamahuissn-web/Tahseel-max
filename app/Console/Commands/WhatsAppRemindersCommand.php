@@ -6,6 +6,7 @@ use App\Models\Admin\Invoice;
 use App\Services\WhatsAppMessageBuilder;
 use App\Services\WhatsAppService;
 use App\Services\WhatsApp\WhatsAppTemplateService;
+use App\Services\WhatsApp\InvoiceEligibilityService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -117,6 +118,7 @@ class WhatsAppRemindersCommand extends Command
         $query = Invoice::with(['client'])
             ->selectRaw('*, (SELECT COUNT(*) FROM tbl_invoices inv2 WHERE inv2.client_id = tbl_invoices.client_id AND inv2.status IN ("unpaid","partial")) as total_unpaid')
             ->whereIn('due_date', $targetDates)
+            ->where('due_date', '<=', Carbon::today())  // Only include due/overdue invoices
             ->whereIn('status', $statuses)
             ->whereHas('client', function ($q) use ($rulesConfig) {
                 $q->whereNotNull('phone')->where('phone', '!=', '');

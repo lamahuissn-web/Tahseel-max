@@ -7,6 +7,8 @@ use App\Models\WhatsAppMessageLog;
 use App\Services\WhatsApp\WhatsAppTemplateService;
 use App\Services\WhatsAppMessageBuilder;
 use App\Services\WhatsAppService;
+use App\Services\WhatsApp\InvoiceEligibilityService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -253,21 +255,25 @@ class WhatsAppControlCenterController extends Controller
             $message = str_replace('{name}', $client->name, $message);
             $message = str_replace('{message_body}', $request->custom_message ?? '', $message);
 
-            $unpaidInvoices = DB::table('tbl_invoices')
-                ->where('client_id', $client->id)
-                ->whereIn('status', ['unpaid', 'partial'])
-                ->get();
+            // Use centralized eligibility check — only due/overdue invoices
+            $unpaidInvoices = InvoiceEligibilityService::getEligibleInvoices($client->id);
 
             $totalAmount = $unpaidInvoices->sum('remaining_amount');
 
             if ($unpaidInvoices->isNotEmpty()) {
                 $invoiceDetailsList = WhatsAppMessageBuilder::buildInvoiceDetailsList($unpaidInvoices);
                 $message = WhatsAppMessageBuilder::buildMessage($message, $client->name, $totalAmount, $invoiceDetailsList);
+                // Use the most recent invoice's actual due date
+                $dueDate = $unpaidInvoices->last()->due_date
+                    ? Carbon::parse($unpaidInvoices->last()->due_date)->format('Y-m-d')
+                    : Carbon::today()->format('Y-m-d');
+            } else {
+                $dueDate = Carbon::today()->format('Y-m-d');
             }
 
             $message = str_replace('{total_amount}', number_format($totalAmount, 2), $message);
             $message = str_replace('{invoice_details_list}', 'لا توجد فواتير مستحقة', $message);
-            $message = str_replace('{due_date}', now()->addDays(3)->format('Y-m-d'), $message);
+            $message = str_replace('{due_date}', $dueDate, $message);
             $message = str_replace('{support_phone}', '96170781562', $message);
             $message = str_replace('{amount}', number_format($totalAmount > 0 ? $totalAmount : 0, 2), $message);
             $message = str_replace('{month}', now()->format('m'), $message);
@@ -849,22 +855,25 @@ class WhatsAppControlCenterController extends Controller
             $message = str_replace('{name}', $client->name, $message);
             $message = str_replace('{message_body}', '', $message);
 
-            $unpaidInvoices = DB::table('tbl_invoices')
-                ->where('client_id', $client->id)
-                ->whereIn('status', ['unpaid', 'partial'])
-                ->whereNull('deleted_at')
-                ->get();
+            // Use centralized eligibility check — only due/overdue invoices
+            $unpaidInvoices = InvoiceEligibilityService::getEligibleInvoices($client->id);
 
             $totalAmount = $unpaidInvoices->sum('remaining_amount');
 
             if ($unpaidInvoices->isNotEmpty()) {
                 $invoiceDetailsList = WhatsAppMessageBuilder::buildInvoiceDetailsList($unpaidInvoices);
                 $message = WhatsAppMessageBuilder::buildMessage($message, $client->name, $totalAmount, $invoiceDetailsList);
+                // Use the most recent invoice's actual due date
+                $dueDate = $unpaidInvoices->last()->due_date
+                    ? Carbon::parse($unpaidInvoices->last()->due_date)->format('Y-m-d')
+                    : Carbon::today()->format('Y-m-d');
+            } else {
+                $dueDate = Carbon::today()->format('Y-m-d');
             }
 
             $message = str_replace('{total_amount}', number_format($totalAmount, 2), $message);
             $message = str_replace('{invoice_details_list}', 'لا توجد فواتير مستحقة', $message);
-            $message = str_replace('{due_date}', now()->addDays(3)->format('Y-m-d'), $message);
+            $message = str_replace('{due_date}', $dueDate, $message);
             $message = str_replace('{support_phone}', '96170781562', $message);
             $message = str_replace('{amount}', number_format($totalAmount > 0 ? $totalAmount : 0, 2), $message);
             $message = str_replace('{month}', now()->format('m'), $message);

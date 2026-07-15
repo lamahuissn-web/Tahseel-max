@@ -163,40 +163,61 @@
 
 <script>
     function sendClientWhatsAppReminder(clientId) {
-        var $btn = $('.whatsapp-reminder-btn');
-        var originalHtml = $btn.html();
+        Swal.fire({
+            title: 'إرسال تذكير واتساب',
+            html: '<p style="margin-bottom:10px">اختر نوع الفواتير المراد إرسالها:</p>',
+            icon: 'question',
+            showDenyButton: true,
+            confirmButtonText: '✅ الفواتير المستحقة فقط',
+            denyButtonText: '📋 جميع فواتير غير المدفوعة',
+            confirmButtonColor: '#198754',
+            denyButtonColor: '#0d6efd',
+            customClass: {
+                confirmButton: 'swal2-confirm-me',
+                denyButton: 'swal2-deny-me'
+            }
+        }).then((result) => {
+            if (result.isConfirmed || result.isDenied) {
+                var filterDue = result.isConfirmed ? 1 : 0;
+                var $btn = $('.whatsapp-reminder-btn');
+                var originalHtml = $btn.html();
 
-        $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> جاري الإرسال...');
+                $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> جاري الإرسال...');
 
-        $.ajax({
-            url: '{{ route('admin.clients.whatsapp_reminder', ['id' => '__ID__']) }}'.replace('__ID__', clientId),
-            type: 'POST',
-            data: { _token: '{{ csrf_token() }}' },
-            success: function(res) {
-                if (res.success) {
-                    Swal.fire({
-                        icon: 'success',
-                        title: res.message,
-                        timer: 2000,
-                        showConfirmButton: false
-                    });
-                } else {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '{{ trans("forms.error") }}',
-                        text: res.error
-                    });
-                }
-            },
-            error: function() {
-                Swal.fire({
-                    icon: 'error',
-                    title: '{{ trans("forms.error") }}',
-                    text: '{{ trans("clients.whatsapp_send_failed") }}'
+                $.ajax({
+                    url: '{{ route('admin.clients.whatsapp_reminder', ['id' => '__ID__']) }}'.replace('__ID__', clientId),
+                    type: 'POST',
+                    data: {
+                        _token: '{{ csrf_token() }}',
+                        filter_due: filterDue
+                    },
+                    success: function(res) {
+                        if (res.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: res.message,
+                                timer: 2000,
+                                showConfirmButton: false
+                            });
+                        } else {
+                            Swal.fire({
+                                icon: 'error',
+                                title: '{{ trans("forms.error") }}',
+                                text: res.error
+                            });
+                        }
+                    },
+                    error: function() {
+                        Swal.fire({
+                            icon: 'error',
+                            title: '{{ trans("forms.error") }}',
+                            text: '{{ trans("clients.whatsapp_send_failed") }}'
+                        });
+                    },
+                    complete: function() {
+                        $btn.prop('disabled', false).html(originalHtml);
+                    }
                 });
-            },
-            complete: function() {
-                $btn.prop('disabled', false).html(originalHtml);
             }
         });
     }

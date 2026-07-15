@@ -19,6 +19,12 @@ class WhatsAppTemplateService
                 'body' => "🌐 MegaNet\n\n👤 اسم المشترك: {name}\n\n📋 لديك فواتير مستحقة بإجمالي \${total_amount}.\n\n📄 تفاصيل الفواتير المستحقة:\n{invoice_details_list}\n\n━━━━━━━━━━━━━━━━━━\n\n⚠️ يرجى التكرم بتسديد الرصيد المستحق في أقرب وقت ممكن.\nإذا كنت قد سددت هذا المبلغ مؤخراً، يرجى تجاهل هذه الرسالة.\n\nشكراً لاختياركم MegaNet 🌹",
                 'variables' => ['{name}', '{total_amount}', '{invoice_details_list}'],
             ],
+            'invoice_notification' => [
+                'label' => 'إشعار فاتورة جديدة',
+                'label_en' => 'Invoice Notification',
+                'body' => "🌐 MegaNet\n\n👤 عزيزي المشترك: {name}\n\n📋 تم إصدار فاتورة اشتراك جديدة:\n\n📅 شهر الفاتورة: {month} / {year}\n💵 المبلغ: \${amount}\n⏰ تاريخ الاستحقاق: {due_date}\n\n━━━━━━━━━━━━━━━━━━\n\n📝 يرجى ملاحظة موعد الاستحقاق وتسديد المبلغ قبل التاريخ المذكور لتجنب أي انقطاع في الخدمة.\n\nشكراً لاختياركم MegaNet 🌹",
+                'variables' => ['{name}', '{month}', '{year}', '{amount}', '{due_date}'],
+            ],
             'receipt' => [
                 'label' => 'إيصال دفع',
                 'label_en' => 'Payment Receipt',
