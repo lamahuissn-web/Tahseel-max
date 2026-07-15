@@ -19,6 +19,8 @@
 @endsection
 
 @section('content')
+
+@include('dashbord.whatsapp._partials.tab-nav')
 <div id="kt_app_content_container" class="app-container container-xxxl">
     <div class="card">
         <div class="card-header">
@@ -30,7 +32,7 @@
 
                 {{-- ═══════════ To: Field (Gmail-style) ═══════════ --}}
                 <div class="mb-6">
-                    <label class="form-label fw-bold mb-2">{{ trans('clients.whatsapp_to') ?? 'إلى' }}</label>
+                    <label class="form-label fw-bold mb-2">{{ trans('clients.whatsapp_send_to') ?? 'إلى' }}</label>
                     <div class="border rounded p-2 bg-white" id="toField" tabindex="0">
                         <div class="d-flex flex-wrap align-items-center gap-1" id="toChips"></div>
                         <div class="d-flex align-items-center gap-1 flex-grow-1" id="toInputRow">
@@ -115,11 +117,11 @@
             <div class="modal-body">
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label class="form-label fw-bold fs-7">{{ trans('clients.whatsapp_client_type') ?? 'نوع العميل' }}</label>
+                        <label class="form-label fw-bold fs-7">{{ trans('clients.whatsapp_send_client_type') ?? 'نوع العميل' }}</label>
                         <select class="form-select" name="filter_client_type" id="filterClientType">
                             <option value="">{{ trans('clients.all') ?? 'الكل' }}</option>
-                            <option value="internet">{{ trans('clients.whatsapp_internet') ?? 'إنترنت' }}</option>
-                            <option value="satellite">{{ trans('clients.whatsapp_satellite') ?? 'ساتلايت' }}</option>
+                            <option value="internet">{{ trans('clients.whatsapp_send_type_internet') ?? 'إنترنت' }}</option>
+                            <option value="satellite">{{ trans('clients.whatsapp_send_type_satellite') ?? 'ساتلايت' }}</option>
                         </select>
                     </div>
                     <div class="col-md-6">
@@ -172,7 +174,7 @@
             <div class="modal-header">
                 <h5 class="modal-title" id="filterResultsTitle">
                     <i class="bi bi-list-check me-2"></i>
-                    <span id="filterResultsTitleText">{{ trans('clients.whatsapp_filter_results') ?? 'نتائج الفلتر' }}</span>
+                    <span id="filterResultsTitleText">{{ trans('clients.whatsapp_send_filter_results') ?? 'نتائج الفلتر' }}</span>
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
@@ -190,7 +192,7 @@
                                 <th>{{ trans('clients.name') ?? 'الاسم' }}</th>
                                 <th>{{ trans('clients.phone') ?? 'الرقم' }}</th>
                                 <th>{{ trans('clients.status') ?? 'الحالة' }}</th>
-                                <th class="text-center">{{ trans('clients.whatsapp_unpaid_bills_short') ?? ' unpaid' }}</th>
+                                <th class="text-center">{{ trans('clients.whatsapp_send_unpaid_short') ?? ' unpaid' }}</th>
                             </tr>
                         </thead>
                         <tbody id="filterResultsBody">
@@ -206,10 +208,10 @@
             </div>
             <div class="modal-footer d-flex justify-content-between">
                 <button type="button" class="btn btn-light" id="backToFiltersBtn">
-                    <i class="bi bi-arrow-right"></i> {{ trans('clients.whatsapp_back_to_filters') ?? 'العودة للفلاتر' }}
+                    <i class="bi bi-arrow-right"></i> {{ trans('clients.whatsapp_send_back_filters') ?? 'العودة للفلاتر' }}
                 </button>
                 <button type="button" class="btn btn-primary" id="addSelectedBtn" disabled>
-                    <i class="bi bi-plus-lg"></i> <span id="addSelectedText">{{ trans('clients.whatsapp_add_selected') ?? 'إضافة المحددين' }}</span>
+                    <i class="bi bi-plus-lg"></i> <span id="addSelectedText">{{ trans('clients.whatsapp_send_add_selected') ?? 'إضافة المحددين' }}</span>
                 </button>
             </div>
         </div>
@@ -457,7 +459,7 @@ $(document).ready(function() {
     function renderFilterResults(clients) {
         const tbody = $('#filterResultsBody');
         const count = clients.length;
-        $('#filterResultsTitleText').text('{{ trans("clients.whatsapp_filter_results") ?? "نتائج الفلتر" }} — ' + count + ' {{ trans("clients.whatsapp_recipient") ?? "زبون" }}');
+        $('#filterResultsTitleText').text('{{ trans("clients.whatsapp_send_filter_results") ?? "نتائج الفلتر" }} — ' + count + ' {{ trans("clients.whatsapp_recipient") ?? "زبون" }}');
 
         if (count === 0) {
             tbody.html(`
@@ -469,7 +471,7 @@ $(document).ready(function() {
                 </tr>
             `);
             $('#addSelectedBtn').prop('disabled', true);
-            $('#addSelectedText').text('{{ trans("clients.whatsapp_add_selected") ?? "إضافة المحددين" }}');
+            $('#addSelectedText').text('{{ trans("clients.whatsapp_send_add_selected") ?? "إضافة المحددين" }}');
             return;
         }
 
@@ -520,10 +522,10 @@ $(document).ready(function() {
 
         if (checked === 0) {
             btn.prop('disabled', true);
-            text.text('{{ trans("clients.whatsapp_add_selected") ?? "إضافة المحددين" }}');
+            text.text('{{ trans("clients.whatsapp_send_add_selected") ?? "إضافة المحددين" }}');
         } else {
             btn.prop('disabled', false);
-            text.text('{{ trans("clients.whatsapp_add_selected") ?? "إضافة المحددين" }} (' + checked + ')');
+            text.text('{{ trans("clients.whatsapp_send_add_selected") ?? "إضافة المحددين" }} (' + checked + ')');
         }
 
         // Update select-all state
@@ -563,7 +565,7 @@ $(document).ready(function() {
         setTimeout(function() {
             Swal.fire({
                 icon: 'success',
-                text: count + ' {{ trans("clients.whatsapp_filter_added") ?? "تمت الإضافة" }}',
+                text: count + ' {{ trans("clients.whatsapp_send_filter_added") ?? "تمت الإضافة" }}',
                 timer: 1500,
                 showConfirmButton: false
             });

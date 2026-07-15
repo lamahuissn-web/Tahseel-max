@@ -598,6 +598,73 @@ class WhatsAppControlCenterController extends Controller
     /**
      * Get automation rules config from app_config.
      */
+    // ═══════════════════════════════════════════════════════════════
+    //  📋 PREVIEW & SEND
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * 📋 Preview an automation rule — returns who will receive messages.
+     */
+    public function previewAutomationRule($id)
+    {
+        $rules = $this->getAutomationRulesConfig();
+        if (!isset($rules[$id])) {
+            return response()->json(['success' => false, 'error' => 'Rule not found'], 404);
+        }
+
+        $rule = $rules[$id];
+        $filters = [
+            'client_type' => $rule['filter_client_type'] ?? 'all',
+            'subscription_id' => $rule['filter_subscription_id'] ?? null,
+            'min_unpaid' => $rule['filter_min_unpaid'] ?? 0,
+            'client_status' => $rule['filter_client_status'] ?? 'all',
+        ];
+
+        $service = app(\App\Services\WhatsApp\ReminderService::class);
+
+        if ($id === 'whatsapp_remind_before') {
+            $days = abs((int) ($rule['days_offset'] ?? 3));
+            $preview = $service->getBeforeDisconnectionPreview($days, $filters);
+        } elseif ($id === 'whatsapp_custom') {
+            // Custom = overdue for now
+            $preview = $service->getOverduePreview($filters);
+        } else {
+            return response()->json(['success' => false, 'error' => 'Rule not supported for preview'], 400);
+        }
+
+        // Return preview data directly (not wrapped) for JS compatibility
+        return response()->json($preview);
+    }
+
+    /**
+     * 📨 Send from preview — sends to the client IDs shown in preview.
+     */
+    public function sendFromPreview(Request $request, $id)
+    {
+        $request->validate([
+            'client_ids' => 'required|array',
+            'client_ids.*' => 'integer',
+        ]);
+
+        $rules = $this->getAutomationRulesConfig();
+        if (!isset($rules[$id])) {
+            return response()->json(['success' => false, 'error' => 'Rule not found'], 404);
+        }
+
+        $template = $rules[$id]['template'] ?? 'payment_reminder';
+        $clientIds = $request->client_ids;
+
+        $service = app(\App\Services\WhatsApp\ReminderService::class);
+        $result = $service->sendReminders($clientIds, $template);
+
+        return response()->json([
+            'success' => true,
+            'sent' => $result['sent'],
+            'failed' => $result['failed'],
+            'total' => $result['total'],
+        ]);
+    }
+
     private function getAutomationRulesConfig(): array
     {
         $defaults = $this->getDefaultAutomationRules();

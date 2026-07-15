@@ -446,4 +446,25 @@
         'whatsapp_auto_skip_hours' => 'تخطي إذا تم الإرسال خلال',
         'second' => 'ثانية',
         'hour' => 'ساعة',
+
+        // WhatsApp Calendar
+        'whatsapp_calendar_monthly' => 'التقويم الشهري',
+        'whatsapp_calendar_no_clients' => 'لا يوجد زبائن غير مدفوعين',
+
+        // WhatsApp Rule Labels
+        'whatsapp_rule_days_before' => 'أيام قبل التعطيل',
+        'whatsapp_rule_days_of_week' => 'أيام الأسبوع',
+        'whatsapp_rule_filters' => 'التصفية',
+        'whatsapp_rule_time' => 'وقت الإرسال',
+
+        // WhatsApp Send Screen
+        'whatsapp_send_add_selected' => 'إضافة المحددين',
+        'whatsapp_send_back_filters' => 'العودة للفلاتر',
+        'whatsapp_send_client_type' => 'نوع العميل',
+        'whatsapp_send_filter_added' => 'تمت الإضافة',
+        'whatsapp_send_filter_results' => 'نتائج الفلتر',
+        'whatsapp_send_to' => 'المرسل إليه',
+        'whatsapp_send_type_internet' => 'إنترنت',
+        'whatsapp_send_type_satellite' => 'ساتلايت',
+        'whatsapp_send_unpaid_short' => 'unpaid',
      );

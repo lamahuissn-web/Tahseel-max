@@ -18,6 +18,8 @@
 @endsection
 
 @section('content')
+
+@include('dashbord.whatsapp._partials.tab-nav')
 <div id="kt_app_content_container" class="app-container container-xxxl">
 
     {{-- Emergency Banner --}}

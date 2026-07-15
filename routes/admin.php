@@ -256,6 +256,8 @@ Route::group(
                 Route::get('/automation', [WhatsAppControlCenterController::class, 'automation'])->name('automation');
                 Route::post('/automation/{id}/toggle', [WhatsAppControlCenterController::class, 'toggleAutomationRule'])->name('automation.toggle');
                 Route::post('/automation/{id}/run', [WhatsAppControlCenterController::class, 'runAutomationRule'])->name('automation.run');
+                Route::match(['get', 'post'], '/automation/{id}/preview', [WhatsAppControlCenterController::class, 'previewAutomationRule'])->name('automation.preview');
+                Route::match(['get', 'post'], '/automation/{id}/send-from-preview', [WhatsAppControlCenterController::class, 'sendFromPreview'])->name('automation.send_from_preview');
                 Route::post('/automation/{id}/save', [WhatsAppControlCenterController::class, 'saveAutomationRule'])->name('automation.save');
                 Route::get('/queue', [WhatsAppControlCenterController::class, 'queue'])->name('queue');
                 Route::post('/queue/resend-failed', [WhatsAppControlCenterController::class, 'resendAllFailed'])->name('queue.resend_failed');
