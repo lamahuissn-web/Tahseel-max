@@ -97,22 +97,47 @@ class WhatsAppService
             $data = $response->json();
             $statusCode = $response->status();
 
-            // OpenWA known bug: returns HTTP 500 with {"statusCode":500,"message":"Internal server error"}
-            // even when the message IS sent successfully. Treat as success since messages are delivered.
-            if ($statusCode === 500 && isset($data['statusCode']) && $data['statusCode'] === 500) {
-                Log::warning('OpenWA returned 500 but message may have been sent', [
-                    'phone' => substr($phone, 0, 6) . '***',
-                    'response' => $data,
-                ]);
-                return ['success' => true, 'warning' => 'OpenWA returned 500 (message likely sent)'];
+            if ($response->successful() && (isset($data['messageId']) || (isset($data['success']) && $data['success']))) {
+                return [
+                    'success' => true,
+                    'message_id' => $data['messageId'] ?? null,
+                ];
             }
 
-            if (isset($data['messageId']) || (isset($data['success']) && $data['success'])) {
-                return ['success' => true];
+            $isGeneric500 = $statusCode === 500
+                && (($data['statusCode'] ?? null) === 500)
+                && (($data['message'] ?? '') === 'Internal server error');
+
+            if ($isGeneric500) {
+                $sessionStatus = $this->status();
+                if (($sessionStatus['connected'] ?? false) === true) {
+                    Log::warning('OpenWA returned generic 500 on healthy session; treating as delivered', [
+                        'phone' => substr($phone, 0, 6) . '***',
+                        'status_code' => $statusCode,
+                        'session_status' => $sessionStatus,
+                        'response' => $data,
+                    ]);
+
+                    return [
+                        'success' => true,
+                        'warning' => 'OpenWA returned generic 500 on healthy session',
+                        'assumed_delivery' => true,
+                    ];
+                }
             }
 
-            $errorMsg = $data['error']['message'] ?? $data['message'] ?? 'Unknown error';
-            return ['success' => false, 'error' => $errorMsg];
+            $errorMsg = $data['error']['message'] ?? $data['message'] ?? ('OpenWA HTTP ' . $statusCode);
+            Log::warning('OpenWA send returned failure', [
+                'phone' => substr($phone, 0, 6) . '***',
+                'status_code' => $statusCode,
+                'response' => $data,
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $errorMsg,
+                'status_code' => $statusCode,
+            ];
         } catch (\Exception $e) {
             Log::error('OpenWA send failed: ' . $e->getMessage());
             return ['success' => false, 'error' => $e->getMessage()];

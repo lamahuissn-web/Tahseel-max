@@ -108,7 +108,7 @@
                                                     0 => 'الأحد', 1 => 'الاثنين', 2 => 'الثلاثاء',
                                                     3 => 'الأربعاء', 4 => 'الخميس', 5 => 'الجمعة', 6 => 'السبت'
                                                 ];
-                                                $selectedDow = $r1['days_of_week'] ?? [0,1,2,3,4,5,6];
+                                                $selectedDow = $r1['days'] ?? [0,1,2,3,4,5,6];
                                                 if (!is_array($selectedDow)) $selectedDow = [0,1,2,3,4,5,6];
                                                 @endphp
                                                 @foreach($dowLabels as $dayNum => $dayName)
@@ -147,7 +147,7 @@
                                                     <option value="all">الكل</option>
                                                     @foreach($subscriptions as $sub)
                                                         <option value="{{ $sub->id }}"
-                                                            {{ ($r1['filter_subscription'] ?? '') == $sub->id ? 'selected' : '' }}>
+                                                            {{ ($r1['filter_subscription_id'] ?? '') == $sub->id ? 'selected' : '' }}>
                                                             {{ $sub->name }}
                                                         </option>
                                                     @endforeach
@@ -169,8 +169,8 @@
                                                         id="filter_status_whatsapp_remind_before"
                                                         data-rule="whatsapp_remind_before">
                                                     <option value="all">الكل</option>
-                                                    <option value="active" {{ ($r1['filter_status'] ?? '') == 'active' ? 'selected' : '' }}>نشط</option>
-                                                    <option value="inactive" {{ ($r1['filter_status'] ?? '') == 'inactive' ? 'selected' : '' }}>غير نشط</option>
+                                                    <option value="active" {{ ($r1['filter_client_status'] ?? '') == 'active' ? 'selected' : '' }}>نشط</option>
+                                                    <option value="inactive" {{ ($r1['filter_client_status'] ?? '') == 'inactive' ? 'selected' : '' }}>غير نشط</option>
                                                 </select>
                                             </div>
                                         </div>
@@ -197,7 +197,7 @@
                         @endif
 
                         {{-- == RULE 2: Overdue Reminder == --}}
-                        @php $r2 = $rules['whatsapp_custom'] ?? null; @endphp
+                        @php $r2 = $rules['whatsapp_overdue'] ?? $rules['whatsapp_custom'] ?? null; @endphp
                         @if($r2)
                         <div class="col-lg-6">
                             <div class="card card-flush shadow-sm h-100">
@@ -214,8 +214,8 @@
                                     <div class="card-toolbar">
                                         <div class="form-check form-switch form-switch-custom form-switch-warning">
                                             <input class="form-check-input rule-toggle" type="checkbox"
-                                                   id="toggle_whatsapp_custom"
-                                                   data-id="whatsapp_custom"
+                                                   id="toggle_whatsapp_overdue"
+                                                   data-id="whatsapp_overdue"
                                                    {{ ($r2['enabled'] ?? false) ? 'checked' : '' }}>
                                         </div>
                                     </div>
@@ -226,14 +226,14 @@
                                         <div class="col-md-6">
                                             <label class="form-label fw-bold fs-7">{{ trans('clients.whatsapp_rule_time') ?? 'الوقت' }}</label>
                                             <input type="time" class="form-control form-control-sm"
-                                                   id="time_whatsapp_custom"
+                                                   id="time_whatsapp_overdue"
                                                    value="{{ $r2['time'] ?? '09:00' }}">
                                         </div>
                                         {{-- Template --}}
                                         <div class="col-md-6">
                                             <label class="form-label fw-bold fs-7">{{ trans('clients.whatsapp_template') ?? 'القالب' }}</label>
                                             <select class="form-select form-select-sm"
-                                                    id="template_whatsapp_custom">
+                                                    id="template_whatsapp_overdue">
                                                 @foreach($templates as $tplId => $tpl)
                                                     <option value="{{ $tplId }}"
                                                         {{ ($r2['template'] ?? '') == $tplId ? 'selected' : '' }}>
@@ -246,14 +246,14 @@
                                         <div class="col-md-6">
                                             <label class="form-label fw-bold fs-7">{{ trans('clients.whatsapp_rule_days_of_week') ?? 'أيام الأسبوع' }}</label>
                                             <select class="form-select form-select-sm"
-                                                    id="dow_whatsapp_custom" multiple
+                                                    id="dow_whatsapp_overdue" multiple
                                                     style="min-height:80px;">
                                                 @php
                                                 $dowLabels2 = [
                                                     0 => 'الأحد', 1 => 'الاثنين', 2 => 'الثلاثاء',
                                                     3 => 'الأربعاء', 4 => 'الخميس', 5 => 'الجمعة', 6 => 'السبت'
                                                 ];
-                                                $selectedDow2 = $r2['days_of_week'] ?? [0,1,2,3,4,5,6];
+                                                $selectedDow2 = $r2['days'] ?? [0,1,2,3,4,5,6];
                                                 if (!is_array($selectedDow2)) $selectedDow2 = [0,1,2,3,4,5,6];
                                                 @endphp
                                                 @foreach($dowLabels2 as $dayNum => $dayName)
@@ -276,8 +276,8 @@
                                             <div class="col-md-6">
                                                 <label class="form-label fw-bold fs-8">{{ trans('clients.client_type') ?? 'نوع العميل' }}</label>
                                                 <select class="form-select form-select-sm filter-select"
-                                                        id="filter_type_whatsapp_custom"
-                                                        data-rule="whatsapp_custom">
+                                                        id="filter_type_whatsapp_overdue"
+                                                        data-rule="whatsapp_overdue">
                                                     <option value="all" {{ ($r2['filter_client_type'] ?? 'all') == 'all' ? 'selected' : '' }}>الكل</option>
                                                     <option value="internet" {{ ($r2['filter_client_type'] ?? '') == 'internet' ? 'selected' : '' }}>إنترنت</option>
                                                     <option value="satellite" {{ ($r2['filter_client_type'] ?? '') == 'satellite' ? 'selected' : '' }}>ساتلايت</option>
@@ -287,12 +287,12 @@
                                             <div class="col-md-6">
                                                 <label class="form-label fw-bold fs-8">{{ trans('clients.subscription') ?? 'الاشتراك' }}</label>
                                                 <select class="form-select form-select-sm filter-select"
-                                                        id="filter_sub_whatsapp_custom"
-                                                        data-rule="whatsapp_custom">
+                                                        id="filter_sub_whatsapp_overdue"
+                                                        data-rule="whatsapp_overdue">
                                                     <option value="all">الكل</option>
                                                     @foreach($subscriptions as $sub)
                                                         <option value="{{ $sub->id }}"
-                                                            {{ ($r2['filter_subscription'] ?? '') == $sub->id ? 'selected' : '' }}>
+                                                            {{ ($r2['filter_subscription_id'] ?? '') == $sub->id ? 'selected' : '' }}>
                                                             {{ $sub->name }}
                                                         </option>
                                                     @endforeach
@@ -302,8 +302,8 @@
                                             <div class="col-md-6">
                                                 <label class="form-label fw-bold fs-8">{{ trans('clients.min_unpaid') ?? 'الحد الأدنى للمبلغ غير المدفوع' }}</label>
                                                 <input type="number" class="form-control form-control-sm filter-input"
-                                                       id="filter_min_whatsapp_custom"
-                                                       data-rule="whatsapp_custom"
+                                                       id="filter_min_whatsapp_overdue"
+                                                       data-rule="whatsapp_overdue"
                                                        min="0" step="0.01"
                                                        value="{{ $r2['filter_min_unpaid'] ?? 0 }}">
                                             </div>
@@ -311,11 +311,11 @@
                                             <div class="col-md-6">
                                                 <label class="form-label fw-bold fs-8">{{ trans('clients.status') ?? 'حالة العميل' }}</label>
                                                 <select class="form-select form-select-sm filter-select"
-                                                        id="filter_status_whatsapp_custom"
-                                                        data-rule="whatsapp_custom">
+                                                        id="filter_status_whatsapp_overdue"
+                                                        data-rule="whatsapp_overdue">
                                                     <option value="all">الكل</option>
-                                                    <option value="active" {{ ($r2['filter_status'] ?? '') == 'active' ? 'selected' : '' }}>نشط</option>
-                                                    <option value="inactive" {{ ($r2['filter_status'] ?? '') == 'inactive' ? 'selected' : '' }}>غير نشط</option>
+                                                    <option value="active" {{ ($r2['filter_client_status'] ?? '') == 'active' ? 'selected' : '' }}>نشط</option>
+                                                    <option value="inactive" {{ ($r2['filter_client_status'] ?? '') == 'inactive' ? 'selected' : '' }}>غير نشط</option>
                                                 </select>
                                             </div>
                                         </div>
@@ -324,15 +324,15 @@
                                     {{-- == Actions == --}}
                                     <div class="mt-4 pt-3 border-top d-flex align-items-center gap-2 flex-wrap">
                                         <button type="button" class="btn btn-sm btn-light-primary preview-rule"
-                                                data-id="whatsapp_custom">
+                                                data-id="whatsapp_overdue">
                                             <i class="bi bi-eye"></i> {{ trans('clients.whatsapp_preview') ?? 'معاينة' }}
                                         </button>
                                         <button type="button" class="btn btn-sm btn-primary save-rule"
-                                                data-id="whatsapp_custom">
+                                                data-id="whatsapp_overdue">
                                             <i class="bi bi-check-lg"></i> {{ trans('clients.whatsapp_save') ?? 'حفظ' }}
                                         </button>
                                         <button type="button" class="btn btn-sm btn-success run-rule"
-                                                data-id="whatsapp_custom">
+                                                data-id="whatsapp_overdue">
                                             <i class="bi bi-play-fill"></i> {{ trans('clients.whatsapp_run_now') ?? 'تشغيل الآن' }}
                                         </button>
                                     </div>
@@ -524,6 +524,7 @@ $(document).ready(function() {
     // =================================================================
 
     var currentPreviewId = null;
+    var currentPreviewClientIds = [];
 
     // -- Toggle Switch --
     $('.rule-toggle').on('change', function() {
@@ -606,6 +607,7 @@ $(document).ready(function() {
         $('#previewEmpty').addClass('d-none');
         $('#previewSendBtn').prop('disabled', true);
         $('#previewCountNum').text('0');
+        currentPreviewClientIds = [];
         $('#previewModalTitle').html('<i class="bi bi-eye text-primary ms-1"></i> ' +
             ($(this).closest('.card').find('h5').text() || 'معاينة'));
 
@@ -620,6 +622,12 @@ $(document).ready(function() {
                     $('#previewEmpty').removeClass('d-none');
                     return;
                 }
+
+                currentPreviewClientIds = res.clients.map(function(c) {
+                    return parseInt(c.id);
+                }).filter(function(id) {
+                    return !isNaN(id);
+                });
 
                 var totalAmount = 0;
                 var totalInvoices = 0;
@@ -670,21 +678,48 @@ $(document).ready(function() {
 
         var sendUrl = '{{ route("admin.whatsapp.automation.send_from_preview", "__ID__") }}'.replace('__ID__', currentPreviewId);
 
-        $.post(sendUrl, { _token: '{{ csrf_token() }}' })
+        if (!currentPreviewClientIds || currentPreviewClientIds.length === 0) {
+            Swal.fire({ icon: 'error', text: 'لا يوجد زبائن للإرسال' });
+            btn.prop('disabled', false).html('<i class="bi bi-send"></i> {{ trans("clients.whatsapp_send_reminder") ?? "إرسال التذكيرات" }}');
+            return;
+        }
+
+        $.post(sendUrl, {
+            _token: '{{ csrf_token() }}',
+            client_ids: currentPreviewClientIds
+        })
             .done(function(res) {
-                var msg = 'تم الإرسال: ' + res.sent;
-                if (res.failed > 0) {
-                    msg += '<br>فشل: ' + res.failed;
-                    if (res.errors && res.errors.length > 0) {
-                        msg += '<br><br>الأخطاء:<br>';
-                        res.errors.forEach(function(e) { msg += '- ' + e + '<br>'; });
+                var msg = 'تمت إضافة ' + (res.queued || 0) + ' رسالة إلى الطابور';
+                if ((res.skipped || 0) > 0) {
+                    msg += '<br>تم تخطي: ' + res.skipped;
+                }
+                if ((res.failed || 0) > 0) {
+                    msg += '<br>فشل قبل الإضافة: ' + res.failed;
+                }
+
+                Swal.fire({ icon: 'success', html: msg, timer: 1500, showConfirmButton: false });
+                $('#previewModal').modal('hide');
+
+                if (res.redirect_url) {
+                    setTimeout(function() {
+                        window.location.href = res.redirect_url;
+                    }, 900);
+                }
+            })
+            .fail(function(xhr) {
+                var errorText = '{{ trans("clients.whatsapp_test_error") ?? "حدث خطأ في الإرسال" }}';
+                if (xhr.responseJSON) {
+                    if (xhr.responseJSON.message) {
+                        errorText = xhr.responseJSON.message;
+                    }
+                    if (xhr.responseJSON.errors) {
+                        var firstKey = Object.keys(xhr.responseJSON.errors)[0];
+                        if (firstKey && xhr.responseJSON.errors[firstKey] && xhr.responseJSON.errors[firstKey][0]) {
+                            errorText = xhr.responseJSON.errors[firstKey][0];
+                        }
                     }
                 }
-                Swal.fire({ icon: (res.failed > 0 && res.sent === 0) ? 'error' : 'success', html: msg });
-                $('#previewModal').modal('hide');
-            })
-            .fail(function() {
-                Swal.fire({ icon: 'error', text: '{{ trans("clients.whatsapp_test_error") ?? "حدث خطأ في الإرسال" }}' });
+                Swal.fire({ icon: 'error', text: errorText });
             })
             .always(function() {
                 btn.prop('disabled', false).html('<i class="bi bi-send"></i> {{ trans("clients.whatsapp_send_reminder") ?? "إرسال التذكيرات" }}');

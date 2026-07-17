@@ -610,6 +610,23 @@ $(document).ready(function() {
             custom_message: $('#customMessage').val(),
             client_ids: clientIds
         }).done(function(res) {
+            if (res.redirect_url) {
+                let msg = 'تمت إضافة ' + (res.queued || 0) + ' رسالة إلى الطابور';
+                if ((res.failed || 0) > 0) {
+                    msg += '<br>فشل قبل الإضافة: ' + res.failed;
+                }
+                if (res.errors && res.errors.length > 0) {
+                    msg += '<br><br>' + res.errors.join('<br>');
+                }
+                Swal.fire({ icon: 'success', html: msg, timer: 1500, showConfirmButton: false });
+                selectedClients.clear();
+                renderChips();
+                setTimeout(function() {
+                    window.location.href = res.redirect_url;
+                }, 900);
+                return;
+            }
+
             $('#resultSent').text(res.sent || 0);
             $('#resultFailed').text(res.failed || 0);
             if (res.errors && res.errors.length > 0) {

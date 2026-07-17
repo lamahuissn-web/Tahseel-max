@@ -12,6 +12,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class WhatsAppControlCenterController extends Controller
 {
@@ -244,6 +245,76 @@ class WhatsAppControlCenterController extends Controller
         $service = app(WhatsAppService::class);
         $results = ['sent' => 0, 'failed' => 0, 'errors' => []];
 
+        if (count($request->client_ids) > 1) {
+            $batchId = (string) Str::uuid();
+            $queued = 0;
+
+            foreach ($request->client_ids as $clientId) {
+                $client = DB::table('tbl_clients')->find($clientId);
+                if (!$client || empty($client->phone)) {
+                    $results['failed']++;
+                    $results['errors'][] = 'Client #' . $clientId . ': missing client or phone';
+                    continue;
+                }
+
+                $message = $body;
+                $message = str_replace('{name}', $client->name, $message);
+                $message = str_replace('{message_body}', $request->custom_message ?? '', $message);
+
+                $unpaidInvoices = InvoiceEligibilityService::getEligibleInvoices($client->id);
+                $totalAmount = $unpaidInvoices->sum('remaining_amount');
+
+                if ($unpaidInvoices->isNotEmpty()) {
+                    $invoiceDetailsList = WhatsAppMessageBuilder::buildInvoiceDetailsList($unpaidInvoices);
+                    $message = WhatsAppMessageBuilder::buildMessage($message, $client->name, $totalAmount, $invoiceDetailsList);
+                    $dueDate = $unpaidInvoices->last()->due_date
+                        ? Carbon::parse($unpaidInvoices->last()->due_date)->format('Y-m-d')
+                        : Carbon::today()->format('Y-m-d');
+                } else {
+                    $dueDate = Carbon::today()->format('Y-m-d');
+                }
+
+                $message = str_replace('{total_amount}', number_format($totalAmount, 2), $message);
+                $message = str_replace('{invoice_details_list}', 'لا توجد فواتير مستحقة', $message);
+                $message = str_replace('{due_date}', $dueDate, $message);
+                $message = str_replace('{support_phone}', '96170781562', $message);
+                $message = str_replace('{amount}', number_format($totalAmount > 0 ? $totalAmount : 0, 2), $message);
+                $message = str_replace('{month}', now()->format('m'), $message);
+                $message = str_replace('{year}', now()->format('Y'), $message);
+                $message = str_replace('{collector}', auth('admin')->user()->name ?? 'الإدارة', $message);
+                $message = str_replace('{datetime}', now()->format('Y-m-d h:i A'), $message);
+                $message = str_replace('{balance_status}', 'الرصيد الحالي: $' . number_format($totalAmount, 2), $message);
+
+                WhatsAppMessageLog::create([
+                    'client_id' => $client->id,
+                    'client_name' => $client->name,
+                    'phone' => $client->phone,
+                    'message' => $message,
+                    'template_type' => $request->template_type,
+                    'status' => 'pending',
+                    'error' => null,
+                    'sent_by' => 'admin:manual|batch:' . $batchId,
+                ]);
+
+                $queued++;
+            }
+
+            if ($queued > 0) {
+                $delay = (int) (DB::table('app_config')->where('key', 'whatsapp_auto_delay')->value('value') ?? 10);
+                $this->startQueuedBatchProcessor($batchId, $delay);
+            }
+
+            return response()->json([
+                'success' => true,
+                'queued' => $queued,
+                'failed' => $results['failed'],
+                'errors' => $results['errors'],
+                'total' => count($request->client_ids),
+                'batch_id' => $batchId,
+                'redirect_url' => route('admin.whatsapp.queue'),
+            ]);
+        }
+
         foreach ($request->client_ids as $clientId) {
             $client = DB::table('tbl_clients')->find($clientId);
             if (!$client || empty($client->phone)) {
@@ -364,6 +435,9 @@ class WhatsAppControlCenterController extends Controller
                 'error' => $log->error,
                 'created_at' => $log->created_at->format('Y-m-d h:i A'),
                 'sent_by' => $log->sent_by,
+                'source_label' => $this->getMessageSourceMeta($log->sent_by)['label'],
+                'source_badge' => $this->getMessageSourceMeta($log->sent_by)['badge'],
+                'source_detail' => $this->getMessageSourceMeta($log->sent_by)['detail'],
             ]),
         ]);
     }
@@ -486,6 +560,7 @@ class WhatsAppControlCenterController extends Controller
      */
     public function toggleAutomationRule($id)
     {
+        $id = $this->normalizeAutomationRuleId($id);
         $rules = $this->getAutomationRulesConfig();
 
         if (!isset($rules[$id])) {
@@ -506,6 +581,7 @@ class WhatsAppControlCenterController extends Controller
      */
     public function saveAutomationRule(Request $request, $id)
     {
+        $id = $this->normalizeAutomationRuleId($id);
         $rules = $this->getAutomationRulesConfig();
 
         if (!isset($rules[$id])) {
@@ -525,8 +601,8 @@ class WhatsAppControlCenterController extends Controller
         $rules[$id]['template'] = $request->template;
         $rules[$id]['days_offset'] = (int) ($request->days_offset ?? $rules[$id]['days_offset'] ?? 0);
 
-        // Filter settings (reminder-specific)
-        if ($id === 'whatsapp_remind_before') {
+        // Filter settings (shared by both reminder rules)
+        if (in_array($id, ['whatsapp_remind_before', 'whatsapp_overdue'], true)) {
             $rules[$id]['filter_client_type'] = $request->filter_client_type ?? 'all';
             $rules[$id]['filter_subscription_id'] = $request->filter_subscription_id ?? null;
             $rules[$id]['filter_min_unpaid'] = (int) ($request->filter_min_unpaid ?? 0);
@@ -546,10 +622,10 @@ class WhatsAppControlCenterController extends Controller
 
         // Build filter summary
         $filtersSummary = '';
-        if ($id === 'whatsapp_remind_before' && !empty($request->filter_client_type) && $request->filter_client_type !== 'all') {
+        if (in_array($id, ['whatsapp_remind_before', 'whatsapp_overdue'], true) && !empty($request->filter_client_type) && $request->filter_client_type !== 'all') {
             $filtersSummary .= ($request->filter_client_type === 'internet' ? 'إنترنت' : 'ساتلايت');
         }
-        if ($id === 'whatsapp_remind_before') {
+        if (in_array($id, ['whatsapp_remind_before', 'whatsapp_overdue'], true)) {
             $parts = [];
             if ($request->filter_client_type && $request->filter_client_type !== 'all') {
                 $parts[] = $request->filter_client_type === 'internet' ? 'إنترنت' : 'ساتلايت';
@@ -576,6 +652,7 @@ class WhatsAppControlCenterController extends Controller
      */
     public function runAutomationRule($id)
     {
+        $id = $this->normalizeAutomationRuleId($id);
         $rules = $this->getAutomationRulesConfig();
         $command = $rules[$id]['command'] ?? null;
 
@@ -607,6 +684,7 @@ class WhatsAppControlCenterController extends Controller
      */
     public function previewAutomationRule($id)
     {
+        $id = $this->normalizeAutomationRuleId($id);
         $rules = $this->getAutomationRulesConfig();
         if (!isset($rules[$id])) {
             return response()->json(['success' => false, 'error' => 'Rule not found'], 404);
@@ -625,8 +703,7 @@ class WhatsAppControlCenterController extends Controller
         if ($id === 'whatsapp_remind_before') {
             $days = abs((int) ($rule['days_offset'] ?? 3));
             $preview = $service->getBeforeDisconnectionPreview($days, $filters);
-        } elseif ($id === 'whatsapp_custom') {
-            // Custom = overdue for now
+        } elseif ($id === 'whatsapp_overdue') {
             $preview = $service->getOverduePreview($filters);
         } else {
             return response()->json(['success' => false, 'error' => 'Rule not supported for preview'], 400);
@@ -641,6 +718,7 @@ class WhatsAppControlCenterController extends Controller
      */
     public function sendFromPreview(Request $request, $id)
     {
+        $id = $this->normalizeAutomationRuleId($id);
         $request->validate([
             'client_ids' => 'required|array',
             'client_ids.*' => 'integer',
@@ -653,16 +731,42 @@ class WhatsAppControlCenterController extends Controller
 
         $template = $rules[$id]['template'] ?? 'payment_reminder';
         $clientIds = $request->client_ids;
+        $days = abs((int) ($rules[$id]['days_offset'] ?? 3));
+        $delay = (int) (DB::table('app_config')->where('key', 'whatsapp_auto_delay')->value('value') ?? 10);
 
         $service = app(\App\Services\WhatsApp\ReminderService::class);
-        $result = $service->sendReminders($clientIds, $template);
+        $result = $service->enqueueReminders($id, $clientIds, $template, [
+            'days' => $days,
+            'delay_seconds' => $delay,
+            'sent_by' => 'admin:automation',
+        ]);
+
+        if (($result['queued'] ?? 0) > 0) {
+            $this->startQueuedBatchProcessor($result['batch_id'], $delay);
+        }
 
         return response()->json([
             'success' => true,
-            'sent' => $result['sent'],
+            'queued' => $result['queued'],
             'failed' => $result['failed'],
+            'skipped' => $result['skipped'],
             'total' => $result['total'],
+            'batch_id' => $result['batch_id'],
+            'redirect_url' => route('admin.whatsapp.queue'),
         ]);
+    }
+
+    private function startQueuedBatchProcessor(string $batchId, int $delay): void
+    {
+        $phpBinary = is_executable('/usr/bin/php') ? '/usr/bin/php' : PHP_BINARY;
+        $php = escapeshellarg($phpBinary);
+        $artisan = escapeshellarg(base_path('artisan'));
+        $batchArg = escapeshellarg($batchId);
+        $delayArg = (int) max(0, $delay);
+        $logFile = '/tmp/whatsapp-batch-' . preg_replace('/[^A-Za-z0-9_-]/', '-', $batchId) . '.log';
+
+        $command = "{$php} {$artisan} whatsapp:process-pending {$batchArg} --delay={$delayArg} > " . escapeshellarg($logFile) . " 2>&1 &";
+        exec($command);
     }
 
     private function getAutomationRulesConfig(): array
@@ -672,22 +776,41 @@ class WhatsAppControlCenterController extends Controller
 
         if ($stored) {
             $storedRules = json_decode($stored, true) ?? [];
+            $storedRules = $this->normalizeStoredAutomationRules($storedRules);
             $rules = array_merge($defaults, $storedRules);
+            $needsSave = false;
 
             foreach ($defaults as $key => $defaultRule) {
                 if (!isset($rules[$key])) {
                     $rules[$key] = $defaultRule;
+                    $needsSave = true;
                 } else {
                     foreach ($defaultRule as $field => $value) {
                         if (!array_key_exists($field, $rules[$key])) {
                             $rules[$key][$field] = $value;
+                            $needsSave = true;
                         }
                     }
                 }
             }
 
             // Strip rules that are no longer in defaults (e.g. removed receipt/disconnection)
+            if (count(array_diff_key($rules, $defaults)) > 0) {
+                $needsSave = true;
+            }
             $rules = array_intersect_key($rules, $defaults);
+
+            foreach ($rules as $key => &$rule) {
+                if (($rule['id'] ?? null) !== $key) {
+                    $rule['id'] = $key;
+                    $needsSave = true;
+                }
+            }
+            unset($rule);
+
+            if ($needsSave) {
+                $this->saveAutomationRulesConfig($rules);
+            }
 
             return $rules;
         }
@@ -715,7 +838,9 @@ class WhatsAppControlCenterController extends Controller
     {
         $lean = [];
         foreach ($rules as $key => $rule) {
+            $key = $this->normalizeAutomationRuleId($key);
             $entry = [
+                'id' => $key,
                 'enabled' => $rule['enabled'] ?? false,
                 'time' => $rule['time'] ?? '09:00',
                 'days' => $rule['days'] ?? [0,1,2,3,4,5,6],
@@ -723,8 +848,8 @@ class WhatsAppControlCenterController extends Controller
                 'days_offset' => $rule['days_offset'] ?? 0,
             ];
 
-            // Save filter settings for reminder rule
-            if ($key === 'whatsapp_remind_before') {
+            // Save filter settings for reminder rules
+            if (in_array($key, ['whatsapp_remind_before', 'whatsapp_overdue'], true)) {
                 $entry['filter_client_type'] = $rule['filter_client_type'] ?? 'all';
                 $entry['filter_subscription_id'] = $rule['filter_subscription_id'] ?? null;
                 $entry['filter_min_unpaid'] = (int) ($rule['filter_min_unpaid'] ?? 0);
@@ -767,22 +892,68 @@ class WhatsAppControlCenterController extends Controller
                 'filter_client_status' => 'all',     // 'all', 'active', 'inactive'
                 'filter_summary' => 'الكل',
             ],
-            'whatsapp_custom' => [
-                'id' => 'whatsapp_custom',
-                'label' => 'رسالة مخصصة',
-                'label_en' => 'Custom Message',
-                'command' => 'whatsapp:custom',
+            'whatsapp_overdue' => [
+                'id' => 'whatsapp_overdue',
+                'label' => 'تذكير متأخر',
+                'label_en' => 'Overdue Reminder',
+                'command' => 'whatsapp:reminders',
                 'icon' => 'bi bi-envelope',
                 'color' => 'info',
                 'enabled' => false,
                 'time' => '10:00',
                 'days' => [0,1,2,3,4,5,6],
-                'template' => 'custom',
+                'template' => 'reminder',
                 'days_offset' => 0,
                 'days_offset_label' => 'كل',
                 'days_offset_unit' => 'أيام',
+                'description' => 'إرسال تذكير للزبائن الذين تأخر سداد فواتيرهم',
+                'filter_client_type' => 'all',
+                'filter_subscription_id' => null,
+                'filter_min_unpaid' => 0,
+                'filter_client_status' => 'all',
+                'filter_summary' => 'الكل',
             ],
         ];
+    }
+
+    private function normalizeAutomationRuleId(string $id): string
+    {
+        return $id === 'whatsapp_custom' ? 'whatsapp_overdue' : $id;
+    }
+
+    private function normalizeStoredAutomationRules(array $rules): array
+    {
+        if (isset($rules['whatsapp_custom']) && !isset($rules['whatsapp_overdue'])) {
+            $rules['whatsapp_overdue'] = $rules['whatsapp_custom'];
+        }
+
+        unset($rules['whatsapp_custom']);
+
+        if (isset($rules['whatsapp_overdue'])) {
+            $rules['whatsapp_overdue']['id'] = 'whatsapp_overdue';
+            $rules['whatsapp_overdue']['label'] = $rules['whatsapp_overdue']['label'] ?? 'تذكير متأخر';
+            $rules['whatsapp_overdue']['label_en'] = $rules['whatsapp_overdue']['label_en'] ?? 'Overdue Reminder';
+            $rules['whatsapp_overdue']['command'] = 'whatsapp:reminders';
+            $rules['whatsapp_overdue']['template'] = $rules['whatsapp_overdue']['template'] ?? 'reminder';
+            $rules['whatsapp_overdue']['filter_subscription_id'] = $rules['whatsapp_overdue']['filter_subscription_id']
+                ?? $rules['whatsapp_overdue']['filter_subscription']
+                ?? null;
+            $rules['whatsapp_overdue']['filter_client_status'] = $rules['whatsapp_overdue']['filter_client_status']
+                ?? $rules['whatsapp_overdue']['filter_status']
+                ?? 'all';
+        }
+
+        if (isset($rules['whatsapp_remind_before'])) {
+            $rules['whatsapp_remind_before']['id'] = 'whatsapp_remind_before';
+            $rules['whatsapp_remind_before']['filter_subscription_id'] = $rules['whatsapp_remind_before']['filter_subscription_id']
+                ?? $rules['whatsapp_remind_before']['filter_subscription']
+                ?? null;
+            $rules['whatsapp_remind_before']['filter_client_status'] = $rules['whatsapp_remind_before']['filter_client_status']
+                ?? $rules['whatsapp_remind_before']['filter_status']
+                ?? 'all';
+        }
+
+        return $rules;
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -792,15 +963,93 @@ class WhatsAppControlCenterController extends Controller
     /**
      * ⏳ Queue — View pending/recent messages. (P2)
      */
-    public function queue()
+    public function queue(Request $request)
     {
         $pending = WhatsAppMessageLog::where('status', 'pending')->count();
+        $sending = WhatsAppMessageLog::where('status', 'sending')->count();
         $failed = WhatsAppMessageLog::where('status', 'failed')->count();
-        $recent = WhatsAppMessageLog::orderBy('created_at', 'desc')->limit(50)->get();
+
+        $statusFilter = trim((string) $request->input('status', ''));
+        $sourceFilter = trim((string) $request->input('source', ''));
+
+        $recentQuery = WhatsAppMessageLog::query();
+
+        if ($statusFilter !== '') {
+            $recentQuery->where('status', $statusFilter);
+        }
+
+        $recent = $recentQuery->orderByRaw("CASE WHEN status = 'sending' THEN 0 WHEN status = 'pending' THEN 1 WHEN status = 'failed' THEN 2 ELSE 3 END")
+            ->orderBy('created_at', 'desc')
+            ->limit(180)
+            ->get();
+
+        $recent = $recent->filter(function ($log) use ($sourceFilter) {
+            if ($sourceFilter === '') {
+                return true;
+            }
+
+            $source = $this->getMessageSourceMeta($log->sent_by)['key'];
+            return $source === $sourceFilter;
+        })->values();
+
+        $batchRows = WhatsAppMessageLog::query()
+            ->whereNotNull('sent_by')
+            ->where('sent_by', 'like', '%|batch:%')
+            ->orderBy('created_at', 'desc')
+            ->limit(500)
+            ->get(['sent_by', 'status', 'created_at']);
+
+        $batchSummaries = $batchRows
+            ->groupBy('sent_by')
+            ->map(function ($rows, $sentBy) {
+                $meta = $this->getMessageSourceMeta($sentBy);
+                return [
+                    'sent_by' => $sentBy,
+                    'source_key' => $meta['key'],
+                    'source_label' => $meta['label'],
+                    'source_badge' => $meta['badge'],
+                    'batch_label' => $meta['detail'],
+                    'total' => $rows->count(),
+                    'pending' => $rows->where('status', 'pending')->count(),
+                    'sending' => $rows->where('status', 'sending')->count(),
+                    'sent' => $rows->where('status', 'sent')->count(),
+                    'failed' => $rows->where('status', 'failed')->count(),
+                    'last_activity' => $rows->max('created_at'),
+                ];
+            })
+            ->filter(function ($batch) use ($sourceFilter) {
+                return $sourceFilter === '' || $batch['source_key'] === $sourceFilter;
+            })
+            ->sortByDesc(function ($batch) {
+                return (string) $batch['last_activity'];
+            })
+            ->take(12)
+            ->values();
 
         $queuePaused = DB::table('app_config')->where('key', 'whatsapp_auto_enabled')->value('value') == '0';
+        $sourceOptions = [
+            '' => 'All Sources',
+            'manual_bulk' => 'Manual Bulk',
+            'manual_single' => 'Manual Single',
+            'automation' => 'Automation',
+            'calendar' => 'Calendar',
+            'cron' => 'Cron',
+            'hermes' => 'Hermes/Test',
+            'system' => 'System',
+            'other' => 'Other',
+        ];
 
-        return view('dashbord.whatsapp.queue', compact('pending', 'failed', 'recent', 'queuePaused'));
+        return view('dashbord.whatsapp.queue', compact(
+            'pending',
+            'sending',
+            'failed',
+            'recent',
+            'queuePaused',
+            'statusFilter',
+            'sourceFilter',
+            'sourceOptions',
+            'batchSummaries'
+        ));
     }
 
     /**
@@ -1046,4 +1295,54 @@ class WhatsAppControlCenterController extends Controller
         return response()->json($results);
     }
 
+    private function getMessageSourceMeta(?string $sentBy): array
+    {
+        $sentBy = trim((string) $sentBy);
+
+        if ($sentBy === '') {
+            return ['key' => 'system', 'label' => 'System', 'badge' => 'badge-light-dark', 'detail' => '-'];
+        }
+
+        if (str_contains($sentBy, 'admin:manual|batch:')) {
+            return ['key' => 'manual_bulk', 'label' => 'Manual Bulk', 'badge' => 'badge-light-primary', 'detail' => $this->extractBatchShortId($sentBy)];
+        }
+
+        if (str_contains($sentBy, 'admin:automation|batch:')) {
+            return ['key' => 'automation', 'label' => 'Automation', 'badge' => 'badge-light-success', 'detail' => $this->extractBatchShortId($sentBy)];
+        }
+
+        if (str_starts_with($sentBy, 'hermes:test|batch:') || str_starts_with($sentBy, 'hermes:bgtest|batch:') || str_starts_with($sentBy, 'hermes:wwwtest|batch:')) {
+            return ['key' => 'hermes', 'label' => 'Test Batch', 'badge' => 'badge-light-info', 'detail' => $this->extractBatchShortId($sentBy)];
+        }
+
+        if (str_starts_with($sentBy, 'calendar:')) {
+            return ['key' => 'calendar', 'label' => 'Calendar', 'badge' => 'badge-light-warning', 'detail' => $sentBy];
+        }
+
+        if (str_starts_with($sentBy, 'admin:') && str_contains($sentBy, '|batch:')) {
+            return ['key' => 'manual_bulk', 'label' => 'Admin Batch', 'badge' => 'badge-light-primary', 'detail' => $this->extractBatchShortId($sentBy)];
+        }
+
+        if (str_starts_with($sentBy, 'admin:')) {
+            return ['key' => 'manual_single', 'label' => 'Manual Single', 'badge' => 'badge-light-primary', 'detail' => $sentBy];
+        }
+
+        if (str_starts_with($sentBy, 'cron:')) {
+            return ['key' => 'cron', 'label' => 'Cron', 'badge' => 'badge-light-success', 'detail' => $sentBy];
+        }
+
+        if (str_starts_with($sentBy, 'hermes:')) {
+            return ['key' => 'hermes', 'label' => 'Hermes', 'badge' => 'badge-light-info', 'detail' => $sentBy];
+        }
+
+        return ['key' => 'other', 'label' => 'Other', 'badge' => 'badge-light-dark', 'detail' => $sentBy];
+    }
+
+    private function extractBatchShortId(string $sentBy): string
+    {
+        $parts = explode('|batch:', $sentBy, 2);
+        $batchId = $parts[1] ?? $sentBy;
+
+        return 'Batch ' . substr($batchId, 0, 8);
+    }
 }

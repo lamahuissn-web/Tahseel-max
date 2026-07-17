@@ -1,17 +1,17 @@
 @extends('dashbord.layouts.master')
 
 @section('title')
-{{ trans('clients.whatsapp_message_logs') ?? 'سجل الرسائل' }}
+{{ trans('clients.whatsapp_log_message_logs') ?? 'سجل الرسائل' }}
 @endsection
 
 @section('toolbar')
 <div id="kt_app_toolbar_container" class="app-container container-xxl d-flex flex-stack">
     @php
-    $title = trans('clients.whatsapp_message_logs') ?? 'سجل الرسائل';
+    $title = trans('clients.whatsapp_log_message_logs') ?? 'سجل الرسائل';
     $breadcrumbs = [
         ['label' => trans('Toolbar.home'), 'link' => route('admin.dashboard')],
         ['label' => trans('clients.whatsapp_control_center'), 'link' => route('admin.whatsapp.dashboard')],
-        ['label' => trans('clients.whatsapp_message_logs') ?? 'سجل الرسائل', 'link' => ''],
+        ['label' => trans('clients.whatsapp_log_message_logs') ?? 'سجل الرسائل', 'link' => ''],
     ];
     PageTitle($title, $breadcrumbs);
     @endphp
@@ -24,7 +24,7 @@
 <div id="kt_app_content_container" class="app-container container-xxxl">
     <div class="card">
         <div class="card-header">
-            <h3 class="card-title">{{ trans('clients.whatsapp_message_logs') ?? 'سجل الرسائل' }}</h3>
+            <h3 class="card-title">{{ trans('clients.whatsapp_log_message_logs') ?? 'سجل الرسائل' }}</h3>
         </div>
         <div class="card-body">
             {{-- Filters --}}
@@ -32,24 +32,26 @@
                 <div class="col-md-3">
                     <label class="form-label fs-7">{{ trans('clients.search') ?? 'بحث' }}</label>
                     <input type="text" class="form-control form-control-sm" id="logSearch"
-                           placeholder="{{ trans('clients.whatsapp_search_placeholder') ?? 'ابحث باسم الزبون أو الرقم...' }}">
+                           placeholder="{{ trans('clients.whatsapp_log_search_placeholder') ?? 'ابحث باسم الزبون أو الرقم...' }}">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label fs-7">{{ trans('clients.status') ?? 'الحالة' }}</label>
                     <select class="form-select form-select-sm" id="logStatus">
                         <option value="">{{ trans('clients.all') ?? 'الكل' }}</option>
-                        <option value="sent">✅ {{ trans('clients.whatsapp_sent') ?? 'تم الإرسال' }}</option>
-                        <option value="failed">❌ {{ trans('clients.whatsapp_failed_send') ?? 'فشل' }}</option>
+                        <option value="pending">⏳ {{ trans('clients.whatsapp_pending') ?? 'قيد الانتظار' }}</option>
+                        <option value="sending">🔄 {{ trans('clients.whatsapp_sending') ?? 'جارٍ الإرسال' }}</option>
+                        <option value="sent">✅ {{ trans('clients.whatsapp_log_sent') ?? 'تم الإرسال' }}</option>
+                        <option value="failed">❌ {{ trans('clients.whatsapp_log_failed') ?? 'فشل' }}</option>
                     </select>
                 </div>
                 <div class="col-md-2">
-                    <label class="form-label fs-7">{{ trans('clients.whatsapp_template_type') ?? 'القالب' }}</label>
+                    <label class="form-label fs-7">{{ trans('clients.whatsapp_log_template_type') ?? 'القالب' }}</label>
                     <select class="form-select form-select-sm" id="logTemplate">
                         <option value="">{{ trans('clients.all') ?? 'الكل' }}</option>
-                        <option value="reminder">{{ trans('clients.whatsapp_reminder') ?? 'تذكير' }}</option>
-                        <option value="receipt">{{ trans('clients.whatsapp_receipt') ?? 'إيصال' }}</option>
-                        <option value="disconnection">{{ trans('clients.whatsapp_disconnection') ?? 'قطع خدمة' }}</option>
-                        <option value="custom">{{ trans('clients.whatsapp_custom') ?? 'مخصص' }}</option>
+                        <option value="reminder">{{ trans('clients.whatsapp_log_reminder') ?? 'تذكير' }}</option>
+                        <option value="receipt">{{ trans('clients.whatsapp_log_receipt') ?? 'إيصال' }}</option>
+                        <option value="disconnection">{{ trans('clients.whatsapp_log_disconnection') ?? 'قطع خدمة' }}</option>
+                        <option value="custom">{{ trans('clients.whatsapp_log_custom') ?? 'مخصص' }}</option>
                     </select>
                 </div>
                 <div class="col-md-2">
@@ -74,8 +76,9 @@
                         <tr class="fw-bold fs-6 text-gray-800">
                             <th>{{ trans('clients.client_name') ?? 'الزبون' }}</th>
                             <th>{{ trans('clients.phone') ?? 'الهاتف' }}</th>
-                            <th>{{ trans('clients.whatsapp_template_type') ?? 'القالب' }}</th>
+                            <th>{{ trans('clients.whatsapp_log_template_type') ?? 'القالب' }}</th>
                             <th>{{ trans('clients.status') ?? 'الحالة' }}</th>
+                            <th>{{ trans('clients.sender') ?? 'المصدر' }}</th>
                             <th>{{ trans('clients.date') ?? 'التاريخ' }}</th>
                             <th>{{ trans('clients.actions') ?? 'إجراءات' }}</th>
                         </tr>
@@ -92,12 +95,12 @@
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">{{ trans('clients.whatsapp_message_details') ?? 'تفاصيل الرسالة' }}</h5>
+                <h5 class="modal-title">{{ trans('clients.whatsapp_log_message_details') ?? 'تفاصيل الرسالة' }}</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="mb-3">
-                    <label class="form-label fw-bold">{{ trans('clients.whatsapp_message_content') ?? 'محتوى الرسالة' }}</label>
+                    <label class="form-label fw-bold">{{ trans('clients.whatsapp_log_message_content') ?? 'محتوى الرسالة' }}</label>
                     <div id="modalMessageBody" class="bg-light p-4 rounded border"
                          style="white-space: pre-wrap; direction: rtl; text-align: right; font-family: 'Tajawal', sans-serif;"></div>
                 </div>
@@ -106,7 +109,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-light" data-bs-dismiss="modal">{{ trans('clients.close') ?? 'إغلاق' }}</button>
                 <button type="button" class="btn btn-success" id="resendBtn">
-                    <i class="bi bi-arrow-clockwise"></i> {{ trans('clients.whatsapp_resend') ?? 'إعادة إرسال' }}
+                    <i class="bi bi-arrow-clockwise"></i> {{ trans('clients.whatsapp_log_resend') ?? 'إعادة إرسال' }}
                 </button>
             </div>
         </div>
@@ -138,10 +141,10 @@ $(document).ready(function() {
                 name: 'template_type',
                 render: function(data) {
                     const labels = {
-                        'reminder': '{{ trans("clients.whatsapp_reminder") ?? "تذكير" }}',
-                        'receipt': '{{ trans("clients.whatsapp_receipt") ?? "إيصال" }}',
-                        'disconnection': '{{ trans("clients.whatsapp_disconnection") ?? "قطع خدمة" }}',
-                        'custom': '{{ trans("clients.whatsapp_custom") ?? "مخصص" }}',
+                        'reminder': '{{ trans("clients.whatsapp_log_reminder") ?? "تذكير" }}',
+                        'receipt': '{{ trans("clients.whatsapp_log_receipt") ?? "إيصال" }}',
+                        'disconnection': '{{ trans("clients.whatsapp_log_disconnection") ?? "قطع خدمة" }}',
+                        'custom': '{{ trans("clients.whatsapp_log_custom") ?? "مخصص" }}',
                     };
                     return labels[data] || data || '-';
                 }
@@ -150,9 +153,20 @@ $(document).ready(function() {
                 data: 'status',
                 name: 'status',
                 render: function(data) {
-                    return data === 'sent'
-                        ? '<span class="badge badge-success">✅ {{ trans("clients.whatsapp_sent") ?? "تم الإرسال" }}</span>'
-                        : '<span class="badge badge-danger">❌ {{ trans("clients.whatsapp_failed_send") ?? "فشل" }}</span>';
+                    if (data === 'pending') return '<span class="badge badge-warning">⏳ {{ trans("clients.whatsapp_pending") ?? "قيد الانتظار" }}</span>';
+                    if (data === 'sending') return '<span class="badge badge-primary">🔄 {{ trans("clients.whatsapp_sending") ?? "جارٍ الإرسال" }}</span>';
+                    if (data === 'sent') return '<span class="badge badge-success">✅ {{ trans("clients.whatsapp_log_sent") ?? "تم الإرسال" }}</span>';
+                    return '<span class="badge badge-danger">❌ {{ trans("clients.whatsapp_log_failed") ?? "فشل" }}</span>';
+                }
+            },
+            {
+                data: null,
+                name: 'sent_by',
+                render: function(data) {
+                    const badge = data.source_badge || 'badge-light-dark';
+                    const label = data.source_label || 'Other';
+                    const detail = data.source_detail || '-';
+                    return `<div class="d-flex flex-column gap-1"><span class="badge ${badge}">${label}</span><span class="text-muted fs-8">${detail}</span></div>`;
                 }
             },
             { data: 'created_at', name: 'created_at' },
@@ -178,7 +192,7 @@ $(document).ready(function() {
         language: {
             url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/ar.json'
         },
-        order: [[4, 'desc']],
+        order: [[5, 'desc']],
         pageLength: 25,
         lengthMenu: [25, 50, 100],
         dom: '<"d-flex justify-content-between align-items-center"lf>t<"d-flex justify-content-between"ip>',
@@ -201,7 +215,7 @@ $(document).ready(function() {
         const status = $(this).data('status');
         $('#modalMessageBody').html(msg.replace(/\n/g, '<br>'));
         if (err && status === 'failed') {
-            $('#modalError').removeClass('d-none').text('{{ trans("clients.whatsapp_error") ?? "الخطأ" }}: ' + err);
+            $('#modalError').removeClass('d-none').text('{{ trans("clients.whatsapp_log_error") ?? "الخطأ" }}: ' + err);
         } else {
             $('#modalError').addClass('d-none');
         }
@@ -223,7 +237,7 @@ $(document).ready(function() {
         }).fail(function() {
             Swal.fire({ icon: 'error', text: '{{ trans("clients.whatsapp_test_error") ?? "حدث خطأ" }}' });
         }).always(function() {
-            btn.prop('disabled', false).html('<i class="bi bi-arrow-clockwise"></i> {{ trans("clients.whatsapp_resend") ?? "إعادة إرسال" }}');
+            btn.prop('disabled', false).html('<i class="bi bi-arrow-clockwise"></i> {{ trans("clients.whatsapp_log_resend") ?? "إعادة إرسال" }}');
         });
     });
 
