@@ -233,8 +233,14 @@
                                             $sourceBadge = 'badge-light-warning';
                                             $sourceDetail = 'Batch ' . substr(explode('|batch:', $sentBy, 2)[1] ?? '', 0, 8);
                                         } elseif (str_starts_with($sentBy, 'calendar:')) {
-                                            $sourceLabel = 'Calendar';
-                                            $sourceBadge = 'badge-light-warning';
+                                            if (str_contains($sentBy, '|batch:')) {
+                                                $sourceLabel = 'Calendar';
+                                                $sourceBadge = 'badge-light-warning';
+                                                $sourceDetail = 'Batch ' . substr(explode('|batch:', $sentBy, 2)[1] ?? '', 0, 8);
+                                            } else {
+                                                $sourceLabel = 'Calendar Direct';
+                                                $sourceBadge = 'badge-light-warning';
+                                            }
                                         } elseif (str_starts_with($sentBy, 'admin:')) {
                                             $sourceLabel = 'Manual Single';
                                             $sourceBadge = 'badge-light-primary';

@@ -1228,6 +1228,75 @@ class WhatsAppControlCenterController extends Controller
         $results = ['sent' => 0, 'failed' => 0, 'errors' => []];
         $failCount = 0;
 
+        if (count($request->client_ids) > 1) {
+            $batchId = (string) Str::uuid();
+            $queued = 0;
+
+            foreach ($request->client_ids as $clientId) {
+                $client = DB::table('tbl_clients')->find($clientId);
+                if (!$client || empty($client->phone)) {
+                    $results['failed']++;
+                    continue;
+                }
+
+                $message = $body;
+                $message = str_replace('{name}', $client->name, $message);
+                $message = str_replace('{message_body}', '', $message);
+
+                $unpaidInvoices = InvoiceEligibilityService::getEligibleInvoices($client->id);
+                $totalAmount = $unpaidInvoices->sum('remaining_amount');
+
+                if ($unpaidInvoices->isNotEmpty()) {
+                    $invoiceDetailsList = WhatsAppMessageBuilder::buildInvoiceDetailsList($unpaidInvoices);
+                    $message = WhatsAppMessageBuilder::buildMessage($message, $client->name, $totalAmount, $invoiceDetailsList);
+                    $dueDate = $unpaidInvoices->last()->due_date
+                        ? Carbon::parse($unpaidInvoices->last()->due_date)->format('Y-m-d')
+                        : Carbon::today()->format('Y-m-d');
+                } else {
+                    $dueDate = Carbon::today()->format('Y-m-d');
+                }
+
+                $message = str_replace('{total_amount}', number_format($totalAmount, 2), $message);
+                $message = str_replace('{invoice_details_list}', 'لا توجد فواتير مستحقة', $message);
+                $message = str_replace('{due_date}', $dueDate, $message);
+                $message = str_replace('{support_phone}', '96170781562', $message);
+                $message = str_replace('{amount}', number_format($totalAmount > 0 ? $totalAmount : 0, 2), $message);
+                $message = str_replace('{month}', now()->format('m'), $message);
+                $message = str_replace('{year}', now()->format('Y'), $message);
+                $message = str_replace('{collector}', auth('admin')->user()->name ?? 'الإدارة', $message);
+                $message = str_replace('{datetime}', now()->format('Y-m-d h:i A'), $message);
+                $message = str_replace('{balance_status}', 'الرصيد الحالي: $' . number_format($totalAmount, 2), $message);
+
+                WhatsAppMessageLog::create([
+                    'client_id' => $client->id,
+                    'client_name' => $client->name,
+                    'phone' => $client->phone,
+                    'message' => $message,
+                    'template_type' => $templateType,
+                    'status' => 'pending',
+                    'error' => null,
+                    'sent_by' => 'calendar|batch:' . $batchId,
+                ]);
+
+                $queued++;
+            }
+
+            if ($queued > 0) {
+                $delay = (int) (DB::table('app_config')->where('key', 'whatsapp_auto_delay')->value('value') ?? 10);
+                $this->startQueuedBatchProcessor($batchId, $delay);
+            }
+
+            return response()->json([
+                'success' => true,
+                'queued' => $queued,
+                'failed' => $results['failed'],
+                'errors' => $results['errors'],
+                'total' => count($request->client_ids),
+                'batch_id' => $batchId,
+                'redirect_url' => route('admin.whatsapp.queue'),
+            ]);
+        }
+
         foreach ($request->client_ids as $clientId) {
             $client = DB::table('tbl_clients')->find($clientId);
             if (!$client || empty($client->phone)) {
@@ -1321,7 +1390,10 @@ class WhatsAppControlCenterController extends Controller
         }
 
         if (str_starts_with($sentBy, 'calendar:')) {
-            return ['key' => 'calendar', 'label' => 'Calendar', 'badge' => 'badge-light-warning', 'detail' => $sentBy];
+            if (str_contains($sentBy, '|batch:')) {
+                return ['key' => 'calendar', 'label' => 'Calendar', 'badge' => 'badge-light-warning', 'detail' => $this->extractBatchShortId($sentBy)];
+            }
+            return ['key' => 'calendar', 'label' => 'Calendar Direct', 'badge' => 'badge-light-warning', 'detail' => $sentBy];
         }
 
         if (str_starts_with($sentBy, 'admin:') && str_contains($sentBy, '|batch:')) {
