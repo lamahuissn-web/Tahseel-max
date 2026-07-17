@@ -93,11 +93,16 @@ class PaymentReceiptNotifier
             // Do NOT include future invoices in the receipt message — they confuse customers.
             $unpaidInvoices = InvoiceEligibilityService::getEligibleInvoices($client->id);
 
-            // 5. Calculate total outstanding
+            // 5. Calculate totals
+            // Total due BEFORE this payment (the paid invoice plus other due invoices)
+            // We exclude the just-paid invoice from remaining, but count its amount
+            // in the "before" total so the customer sees the full picture.
+            $paidAmountNumeric = (float)($invoice->paid_amount ?: $invoice->amount);
             $totalDue = 0;
             foreach ($unpaidInvoices as $unpaid) {
                 $totalDue += (float)$unpaid->remaining_amount;
             }
+            $totalBeforePayment = $totalDue + $paidAmountNumeric;
 
             // 6. Build the message
             $customerName = $client->name ?? 'عميل';
@@ -112,43 +117,41 @@ class PaymentReceiptNotifier
                 $lastPaidMonth,
                 $lastPaidYear,
                 $unpaidInvoices,
-                $totalDue
+                $totalDue,
+                $totalBeforePayment
             );
 
-            // 7. Send via WhatsApp
-            $result = $this->whatsapp->send($phone, $message);
-
-            // Log to message log
+            // 7. Enqueue as pending so it appears in Queue
             try {
+                $batchId = (string) \Illuminate\Support\Str::uuid();
                 DB::table('whatsapp_message_logs')->insert([
                     'client_id' => $client->id,
                     'client_name' => $client->name ?? $customerName,
                     'phone' => $phone,
                     'message' => $message,
                     'template_type' => 'receipt',
-                    'status' => ($result['success'] ?? false) ? 'sent' : 'failed',
-                    'error' => ($result['success'] ?? false) ? null : ($result['error'] ?? 'Unknown'),
-                    'sent_by' => 'system:autoreceipt',
+                    'status' => 'pending',
+                    'error' => null,
+                    'sent_by' => 'system:autoreceipt|batch:' . $batchId,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
-            } catch (\Exception $logErr) {
-                Log::warning('[WhatsApp Receipt] Failed to log message', ['error' => $logErr->getMessage()]);
-            }
 
-            if ($result['success'] ?? false) {
-                Log::info('[WhatsApp Receipt] Sent successfully', [
+                // Start background batch processor
+                $phpBinary = is_executable('/usr/bin/php') ? '/usr/bin/php' : PHP_BINARY;
+                $php = escapeshellarg($phpBinary);
+                $artisan = escapeshellarg(base_path('artisan'));
+                $cmd = "{$php} {$artisan} whatsapp:process-pending {$batchId} --delay=0 > /dev/null 2>&1 &";
+                exec($cmd);
+
+                Log::info('[WhatsApp Receipt] Queued for delivery', [
                     'client_id' => $client->id,
                     'invoice_id' => $invoice->id,
-                    'phone' => $phone,
+                    'batch_id' => $batchId,
                     'unpaid_count' => $unpaidInvoices->count(),
                 ]);
-            } else {
-                Log::warning('[WhatsApp Receipt] Send returned failure', [
-                    'client_id' => $client->id,
-                    'invoice_id' => $invoice->id,
-                    'error' => $result['error'] ?? 'Unknown',
-                ]);
+            } catch (\Exception $logErr) {
+                Log::warning('[WhatsApp Receipt] Failed to enqueue message', ['error' => $logErr->getMessage()]);
             }
         } catch (\Exception $e) {
             Log::error('[WhatsApp Receipt] Failed to send notification', [
@@ -175,7 +178,8 @@ class PaymentReceiptNotifier
         string $lastPaidMonth,
         string $lastPaidYear,
         $unpaidInvoices,
-        float $totalDue
+        float $totalDue,
+        float $totalBeforePayment
     ): string {
         $message = "🌐 MegaNet\n\n";
         $message .= "🧾 إيصال اشتراك الإنترنت\n\n";
@@ -184,6 +188,7 @@ class PaymentReceiptNotifier
         $message .= "📅 الاشتراك المسدد: {$paidMonth} / {$paidYear}\n";
         $message .= "🗓 تاريخ الاستحقاق: {$paidDueDate}\n";
         $message .= "💵 المبلغ المدفوع: \${$paidAmount}\n";
+        $message .= "📊 إجمالي المستحق قبل الدفع: \$" . number_format($totalBeforePayment, 2) . "\n";
         $message .= "🧑 قبضت بواسطة: {$collectorName}\n";
         $message .= "⏱ وقت الدفع: {$paymentTime}\n";
 

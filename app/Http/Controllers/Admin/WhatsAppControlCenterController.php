@@ -1032,6 +1032,7 @@ class WhatsAppControlCenterController extends Controller
             'manual_bulk' => 'Manual Bulk',
             'manual_single' => 'Manual Single',
             'automation' => 'Automation',
+            'autoreceipt' => 'Auto Receipt',
             'calendar' => 'Calendar',
             'cron' => 'Cron',
             'hermes' => 'Hermes/Test',
@@ -1313,6 +1314,10 @@ class WhatsAppControlCenterController extends Controller
 
         if (str_starts_with($sentBy, 'hermes:test|batch:') || str_starts_with($sentBy, 'hermes:bgtest|batch:') || str_starts_with($sentBy, 'hermes:wwwtest|batch:')) {
             return ['key' => 'hermes', 'label' => 'Test Batch', 'badge' => 'badge-light-info', 'detail' => $this->extractBatchShortId($sentBy)];
+        }
+
+        if (str_starts_with($sentBy, 'system:autoreceipt')) {
+            return ['key' => 'autoreceipt', 'label' => 'Auto Receipt', 'badge' => 'badge-light-warning', 'detail' => $this->extractBatchShortId($sentBy)];
         }
 
         if (str_starts_with($sentBy, 'calendar:')) {

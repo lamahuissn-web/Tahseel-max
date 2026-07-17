@@ -26,6 +26,7 @@ class InvoiceEligibilityService
             ->where('client_id', $clientId)
             ->whereIn('status', ['unpaid', 'partial'])
             ->where('due_date', '<=', Carbon::today())
+            ->whereNull('deleted_at')
             ->orderBy('due_date', 'asc')
             ->get();
     }
@@ -42,6 +43,7 @@ class InvoiceEligibilityService
         return DB::table('tbl_invoices')
             ->where('client_id', $clientId)
             ->whereIn('status', ['unpaid', 'partial'])
+            ->whereNull('deleted_at')
             ->orderBy('due_date', 'asc')
             ->get();
     }
@@ -58,6 +60,7 @@ class InvoiceEligibilityService
             ->where('client_id', $clientId)
             ->whereIn('status', ['unpaid', 'partial'])
             ->where('due_date', '<=', Carbon::today())
+            ->whereNull('deleted_at')
             ->exists();
     }
 
@@ -73,6 +76,7 @@ class InvoiceEligibilityService
             ->where('client_id', $clientId)
             ->whereIn('status', ['unpaid', 'partial'])
             ->where('due_date', '<=', Carbon::today())
+            ->whereNull('deleted_at')
             ->count();
     }
 }

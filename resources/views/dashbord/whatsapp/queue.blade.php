@@ -228,6 +228,10 @@
                                             $sourceLabel = 'Automation';
                                             $sourceBadge = 'badge-light-success';
                                             $sourceDetail = 'Batch ' . substr(explode('|batch:', $sentBy, 2)[1] ?? '', 0, 8);
+                                        } elseif (str_contains($sentBy, 'system:autoreceipt')) {
+                                            $sourceLabel = 'Auto Receipt';
+                                            $sourceBadge = 'badge-light-warning';
+                                            $sourceDetail = 'Batch ' . substr(explode('|batch:', $sentBy, 2)[1] ?? '', 0, 8);
                                         } elseif (str_starts_with($sentBy, 'calendar:')) {
                                             $sourceLabel = 'Calendar';
                                             $sourceBadge = 'badge-light-warning';
