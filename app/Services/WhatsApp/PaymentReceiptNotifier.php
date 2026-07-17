@@ -55,6 +55,9 @@ class PaymentReceiptNotifier
             $paymentDate = $invoice->paid_date
                 ? date('d/m/Y', strtotime($invoice->paid_date))
                 : date('d/m/Y');
+            $paidDueDate = $invoice->due_date
+                ? date('d/m/Y', strtotime($invoice->due_date))
+                : $paymentDate;
 
             // 3a. Get collector name and payment time from Revenue record
             $revenue = Revenue::where('invoice_id', $invoice->id)->first();
@@ -86,12 +89,9 @@ class PaymentReceiptNotifier
                 ? date('Y', strtotime($lastPaidInvoice->due_date))
                 : $paidYear;
 
-            // 4. Get unpaid invoices for this client (sorted ascending)
-            $unpaidInvoices = Invoice::where('client_id', $client->id)
-                ->where('id', '!=', $invoice->id)
-                ->whereIn('status', ['unpaid', 'partial'])
-                ->orderBy('due_date', 'asc')
-                ->get();
+            // 4. Get only currently due / overdue unpaid invoices for this client.
+            // Do NOT include future invoices in the receipt message — they confuse customers.
+            $unpaidInvoices = InvoiceEligibilityService::getEligibleInvoices($client->id);
 
             // 5. Calculate total outstanding
             $totalDue = 0;
@@ -106,6 +106,7 @@ class PaymentReceiptNotifier
                 $paidMonth,
                 $paidYear,
                 $paidAmount,
+                $paidDueDate,
                 $collectorName,
                 $paymentTime,
                 $lastPaidMonth,
@@ -168,6 +169,7 @@ class PaymentReceiptNotifier
         string $paidMonth,
         string $paidYear,
         string $paidAmount,
+        string $paidDueDate,
         string $collectorName,
         string $paymentTime,
         string $lastPaidMonth,
@@ -180,6 +182,7 @@ class PaymentReceiptNotifier
         $message .= "👤 اسم المشترك: {$customerName}\n\n";
         $message .= "✅ تم تسجيل عملية الدفع بنجاح في النظام.\n\n";
         $message .= "📅 الاشتراك المسدد: {$paidMonth} / {$paidYear}\n";
+        $message .= "🗓 تاريخ الاستحقاق: {$paidDueDate}\n";
         $message .= "💵 المبلغ المدفوع: \${$paidAmount}\n";
         $message .= "🧑 قبضت بواسطة: {$collectorName}\n";
         $message .= "⏱ وقت الدفع: {$paymentTime}\n";
@@ -195,9 +198,10 @@ class PaymentReceiptNotifier
             foreach ($unpaidInvoices as $unpaid) {
                 $uMonth = $unpaid->due_date ? date('m', strtotime($unpaid->due_date)) : '??';
                 $uYear = $unpaid->due_date ? date('Y', strtotime($unpaid->due_date)) : '??';
+                $uDate = $unpaid->due_date ? date('d/m/Y', strtotime($unpaid->due_date)) : '??/??/????';
                 $uAmount = number_format((float)$unpaid->remaining_amount, 2);
 
-                $message .= "❌ {$uMonth} / {$uYear}      \${$uAmount}\n";
+                $message .= "❌ {$uMonth} / {$uYear} — {$uDate}      \${$uAmount}\n";
             }
         } else {
             $message .= "\n🟢 لا توجد أي فواتير غير مدفوعة.\n";
