@@ -5,6 +5,7 @@
         ['route' => 'admin.whatsapp.monitor', 'label' => 'المراقبة', 'icon' => 'bi-activity', 'emoji' => '🩺'],
         ['route' => 'admin.whatsapp.templates', 'label' => 'القوالب', 'icon' => 'bi-pencil-square', 'emoji' => '📝'],
         ['route' => 'admin.whatsapp.send', 'label' => 'إرسال', 'icon' => 'bi-send', 'emoji' => '📨'],
+        ['route' => 'admin.whatsapp.collectors', 'label' => 'المحصلين', 'icon' => 'bi-person-badge', 'emoji' => '🧾'],
         ['route' => 'admin.whatsapp.automation', 'label' => 'الأتمتة', 'icon' => 'bi-gear', 'emoji' => '🤖'],
         ['route' => 'admin.whatsapp.log', 'label' => 'السجل', 'icon' => 'bi-clock-history', 'emoji' => '📋'],
         ['route' => 'admin.whatsapp.queue', 'label' => 'القائمة', 'icon' => 'bi-list-task', 'emoji' => '⏳'],

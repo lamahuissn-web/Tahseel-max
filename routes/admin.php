@@ -249,6 +249,10 @@ Route::group(
                 Route::post('/templates/save', [WhatsAppControlCenterController::class, 'saveTemplate'])->name('templates.save');
                 Route::post('/templates/test', [WhatsAppControlCenterController::class, 'testTemplate'])->name('templates.test');
                 Route::get('/send', [WhatsAppControlCenterController::class, 'send'])->name('send');
+                Route::get('/collectors', [WhatsAppControlCenterController::class, 'collectors'])->name('collectors');
+                Route::post('/collectors/rules', [WhatsAppControlCenterController::class, 'saveCollectorRules'])->name('collectors.rules.save');
+                Route::get('/collectors/preview', [WhatsAppControlCenterController::class, 'previewCollectorReminders'])->name('collectors.preview');
+                Route::post('/collectors/send-now', [WhatsAppControlCenterController::class, 'sendCollectorRemindersNow'])->name('collectors.send_now');
                 Route::post('/send/broadcast', [WhatsAppControlCenterController::class, 'broadcast'])->name('send.broadcast');
                 Route::get('/send/search-clients', [WhatsAppControlCenterController::class, 'searchClients'])->name('send.search_clients');
                 Route::get('/log', [WhatsAppControlCenterController::class, 'log'])->name('log');

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\WhatsAppMessageLog;
+use App\Services\WhatsApp\CollectorReminderService;
 use App\Services\WhatsApp\WhatsAppTemplateService;
 use App\Services\WhatsAppMessageBuilder;
 use App\Services\WhatsAppService;
@@ -233,6 +234,170 @@ class WhatsAppControlCenterController extends Controller
     {
         $templates = WhatsAppTemplateService::getAll();
         return view('dashbord.whatsapp.send', compact('templates'));
+    }
+
+    public function collectors()
+    {
+        $rules = $this->getCollectorRulesConfig();
+        $collectorUsers = $this->getCollectorUserOptions();
+        $markerSuggestions = $this->getCollectorMarkerSuggestions();
+        $preview = CollectorReminderService::buildPreview($rules);
+
+        return view('dashbord.whatsapp.collectors', compact('rules', 'preview', 'collectorUsers', 'markerSuggestions'));
+    }
+
+    public function saveCollectorRules(Request $request)
+    {
+        $rawRules = [];
+        $userIds = $request->input('collector_user_id', []);
+        $phones = $request->input('collector_phone', []);
+        $markers = $request->input('collector_markers', []);
+        $active = $request->input('collector_active', []);
+        $adminUsers = DB::table('admins')
+            ->whereNull('deleted_at')
+            ->where('status', '1')
+            ->whereIn('id', collect($userIds)->filter()->values()->all())
+            ->get(['id', 'name', 'phone'])
+            ->keyBy('id');
+
+        foreach ($userIds as $index => $adminId) {
+            $admin = $adminUsers->get((int) $adminId);
+            if (!$admin) {
+                continue;
+            }
+
+            $rawRules[] = [
+                'admin_id' => (int) $admin->id,
+                'name' => $admin->name,
+                'phone' => trim((string) ($phones[$index] ?? ($admin->phone ?? ''))),
+                'markers' => $markers[$index] ?? '',
+                'active' => array_key_exists((string) $index, $active) || array_key_exists($index, $active),
+            ];
+        }
+
+        $rules = CollectorReminderService::normalizeRules($rawRules);
+
+        DB::table('app_config')->updateOrInsert(
+            ['key' => 'whatsapp_collector_rules'],
+            [
+                'value' => json_encode($rules, JSON_UNESCAPED_UNICODE),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]
+        );
+
+        return redirect()->route('admin.whatsapp.collectors')->with('success', 'Collector rules saved successfully.');
+    }
+
+    public function previewCollectorReminders()
+    {
+        return response()->json(CollectorReminderService::buildPreview($this->getCollectorRulesConfig()));
+    }
+
+    public function sendCollectorRemindersNow()
+    {
+        $preview = CollectorReminderService::buildPreview($this->getCollectorRulesConfig());
+        $batchId = (string) Str::uuid();
+        $queued = 0;
+        $skipped = [];
+
+        foreach ($preview['groups'] as $group) {
+            if (($group['customer_count'] ?? 0) <= 0) {
+                continue;
+            }
+
+            if (empty($group['phone'])) {
+                $skipped[] = ($group['name'] ?: 'Collector') . ': missing WhatsApp phone';
+                continue;
+            }
+
+            foreach (CollectorReminderService::buildMessages($group) as $message) {
+                WhatsAppMessageLog::create([
+                    'client_id' => null,
+                    'client_name' => $group['name'],
+                    'phone' => $group['phone'],
+                    'message' => $message,
+                    'template_type' => 'collector_reminder',
+                    'status' => 'pending',
+                    'error' => null,
+                    'sent_by' => 'system:collector_reminder|batch:' . $batchId,
+                ]);
+
+                $queued++;
+            }
+        }
+
+        if ($queued > 0) {
+            $delay = (int) (DB::table('app_config')->where('key', 'whatsapp_auto_delay')->value('value') ?? 10);
+            $this->startQueuedBatchProcessor($batchId, $delay);
+        }
+
+        return response()->json([
+            'success' => $queued > 0,
+            'queued' => $queued,
+            'skipped' => $skipped,
+            'batch_id' => $batchId,
+            'redirect_url' => route('admin.whatsapp.queue'),
+            'conflicts' => count($preview['conflicts'] ?? []),
+            'unmatched' => count($preview['unmatched'] ?? []),
+        ]);
+    }
+
+    private function getCollectorRulesConfig(): array
+    {
+        $raw = DB::table('app_config')->where('key', 'whatsapp_collector_rules')->value('value');
+        if (!$raw) {
+            return [];
+        }
+
+        $decoded = json_decode($raw, true);
+        return is_array($decoded) ? CollectorReminderService::normalizeRules($decoded) : [];
+    }
+
+    private function getCollectorUserOptions(): array
+    {
+        return DB::table('admins')
+            ->whereNull('deleted_at')
+            ->where('status', '1')
+            ->orderBy('name')
+            ->get(['id', 'name', 'phone'])
+            ->map(fn ($admin) => [
+                'id' => (int) $admin->id,
+                'name' => $admin->name,
+                'phone' => $admin->phone,
+            ])
+            ->all();
+    }
+
+    private function getCollectorMarkerSuggestions(): array
+    {
+        $counts = [];
+
+        DB::table('tbl_clients')
+            ->whereNull('deleted_at')
+            ->whereNotNull('name')
+            ->select('name')
+            ->orderBy('name')
+            ->chunk(500, function ($clients) use (&$counts) {
+                foreach ($clients as $client) {
+                    preg_match_all('/(?<![\\p{L}\\p{N}.])([A-Z]{1,4}(?:\\.[A-Z]{1,4}){0,4})(?![\\p{L}\\p{N}.])/iu', (string) $client->name, $matches);
+                    foreach ($matches[1] ?? [] as $marker) {
+                        $normalized = mb_strtoupper(trim($marker));
+                        if (mb_strlen($normalized) < 2) {
+                            continue;
+                        }
+                        $counts[$normalized] = ($counts[$normalized] ?? 0) + 1;
+                    }
+                }
+            });
+
+        arsort($counts);
+
+        return collect($counts)
+            ->take(30)
+            ->map(fn ($count, $marker) => ['marker' => $marker, 'count' => $count])
+            ->values()
+            ->all();
     }
 
     /**
@@ -1128,6 +1293,7 @@ class WhatsAppControlCenterController extends Controller
             'manual_single' => 'Manual Single',
             'automation' => 'Automation',
             'autoreceipt' => 'Auto Receipt',
+            'collector_reminder' => 'Collector Reminder',
             'calendar' => 'Calendar',
             'cron' => 'Cron',
             'hermes' => 'Hermes/Test',
@@ -1632,6 +1798,10 @@ class WhatsAppControlCenterController extends Controller
 
         if (str_starts_with($sentBy, 'system:autoreceipt')) {
             return ['key' => 'autoreceipt', 'label' => 'Auto Receipt', 'badge' => 'badge-light-warning', 'detail' => $this->extractBatchShortId($sentBy)];
+        }
+
+        if (str_starts_with($sentBy, 'system:collector_reminder')) {
+            return ['key' => 'collector_reminder', 'label' => 'Collector Reminder', 'badge' => 'badge-light-danger', 'detail' => $this->extractBatchShortId($sentBy)];
         }
 
         if (str_starts_with($sentBy, 'calendar:')) {
