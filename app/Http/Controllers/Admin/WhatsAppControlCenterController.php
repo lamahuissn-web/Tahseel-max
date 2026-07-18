@@ -93,29 +93,64 @@ class WhatsAppControlCenterController extends Controller
         $sendingQueueCount = WhatsAppMessageLog::where('status', 'sending')->count();
         $oldestPending = WhatsAppMessageLog::where('status', 'pending')->orderBy('created_at')->first();
 
+        $apiReachable = (bool) ($device['reachable'] ?? false);
+        $sessionConnected = (bool) ($device['connected'] ?? false);
+        $sessionStatus = (string) ($device['status'] ?? 'unknown');
+        $qrNeeded = !$connectionStatus && !empty($qrState['qr']);
+        $oldestPendingAt = optional($oldestPending)->created_at;
+        $lastSuccessAt = optional($lastSent)->created_at;
+        $lastFailureAt = optional($lastFailed)->created_at;
+        $lastFailureError = $lastFailed->error ?? null;
+        $queueLooksStuck = $this->isQueueLikelyStuck($pendingQueueCount, $sendingQueueCount, $oldestPendingAt);
+        $failureWarning = $this->hasRecentFailureWarning($failuresToday, $lastFailureAt);
+        $overallAlert = $this->buildOverallMonitorAlert(
+            $emergencyStop,
+            $apiReachable,
+            $sessionConnected,
+            $sessionStatus,
+            $qrNeeded,
+            $queueLooksStuck,
+            $failureWarning
+        );
+
         $monitor = [
-            'api_reachable' => (bool) ($device['reachable'] ?? false),
-            'session_connected' => (bool) ($device['connected'] ?? false),
-            'session_status' => (string) ($device['status'] ?? 'unknown'),
-            'session_status_label' => $this->formatSessionStatusLabel((string) ($device['status'] ?? 'unknown')),
+            'api_reachable' => $apiReachable,
+            'session_connected' => $sessionConnected,
+            'session_status' => $sessionStatus,
+            'session_status_label' => $this->formatSessionStatusLabel($sessionStatus),
             'session_message' => $device['message'] ?? $qrState['message'] ?? null,
-            'qr_needed' => !$connectionStatus && !empty($qrState['qr']),
+            'qr_needed' => $qrNeeded,
             'connected_phone' => $devicePhone,
-            'last_success_at' => optional($lastSent)->created_at,
-            'last_failure_at' => optional($lastFailed)->created_at,
-            'last_failure_error' => $lastFailed->error ?? null,
+            'last_success_at' => $lastSuccessAt,
+            'last_failure_at' => $lastFailureAt,
+            'last_failure_error' => $lastFailureError,
             'pending_queue_count' => $pendingQueueCount,
             'sending_queue_count' => $sendingQueueCount,
-            'oldest_pending_at' => optional($oldestPending)->created_at,
+            'oldest_pending_at' => $oldestPendingAt,
+            'queue_looks_stuck' => $queueLooksStuck,
+            'failure_warning' => $failureWarning,
+            'overall_alert_level' => $overallAlert['level'],
+            'overall_alert_label' => $overallAlert['label'],
+            'overall_alert_text' => $overallAlert['text'],
+            'status_badges' => $this->buildMonitorStatusBadges(
+                $emergencyStop,
+                $apiReachable,
+                $sessionConnected,
+                $sessionStatus,
+                $qrNeeded,
+                $queueLooksStuck,
+                $failureWarning
+            ),
+            'checked_at' => now(),
             'recommended_action' => $this->buildConnectionRecommendedAction(
                 $emergencyStop,
-                (bool) ($device['reachable'] ?? false),
-                (bool) ($device['connected'] ?? false),
-                !empty($qrState['qr']),
+                $apiReachable,
+                $sessionConnected,
+                $qrNeeded,
                 $pendingQueueCount,
                 $sendingQueueCount,
-                optional($oldestPending)->created_at,
-                $lastFailed->error ?? null
+                $oldestPendingAt,
+                $lastFailureError
             ),
         ];
 
@@ -1433,10 +1468,109 @@ class WhatsAppControlCenterController extends Controller
             'starting' => 'Starting',
             'authenticated' => 'Authenticated',
             'disconnected' => 'Disconnected',
-            'unreachable' => 'Unreachable',
-            'unknown', '' => 'Unknown',
-            default => Str::headline($status),
+            'auth_failure' => 'Auth Failure',
+            default => Str::of($status)->replace('_', ' ')->title()->toString(),
         };
+    }
+
+    private function isQueueLikelyStuck(int $pendingQueueCount, int $sendingQueueCount, $oldestPendingAt): bool
+    {
+        if ($pendingQueueCount <= 0 || !$oldestPendingAt) {
+            return false;
+        }
+
+        if ($sendingQueueCount > 0) {
+            return false;
+        }
+
+        return $oldestPendingAt instanceof Carbon && $oldestPendingAt->lt(now()->subMinutes(10));
+    }
+
+    private function hasRecentFailureWarning(int $failuresToday, $lastFailureAt): bool
+    {
+        if ($failuresToday <= 0 || !$lastFailureAt) {
+            return false;
+        }
+
+        return $failuresToday >= 3 || ($lastFailureAt instanceof Carbon && $lastFailureAt->gt(now()->subHours(2)));
+    }
+
+    private function buildOverallMonitorAlert(
+        string $emergencyStop,
+        bool $apiReachable,
+        bool $sessionConnected,
+        string $sessionStatus,
+        bool $qrNeeded,
+        bool $queueLooksStuck,
+        bool $failureWarning
+    ): array
+    {
+        if ($emergencyStop === '1') {
+            return ['level' => 'danger', 'label' => 'Emergency Stop', 'text' => 'WhatsApp sending is paused by emergency stop.'];
+        }
+
+        if (!$apiReachable) {
+            return ['level' => 'danger', 'label' => 'API Down', 'text' => 'OpenWA API is unreachable. Admin should check the OpenWA server/container first.'];
+        }
+
+        if ($qrNeeded) {
+            return ['level' => 'warning', 'label' => 'QR Required', 'text' => 'Session is not authenticated. Admin should open QR and scan it from the WhatsApp phone.'];
+        }
+
+        if (!$sessionConnected || in_array(strtolower(trim($sessionStatus)), ['initializing', 'starting', 'disconnected', 'auth_failure'], true)) {
+            return ['level' => 'warning', 'label' => 'Session Issue', 'text' => 'OpenWA is reachable but the WhatsApp session is not fully ready yet.'];
+        }
+
+        if ($queueLooksStuck) {
+            return ['level' => 'warning', 'label' => 'Queue Delay', 'text' => 'Pending queue items look stuck. Admin should inspect Queue and restart the session if needed.'];
+        }
+
+        if ($failureWarning) {
+            return ['level' => 'warning', 'label' => 'Recent Failures', 'text' => 'Recent WhatsApp failures were detected. Review the latest errors in Monitor/Log.'];
+        }
+
+        return ['level' => 'success', 'label' => 'Healthy', 'text' => 'OpenWA, session, and queue look healthy right now.'];
+    }
+
+    private function buildMonitorStatusBadges(
+        string $emergencyStop,
+        bool $apiReachable,
+        bool $sessionConnected,
+        string $sessionStatus,
+        bool $qrNeeded,
+        bool $queueLooksStuck,
+        bool $failureWarning
+    ): array
+    {
+        $badges = [];
+
+        if ($emergencyStop === '1') {
+            $badges[] = ['label' => 'Emergency Stop', 'class' => 'badge-light-danger'];
+        }
+
+        $badges[] = [
+            'label' => $apiReachable ? 'API Reachable' : 'API Unreachable',
+            'class' => $apiReachable ? 'badge-light-success' : 'badge-light-danger',
+        ];
+
+        $badges[] = [
+            'label' => 'Session ' . $this->formatSessionStatusLabel($sessionStatus),
+            'class' => $sessionConnected ? 'badge-light-success' : 'badge-light-warning',
+        ];
+
+        if ($qrNeeded) {
+            $badges[] = ['label' => 'QR Required', 'class' => 'badge-light-warning'];
+        }
+
+        if ($queueLooksStuck) {
+            $badges[] = ['label' => 'Queue Looks Stuck', 'class' => 'badge-light-warning'];
+        }
+
+        if ($failureWarning) {
+            $badges[] = ['label' => 'Recent Failures', 'class' => 'badge-light-danger'];
+        }
+
+        return $badges;
     }
 
     private function buildConnectionRecommendedAction(

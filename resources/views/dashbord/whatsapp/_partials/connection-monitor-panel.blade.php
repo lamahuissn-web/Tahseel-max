@@ -8,7 +8,11 @@
             <span class="badge {{ $monitor['api_reachable'] ? 'badge-light-success' : 'badge-light-danger' }}">
                 {{ $monitor['api_reachable'] ? 'OpenWA Reachable' : 'OpenWA Unreachable' }}
             </span>
-            <button type="button" class="btn btn-sm btn-light-primary" id="monitor-refresh-btn" onclick="refreshConnectionMonitor()">
+            <span class="badge badge-light-{{ $monitor['overall_alert_level'] }}">{{ $monitor['overall_alert_label'] }}</span>
+            <span class="text-muted fs-8" id="monitor-last-checked">
+                Last checked: {{ optional($monitor['checked_at'])->diffForHumans() ?? 'just now' }}
+            </span>
+            <button type="button" class="btn btn-sm btn-light-primary" id="monitor-refresh-btn" onclick="refreshConnectionMonitor(false)">
                 <i class="bi bi-arrow-clockwise me-1"></i> Refresh
             </button>
             <button type="button" class="btn btn-sm btn-light-warning" id="monitor-qr-btn" onclick="fetchMonitorQR()">
@@ -23,6 +27,20 @@
         </div>
     </div>
     <div class="card-body">
+        <div class="alert alert-light-{{ $monitor['overall_alert_level'] }} d-flex align-items-start p-5 mb-6">
+            <i class="bi {{ $monitor['overall_alert_level'] === 'success' ? 'bi-shield-check' : ($monitor['overall_alert_level'] === 'danger' ? 'bi-exclamation-octagon' : 'bi-exclamation-triangle') }} fs-2 me-4 text-{{ $monitor['overall_alert_level'] }}"></i>
+            <div class="d-flex flex-column flex-grow-1">
+                <h4 class="mb-1 text-gray-900">{{ $monitor['overall_alert_label'] }} / حالة المراقبة</h4>
+                <span class="text-gray-700">{{ $monitor['overall_alert_text'] }}</span>
+            </div>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 mb-6">
+            @foreach(($monitor['status_badges'] ?? []) as $badge)
+                <span class="badge {{ $badge['class'] }}">{{ $badge['label'] }}</span>
+            @endforeach
+        </div>
+
         <div class="row g-6">
             <div class="col-xl-6">
                 <div class="table-responsive">

@@ -1,32 +1,52 @@
 <script>
     var qrPollInterval = null;
     var connectionPollInterval = null;
+    var monitorAutoRefreshInterval = null;
     var qrBaseUrl = '{{ route("admin.whatsapp.qr_code") }}';
     var checkConnectionUrl = '{{ route("admin.whatsapp.check_connection") }}';
     var settingsStatusUrl = '{{ route("admin.settings.whatsapp.api_status") }}';
     var settingsQrUrl = '{{ route("admin.settings.whatsapp.api_qr") }}';
     var restartSessionUrl = '{{ route("admin.settings.whatsapp.restart") }}';
 
-    function refreshConnectionMonitor() {
+    function refreshConnectionMonitor(silent) {
+        if (typeof silent === 'undefined') silent = false;
         $('#monitor-refresh-btn').prop('disabled', true);
         $.get(settingsStatusUrl)
             .done(function(res) {
-                var lines = [];
-                lines.push('API reachable: ' + ((res.reachable ?? false) ? 'yes' : 'no'));
-                lines.push('Session status: ' + (res.status || 'unknown'));
-                lines.push('Connected: ' + ((res.connected ?? false) ? 'yes' : 'no'));
-                if (res.phone) {
-                    lines.push('Phone: ' + res.phone);
+                if (!silent) {
+                    var lines = [];
+                    lines.push('API reachable: ' + ((res.reachable ?? false) ? 'yes' : 'no'));
+                    lines.push('Session status: ' + (res.status || 'unknown'));
+                    lines.push('Connected: ' + ((res.connected ?? false) ? 'yes' : 'no'));
+                    if (res.phone) {
+                        lines.push('Phone: ' + res.phone);
+                    }
+                    Swal.fire({ icon: (res.connected ? 'success' : 'info'), title: 'Connection status', html: lines.join('<br>') });
                 }
-                Swal.fire({ icon: (res.connected ? 'success' : 'info'), title: 'Connection status', html: lines.join('<br>') });
-                setTimeout(function() { location.reload(); }, 700);
+
+                $('#monitor-last-checked').text('Last checked: just now');
+                setTimeout(function() { location.reload(); }, silent ? 300 : 700);
             })
             .fail(function() {
-                Swal.fire({ icon: 'error', text: 'Failed to refresh OpenWA status.' });
+                if (!silent) {
+                    Swal.fire({ icon: 'error', text: 'Failed to refresh OpenWA status.' });
+                }
             })
             .always(function() {
                 $('#monitor-refresh-btn').prop('disabled', false);
             });
+    }
+
+    function startMonitorAutoRefresh() {
+        if (monitorAutoRefreshInterval) {
+            clearInterval(monitorAutoRefreshInterval);
+        }
+
+        monitorAutoRefreshInterval = setInterval(function() {
+            if (document.visibilityState === 'visible') {
+                refreshConnectionMonitor(true);
+            }
+        }, 30000);
     }
 
     function fetchMonitorQR() {
@@ -104,4 +124,8 @@
                 $('#monitor-restart-btn').prop('disabled', false);
             });
     }
+
+    $(document).ready(function() {
+        startMonitorAutoRefresh();
+    });
 </script>

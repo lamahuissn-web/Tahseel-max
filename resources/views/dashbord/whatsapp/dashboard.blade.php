@@ -202,8 +202,17 @@
                         <div class="col-md-3">
                             <div class="border rounded p-4 h-100">
                                 <div class="text-muted fs-7 mb-1">Session</div>
-                                <div class="fw-bold">
+                                <div class="fw-bold mb-2">
                                     <span class="badge {{ $monitor['session_connected'] ? 'badge-light-success' : 'badge-light-warning' }}">{{ $monitor['session_status_label'] }}</span>
+                                </div>
+                                <div class="d-flex flex-wrap gap-1">
+                                    <span class="badge badge-light-{{ $monitor['overall_alert_level'] }}">{{ $monitor['overall_alert_label'] }}</span>
+                                    @if($monitor['queue_looks_stuck'])
+                                        <span class="badge badge-light-warning">Queue Delay</span>
+                                    @endif
+                                    @if($monitor['failure_warning'])
+                                        <span class="badge badge-light-danger">Recent Failures</span>
+                                    @endif
                                 </div>
                             </div>
                         </div>
@@ -217,12 +226,18 @@
                             <div class="border rounded p-4 h-100">
                                 <div class="text-muted fs-7 mb-1">Pending Queue</div>
                                 <div class="fw-bold">{{ $monitor['pending_queue_count'] }}</div>
+                                @if($monitor['queue_looks_stuck'])
+                                    <div class="text-warning fw-semibold fs-8 mt-2">Old pending items need attention</div>
+                                @elseif($monitor['sending_queue_count'] > 0)
+                                    <div class="text-info fw-semibold fs-8 mt-2">Queue is actively processing</div>
+                                @endif
                             </div>
                         </div>
                         <div class="col-md-3">
                             <div class="border rounded p-4 h-100">
                                 <div class="text-muted fs-7 mb-1">Recommended</div>
-                                <div class="fw-semibold text-gray-800">{{ \Illuminate\Support\Str::limit($monitor['recommended_action'], 90) }}</div>
+                                <div class="fw-semibold text-gray-800 mb-2">{{ \Illuminate\Support\Str::limit($monitor['recommended_action'], 90) }}</div>
+                                <div class="text-muted fs-8">{{ $monitor['overall_alert_text'] }}</div>
                             </div>
                         </div>
                     </div>
