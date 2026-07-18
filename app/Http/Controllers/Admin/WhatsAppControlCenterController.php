@@ -21,22 +21,50 @@ class WhatsAppControlCenterController extends Controller
      */
     public function dashboard()
     {
+        $dashboardData = $this->buildDashboardMonitorData();
+
+        return view('dashbord.whatsapp.dashboard', $dashboardData);
+    }
+
+    public function monitor()
+    {
+        $dashboardData = $this->buildDashboardMonitorData();
+
+        return view('dashbord.whatsapp.monitor', $dashboardData);
+    }
+
+    private function buildDashboardMonitorData(): array
+    {
         $emergencyStop = DB::table('app_config')->where('key', 'whatsapp_emergency_stop')->value('value');
 
         $connectionStatus = false;
         $devicePhone = null;
-        $lastConnectedAt = null;
+        $service = app(WhatsAppService::class);
+        $device = [
+            'reachable' => false,
+            'connected' => false,
+            'phone' => null,
+            'status' => 'unchecked',
+            'message' => null,
+        ];
+        $qrState = [
+            'reachable' => false,
+            'connected' => false,
+            'qr' => null,
+            'status' => 'unchecked',
+            'message' => null,
+        ];
 
         if ($emergencyStop != '1') {
             try {
-                $service = app(WhatsAppService::class);
                 $device = $service->status();
+                $qrState = $service->getQR();
                 if ($device && ($device['connected'] ?? false)) {
                     $connectionStatus = true;
                     $devicePhone = $device['phone'] ?? null;
                 }
             } catch (\Exception $e) {
-                // OpenWA not reachable — stay as disconnected
+                // OpenWA not reachable — stay disconnected and use fallback states.
             }
         }
 
@@ -58,13 +86,45 @@ class WhatsAppControlCenterController extends Controller
         $lastSent = WhatsAppMessageLog::where('status', 'sent')
             ->orderBy('created_at', 'desc')
             ->first();
+        $lastFailed = WhatsAppMessageLog::where('status', 'failed')
+            ->orderBy('created_at', 'desc')
+            ->first();
+        $pendingQueueCount = WhatsAppMessageLog::where('status', 'pending')->count();
+        $sendingQueueCount = WhatsAppMessageLog::where('status', 'sending')->count();
+        $oldestPending = WhatsAppMessageLog::where('status', 'pending')->orderBy('created_at')->first();
 
-        return view('dashbord.whatsapp.dashboard', compact(
+        $monitor = [
+            'api_reachable' => (bool) ($device['reachable'] ?? false),
+            'session_connected' => (bool) ($device['connected'] ?? false),
+            'session_status' => (string) ($device['status'] ?? 'unknown'),
+            'session_status_label' => $this->formatSessionStatusLabel((string) ($device['status'] ?? 'unknown')),
+            'session_message' => $device['message'] ?? $qrState['message'] ?? null,
+            'qr_needed' => !$connectionStatus && !empty($qrState['qr']),
+            'connected_phone' => $devicePhone,
+            'last_success_at' => optional($lastSent)->created_at,
+            'last_failure_at' => optional($lastFailed)->created_at,
+            'last_failure_error' => $lastFailed->error ?? null,
+            'pending_queue_count' => $pendingQueueCount,
+            'sending_queue_count' => $sendingQueueCount,
+            'oldest_pending_at' => optional($oldestPending)->created_at,
+            'recommended_action' => $this->buildConnectionRecommendedAction(
+                $emergencyStop,
+                (bool) ($device['reachable'] ?? false),
+                (bool) ($device['connected'] ?? false),
+                !empty($qrState['qr']),
+                $pendingQueueCount,
+                $sendingQueueCount,
+                optional($oldestPending)->created_at,
+                $lastFailed->error ?? null
+            ),
+        ];
+
+        return compact(
             'connectionStatus', 'emergencyStop',
             'messagesToday', 'messagesThisMonth', 'failuresToday',
             'totalClients', 'clientsWithPhone', 'lastSent',
-            'devicePhone'
-        ));
+            'devicePhone', 'monitor'
+        );
     }
 
     /**
@@ -1363,6 +1423,57 @@ class WhatsAppControlCenterController extends Controller
         }
 
         return response()->json($results);
+    }
+
+    private function formatSessionStatusLabel(string $status): string
+    {
+        return match (strtolower(trim($status))) {
+            'ready', 'connected' => 'Ready',
+            'initializing' => 'Initializing',
+            'starting' => 'Starting',
+            'authenticated' => 'Authenticated',
+            'disconnected' => 'Disconnected',
+            'unreachable' => 'Unreachable',
+            'unknown', '' => 'Unknown',
+            default => Str::headline($status),
+        };
+    }
+
+    private function buildConnectionRecommendedAction(
+        $emergencyStop,
+        bool $apiReachable,
+        bool $sessionConnected,
+        bool $qrNeeded,
+        int $pendingQueueCount,
+        int $sendingQueueCount,
+        $oldestPendingAt,
+        ?string $lastFailureError
+    ): string {
+        if ((string) $emergencyStop === '1') {
+            return 'WhatsApp is paused by Emergency Stop. If this was intentional, leave it as-is. Otherwise, restart the service from the dashboard.';
+        }
+
+        if (!$apiReachable) {
+            return 'OpenWA API is unreachable. Admin should check the OpenWA server/container first, then use Restart Service after the API is back.';
+        }
+
+        if (!$sessionConnected && $qrNeeded) {
+            return 'OpenWA is reachable but the session needs authentication. Admin should scan the QR code shown on this page.';
+        }
+
+        if (!$sessionConnected) {
+            return 'OpenWA is reachable but the session is not ready. Admin should try Restart Service and then re-check the QR/session state.';
+        }
+
+        if ($pendingQueueCount > 0 && $oldestPendingAt && Carbon::parse($oldestPendingAt)->lt(now()->subMinutes(5)) && $sendingQueueCount === 0) {
+            return 'Messages are waiting in Queue longer than expected. Admin should open Queue, confirm new activity, and if needed restart the batch processor/service.';
+        }
+
+        if (!empty($lastFailureError)) {
+            return 'Connection looks healthy, but there were recent send failures. Admin should review the latest failed log entry and compare it with Queue activity.';
+        }
+
+        return 'Connection and queue look healthy. Admin can keep working normally and use Queue/Log for any delivery follow-up.';
     }
 
     private function getMessageSourceMeta(?string $sentBy): array

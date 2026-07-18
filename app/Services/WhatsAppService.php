@@ -35,22 +35,47 @@ class WhatsAppService
                 ->get("{$this->baseUrl}/sessions/{$this->sessionId}");
 
             $data = $response->json();
+            $statusCode = $response->status();
 
-            if (!$data || isset($data['error'])) {
-                return ['connected' => false, 'phone' => null];
+            if (!$response->successful()) {
+                return [
+                    'reachable' => false,
+                    'connected' => false,
+                    'phone' => null,
+                    'status' => 'unreachable',
+                    'message' => $data['message'] ?? ('OpenWA HTTP ' . $statusCode),
+                ];
             }
 
-            $status = $data['status'] ?? '';
+            if (!$data || isset($data['error'])) {
+                return [
+                    'reachable' => true,
+                    'connected' => false,
+                    'phone' => null,
+                    'status' => $data['status'] ?? 'unknown',
+                    'message' => $data['error']['message'] ?? $data['message'] ?? 'Session data unavailable',
+                ];
+            }
+
+            $status = (string) ($data['status'] ?? 'unknown');
             $connected = in_array(strtolower($status), ['connected', 'ready']);
 
             return [
+                'reachable' => true,
                 'connected' => $connected,
                 'phone' => $data['phoneNumber'] ?? $data['phone'] ?? null,
                 'status' => $status,
+                'message' => $data['message'] ?? null,
             ];
         } catch (\Exception $e) {
             Log::error('OpenWA status check failed: ' . $e->getMessage());
-            return ['connected' => false, 'phone' => null];
+            return [
+                'reachable' => false,
+                'connected' => false,
+                'phone' => null,
+                'status' => 'unreachable',
+                'message' => $e->getMessage(),
+            ];
         }
     }
 
@@ -62,22 +87,61 @@ class WhatsAppService
                 ->get("{$this->baseUrl}/sessions/{$this->sessionId}/qr");
 
             $data = $response->json();
+            $statusCode = $response->status();
+
+            if (!$response->successful()) {
+                $message = (string) ($data['message'] ?? ('OpenWA HTTP ' . $statusCode));
+                $normalized = strtolower($message);
+
+                if (str_contains($normalized, 'already authenticated') || str_contains($normalized, 'no qr code needed')) {
+                    return [
+                        'reachable' => true,
+                        'qr' => null,
+                        'connected' => true,
+                        'status' => 'ready',
+                        'message' => $message,
+                    ];
+                }
+
+                return [
+                    'reachable' => false,
+                    'qr' => null,
+                    'connected' => false,
+                    'status' => 'unreachable',
+                    'message' => $message,
+                ];
+            }
 
             if (!$data || isset($data['error'])) {
-                return ['qr' => null, 'connected' => false];
+                return [
+                    'reachable' => true,
+                    'qr' => null,
+                    'connected' => false,
+                    'status' => $data['status'] ?? 'unknown',
+                    'message' => $data['error']['message'] ?? $data['message'] ?? 'QR not available',
+                ];
             }
 
             $qrCode = $data['qrCode'] ?? $data['qr'] ?? null;
-            $status = $data['status'] ?? '';
+            $status = (string) ($data['status'] ?? 'unknown');
             $connected = in_array(strtolower($status), ['connected', 'ready']);
 
             return [
+                'reachable' => true,
                 'qr' => $qrCode,
                 'connected' => $connected,
+                'status' => $status,
+                'message' => $data['message'] ?? null,
             ];
         } catch (\Exception $e) {
             Log::error('OpenWA QR fetch failed: ' . $e->getMessage());
-            return ['qr' => null, 'connected' => false];
+            return [
+                'reachable' => false,
+                'qr' => null,
+                'connected' => false,
+                'status' => 'unreachable',
+                'message' => $e->getMessage(),
+            ];
         }
     }
 
