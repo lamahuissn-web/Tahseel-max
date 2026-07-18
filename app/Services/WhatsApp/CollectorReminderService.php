@@ -62,6 +62,11 @@ class CollectorReminderService
                 'customers' => [],
                 'customer_count' => 0,
                 'invoice_count' => 0,
+                'due_today_count' => 0,
+                'overdue_count' => 0,
+                'missing_customer_phone_count' => 0,
+                'message_count' => 0,
+                'send_ready' => false,
                 'total_amount' => 0.0,
             ];
         }
@@ -91,10 +96,18 @@ class CollectorReminderService
             $groups[$ruleIndex]['customers'][] = $customerData;
             $groups[$ruleIndex]['customer_count']++;
             $groups[$ruleIndex]['invoice_count'] += $customerData['invoice_count'];
+            $groups[$ruleIndex]['due_today_count'] += $customerData['due_today_count'];
+            $groups[$ruleIndex]['overdue_count'] += $customerData['overdue_count'];
+            $groups[$ruleIndex]['missing_customer_phone_count'] += empty($customerData['phone']) ? 1 : 0;
             $groups[$ruleIndex]['total_amount'] += $customerData['total_amount'];
         }
 
-        $groups = collect($groups)->values()->all();
+        $groups = collect($groups)->map(function ($group) {
+            $group['total_amount'] = round((float) ($group['total_amount'] ?? 0), 2);
+            $group['message_count'] = (int) ceil(max(0, (int) ($group['customer_count'] ?? 0)) / 15);
+            $group['send_ready'] = !empty($group['phone']) && ((int) ($group['customer_count'] ?? 0) > 0);
+            return $group;
+        })->values()->all();
 
         return [
             'rules' => $rules,
@@ -104,8 +117,14 @@ class CollectorReminderService
             'summary' => [
                 'collectors' => count($groups),
                 'collectors_with_customers' => collect($groups)->where('customer_count', '>', 0)->count(),
+                'ready_collectors' => collect($groups)->where('send_ready', true)->count(),
+                'blocked_collectors' => collect($groups)->filter(fn ($group) => ($group['customer_count'] ?? 0) > 0 && empty($group['phone']))->count(),
                 'customers' => collect($groups)->sum('customer_count'),
                 'invoices' => collect($groups)->sum('invoice_count'),
+                'due_today' => collect($groups)->sum('due_today_count'),
+                'overdue' => collect($groups)->sum('overdue_count'),
+                'missing_customer_phones' => collect($groups)->sum('missing_customer_phone_count'),
+                'message_count' => collect($groups)->sum('message_count'),
                 'total_amount' => round((float) collect($groups)->sum('total_amount'), 2),
                 'unmatched' => count($unmatched),
                 'conflicts' => count($conflicts),
@@ -355,6 +374,7 @@ class CollectorReminderService
             ->whereNull('c.deleted_at')
             ->whereNull('i.deleted_at')
             ->whereNotNull('c.name')
+            ->where('c.is_active', '1')
             ->whereIn('i.status', ['unpaid', 'partial']);
 
         if ($includeOverdue) {
@@ -371,6 +391,8 @@ class CollectorReminderService
                 'c.name',
                 'c.phone',
                 DB::raw('COUNT(i.id) as invoice_count'),
+                DB::raw('SUM(CASE WHEN DATE(i.due_date) = CURDATE() THEN 1 ELSE 0 END) as due_today_count'),
+                DB::raw('SUM(CASE WHEN DATE(i.due_date) < CURDATE() THEN 1 ELSE 0 END) as overdue_count'),
                 DB::raw('COALESCE(SUM(i.remaining_amount), 0) as total_amount'),
                 DB::raw('MIN(i.due_date) as first_due_date'),
             ]);
@@ -402,16 +424,43 @@ class CollectorReminderService
         $firstDueDate = $client->first_due_date ?? null;
         $oldestDate = $firstDueDate ? Carbon::parse($firstDueDate) : null;
 
+        $dueTodayCount = (int) ($client->due_today_count ?? 0);
+        $overdueCount = (int) ($client->overdue_count ?? 0);
+        $oldestOverdueDays = $oldestDate ? max(0, $oldestDate->diffInDays(Carbon::today(), false)) : 0;
+
         return [
             'id' => $client->id,
             'name' => $client->name,
             'phone' => $client->phone,
             'invoice_count' => (int) $client->invoice_count,
+            'due_today_count' => $dueTodayCount,
+            'overdue_count' => $overdueCount,
             'total_amount' => round((float) $client->total_amount, 2),
             'first_due_date' => $firstDueDate,
             'first_due_date_formatted' => $firstDueDate ? Carbon::parse($firstDueDate)->format('d/m/Y') : '-',
-            'oldest_overdue_days' => $oldestDate ? max(0, $oldestDate->diffInDays(Carbon::today(), false)) : 0,
+            'oldest_overdue_days' => $oldestOverdueDays,
+            'reason' => self::previewReason($dueTodayCount, $overdueCount, $oldestOverdueDays),
+            'missing_phone' => empty($client->phone),
         ];
+    }
+
+    private static function previewReason(int $dueTodayCount, int $overdueCount, int $oldestOverdueDays): string
+    {
+        if ($overdueCount > 0 && $dueTodayCount > 0) {
+            return "Overdue {$overdueCount} + due today {$dueTodayCount}";
+        }
+
+        if ($overdueCount > 0) {
+            return $oldestOverdueDays > 0
+                ? "Overdue {$oldestOverdueDays} days"
+                : 'Overdue';
+        }
+
+        if ($dueTodayCount > 0) {
+            return 'Due today';
+        }
+
+        return 'Due';
     }
 
     private static function customerData(object $client, Collection $invoices): array

@@ -85,8 +85,11 @@ Sections:
    - comma-separated markers
    - active yes/no
 2. Preview Today
-   - collector grouped counts/totals
-   - unmatched/conflict counts
+   - top operational counters for ready collectors, due customers, message chunks, missing phones, conflicts, unmatched, and total due amount
+   - collector grouped counts/totals with chips for ready, overdue, due today, message chunks, missing customer phones, and blocked missing collector phone
+   - customer table showing name, phone, invoices, due amount, due date, and inclusion reason
+   - skipped/blocked warnings are visible before sending
+   - Send Now confirmation summarizes collectors, customers, messages, total due, conflicts, unmatched, and warnings before queueing
 3. Send Now
    - sends reminders through queue
 

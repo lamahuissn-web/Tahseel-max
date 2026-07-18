@@ -217,11 +217,16 @@
                     </div>
                 </div>
                 <div class="card-body">
+                    @php $previewSummary = $preview['summary'] ?? []; @endphp
                     <div class="row g-4 mb-6">
-                        <div class="col-md-3"><div class="border rounded p-4"><div class="text-muted fs-7">Collectors</div><div class="fs-2 fw-bold">{{ $preview['summary']['collectors_with_customers'] ?? 0 }}</div></div></div>
-                        <div class="col-md-3"><div class="border rounded p-4"><div class="text-muted fs-7">Customers</div><div class="fs-2 fw-bold">{{ $preview['summary']['customers'] ?? 0 }}</div></div></div>
-                        <div class="col-md-3"><div class="border rounded p-4"><div class="text-muted fs-7">Invoices</div><div class="fs-2 fw-bold">{{ $preview['summary']['invoices'] ?? 0 }}</div></div></div>
-                        <div class="col-md-3"><div class="border rounded p-4"><div class="text-muted fs-7">Total</div><div class="fs-2 fw-bold">${{ number_format($preview['summary']['total_amount'] ?? 0, 2) }}</div></div></div>
+                        <div class="col-md-3"><div class="border border-success rounded p-4 bg-light-success"><div class="text-muted fs-7">Ready Collectors</div><div class="fs-2 fw-bold text-success">{{ $previewSummary['ready_collectors'] ?? 0 }}</div><div class="fs-8 text-muted">Can queue now</div></div></div>
+                        <div class="col-md-3"><div class="border rounded p-4"><div class="text-muted fs-7">Due Customers</div><div class="fs-2 fw-bold">{{ $previewSummary['customers'] ?? 0 }}</div><div class="fs-8 text-muted">{{ $previewSummary['overdue'] ?? 0 }} overdue · {{ $previewSummary['due_today'] ?? 0 }} due today</div></div></div>
+                        <div class="col-md-3"><div class="border rounded p-4"><div class="text-muted fs-7">Messages</div><div class="fs-2 fw-bold">{{ $previewSummary['message_count'] ?? 0 }}</div><div class="fs-8 text-muted">Collector message chunks</div></div></div>
+                        <div class="col-md-3"><div class="border rounded p-4"><div class="text-muted fs-7">Total Due</div><div class="fs-2 fw-bold">${{ number_format($previewSummary['total_amount'] ?? 0, 2) }}</div><div class="fs-8 text-muted">Preview today only</div></div></div>
+                        <div class="col-md-3"><div class="border rounded p-4"><div class="text-muted fs-7">Missing Customer Phones</div><div class="fs-2 fw-bold text-warning">{{ $previewSummary['missing_customer_phones'] ?? 0 }}</div><div class="fs-8 text-muted">Still listed for collector</div></div></div>
+                        <div class="col-md-3"><div class="border rounded p-4"><div class="text-muted fs-7">Blocked Collectors</div><div class="fs-2 fw-bold text-danger">{{ $previewSummary['blocked_collectors'] ?? 0 }}</div><div class="fs-8 text-muted">Missing collector phone</div></div></div>
+                        <div class="col-md-3"><div class="border rounded p-4"><div class="text-muted fs-7">Conflicts</div><div class="fs-2 fw-bold text-warning">{{ $previewSummary['conflicts'] ?? 0 }}</div><div class="fs-8 text-muted">Not auto-sent</div></div></div>
+                        <div class="col-md-3"><div class="border rounded p-4"><div class="text-muted fs-7">Unmatched</div><div class="fs-2 fw-bold text-muted">{{ $previewSummary['unmatched'] ?? 0 }}</div><div class="fs-8 text-muted">Need marker review</div></div></div>
                     </div>
 
                     @if(($preview['summary']['conflicts'] ?? 0) > 0)
@@ -247,7 +252,16 @@
                                             <i class="bi bi-printer me-1"></i> Print
                                         </a>
                                     </div>
-                                    <span class="badge badge-light-primary">{{ $group['customer_count'] }} due customers</span>
+                                    <span class="badge {{ ($group['send_ready'] ?? false) ? 'badge-light-success' : ((($group['customer_count'] ?? 0) > 0 && empty($group['phone'])) ? 'badge-light-danger' : 'badge-light-secondary') }}">
+                                        {{ ($group['send_ready'] ?? false) ? 'Ready' : ((($group['customer_count'] ?? 0) > 0 && empty($group['phone'])) ? 'Blocked: no collector phone' : 'No send needed') }}
+                                    </span>
+                                    <span class="badge badge-light-primary">{{ $group['customer_count'] }} customers</span>
+                                    <span class="badge badge-light-info">{{ $group['message_count'] ?? 0 }} msg</span>
+                                    <span class="badge badge-light-warning">{{ $group['overdue_count'] ?? 0 }} overdue</span>
+                                    <span class="badge badge-light-secondary">{{ $group['due_today_count'] ?? 0 }} due today</span>
+                                    @if(($group['missing_customer_phone_count'] ?? 0) > 0)
+                                        <span class="badge badge-light-danger">{{ $group['missing_customer_phone_count'] }} missing phone</span>
+                                    @endif
                                     <span class="badge badge-light-success">${{ number_format($group['total_amount'], 2) }}</span>
                                 </div>
                             </div>
@@ -255,15 +269,37 @@
                             @if(($group['customer_count'] ?? 0) > 0)
                                 <div class="table-responsive">
                                     <table class="table table-sm table-row-dashed align-middle mb-0">
-                                        <thead><tr><th>Customer</th><th>Phone</th><th>Invoices</th><th>Due</th><th>Amount</th></tr></thead>
+                                        <thead>
+                                            <tr>
+                                                <th>Customer</th>
+                                                <th>Phone</th>
+                                                <th>Invoices</th>
+                                                <th>Due Amount</th>
+                                                <th>Due Date</th>
+                                                <th>Reason</th>
+                                            </tr>
+                                        </thead>
                                         <tbody>
                                         @foreach(array_slice($group['customers'], 0, 20) as $customer)
                                             <tr>
-                                                <td>{{ $customer['name'] }}</td>
-                                                <td>{{ $customer['phone'] ?: '—' }}</td>
+                                                <td class="fw-semibold">{{ $customer['name'] }}</td>
+                                                <td>
+                                                    @if(!empty($customer['phone']))
+                                                        <span dir="ltr">{{ $customer['phone'] }}</span>
+                                                    @else
+                                                        <span class="badge badge-light-danger">Missing phone</span>
+                                                    @endif
+                                                </td>
                                                 <td>{{ $customer['invoice_count'] }}</td>
+                                                <td class="fw-bold text-success">${{ number_format($customer['total_amount'], 2) }}</td>
                                                 <td>{{ $customer['first_due_date_formatted'] }}</td>
-                                                <td>${{ number_format($customer['total_amount'], 2) }}</td>
+                                                <td>
+                                                    @if(($customer['overdue_count'] ?? 0) > 0)
+                                                        <span class="badge badge-light-warning">{{ $customer['reason'] ?? 'Overdue' }}</span>
+                                                    @else
+                                                        <span class="badge badge-light-info">{{ $customer['reason'] ?? 'Due today' }}</span>
+                                                    @endif
+                                                </td>
                                             </tr>
                                         @endforeach
                                         </tbody>
@@ -336,6 +372,7 @@
 <script>
 let collectorRuleIndex = {{ count($rulesForView ?? []) }};
 const collectorUsers = @json($collectorUsers ?? []);
+const collectorPreviewSummary = @json($preview['summary'] ?? []);
 let activeMarkerInput = null;
 
 function setActiveMarkerInput(input) {
@@ -424,7 +461,44 @@ function removeCollectorRule(button) {
     $(button).closest('.collector-rule').remove();
 }
 
+function collectorSendConfirmationHtml() {
+    const s = collectorPreviewSummary || {};
+    const warnings = [];
+    if ((s.blocked_collectors || 0) > 0) warnings.push((s.blocked_collectors || 0) + ' collector(s) blocked: missing collector phone');
+    if ((s.missing_customer_phones || 0) > 0) warnings.push((s.missing_customer_phones || 0) + ' customer(s) missing phone');
+    if ((s.conflicts || 0) > 0) warnings.push((s.conflicts || 0) + ' conflict customer(s) not auto-sent');
+    if ((s.unmatched || 0) > 0) warnings.push((s.unmatched || 0) + ' due customer(s) unmatched');
+
+    return `
+        <div class="text-start">
+            <div class="mb-2"><strong>Ready collectors:</strong> ${s.ready_collectors || 0}</div>
+            <div class="mb-2"><strong>Due customers:</strong> ${s.customers || 0}</div>
+            <div class="mb-2"><strong>WhatsApp messages:</strong> ${s.message_count || 0}</div>
+            <div class="mb-2"><strong>Total due:</strong> $${Number(s.total_amount || 0).toFixed(2)}</div>
+            <hr>
+            <div class="mb-2 text-warning"><strong>Warnings before queue:</strong></div>
+            ${warnings.length ? '<ul class="mb-0"><li>' + warnings.map(escapeHtml).join('</li><li>') + '</li></ul>' : '<div class="text-success">No warnings.</div>'}
+        </div>`;
+}
+
 function sendCollectorRemindersNow() {
+    Swal.fire({
+        icon: 'question',
+        title: 'Queue Collector Reminders?',
+        html: collectorSendConfirmationHtml(),
+        showCancelButton: true,
+        confirmButtonText: 'Queue Collector Reminders',
+        cancelButtonText: 'Cancel',
+        width: 560,
+    }).then(function(result) {
+        if (!result.isConfirmed) {
+            return;
+        }
+        queueCollectorReminders(false);
+    });
+}
+
+function queueCollectorReminders(initialForce) {
     $('#send-collector-reminders-btn').prop('disabled', true);
 
     function doSend(force) {
@@ -474,7 +548,7 @@ function sendCollectorRemindersNow() {
             });
     }
 
-    doSend(false);
+    doSend(initialForce === true);
 }
 </script>
 @endsection
