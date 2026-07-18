@@ -53,6 +53,15 @@ A customer appears in a collector reminder when they have unpaid/partial invoice
 - invoice is not soft deleted
 - customer is not soft deleted
 
+## Export / Print
+- The collectors page must provide Excel export and printable tracking pages for collectors.
+- Export/print scope is **all active customers whose names match a collector marker**, not only today's due/overdue reminder customers.
+- Export must support per-collector files and an all-collectors file.
+- All-collectors Excel should use separate sheets per collector where supported.
+- Print output must include blank tracking columns such as visited, collected, and notes so collectors can work offline.
+- Export/print must be read-only: no WhatsApp sends, no finance data updates, no new tables, no migrations.
+- If a customer matches multiple collectors, include a visible conflict warning/status rather than hiding it.
+
 ## Performance
 - The collectors page must not run per-customer invoice eligibility queries during initial render.
 - Preview must use grouped invoice/customer queries so `/admin/whatsapp/collectors` remains fast as customer count grows.

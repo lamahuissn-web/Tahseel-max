@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\CollectorMarkedCustomersExport;
 use App\Http\Controllers\Controller;
 use App\Models\WhatsAppMessageLog;
 use App\Services\WhatsApp\CollectorReminderService;
@@ -14,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Maatwebsite\Excel\Facades\Excel;
 
 class WhatsAppControlCenterController extends Controller
 {
@@ -241,9 +243,66 @@ class WhatsAppControlCenterController extends Controller
         $rules = $this->getCollectorRulesConfig();
         $collectorUsers = $this->getCollectorUserOptions();
         $markerSuggestions = $this->getCollectorMarkerSuggestions();
-        $preview = CollectorReminderService::buildPreview($rules);
+        $collectorSettings = $this->getCollectorSettings();
+        $preview = CollectorReminderService::buildPreview($rules, $collectorSettings);
+        $lastSend = $this->getCollectorLastSend();
+        $unmatchedPreview = array_slice($preview['unmatched'] ?? [], 0, 50);
 
-        return view('dashbord.whatsapp.collectors', compact('rules', 'preview', 'collectorUsers', 'markerSuggestions'));
+        return view('dashbord.whatsapp.collectors', compact(
+            'rules', 'preview', 'collectorUsers', 'markerSuggestions',
+            'lastSend', 'collectorSettings', 'unmatchedPreview'
+        ));
+    }
+
+    public function exportCollectorMarkedCustomers(?int $ruleIndex = null)
+    {
+        $dataset = CollectorReminderService::buildAllMarkedCustomers($this->getCollectorRulesConfig());
+        $groups = $this->filterCollectorMarkedGroups($dataset['groups'] ?? [], $ruleIndex);
+
+        if ($ruleIndex !== null && empty($groups)) {
+            abort(404, 'Collector rule not found.');
+        }
+
+        $filename = $ruleIndex === null
+            ? 'collector-all-marked-customers-' . now()->format('Y-m-d') . '.xlsx'
+            : 'collector-' . $this->safeFilename($groups[0]['name'] ?? 'collector') . '-marked-customers-' . now()->format('Y-m-d') . '.xlsx';
+
+        return Excel::download(new CollectorMarkedCustomersExport($groups), $filename);
+    }
+
+    public function printCollectorMarkedCustomers(?int $ruleIndex = null)
+    {
+        $dataset = CollectorReminderService::buildAllMarkedCustomers($this->getCollectorRulesConfig());
+        $groups = $this->filterCollectorMarkedGroups($dataset['groups'] ?? [], $ruleIndex);
+
+        if ($ruleIndex !== null && empty($groups)) {
+            abort(404, 'Collector rule not found.');
+        }
+
+        return view('dashbord.whatsapp.collectors-print', [
+            'groups' => $groups,
+            'summary' => $dataset['summary'] ?? [],
+            'singleCollector' => $ruleIndex !== null,
+            'printedAt' => now(),
+        ]);
+    }
+
+    private function filterCollectorMarkedGroups(array $groups, ?int $ruleIndex = null): array
+    {
+        if ($ruleIndex === null) {
+            return array_values($groups);
+        }
+
+        return collect($groups)
+            ->filter(fn ($group) => (int) ($group['rule_index'] ?? -1) === (int) $ruleIndex)
+            ->values()
+            ->all();
+    }
+
+    private function safeFilename(string $value): string
+    {
+        $value = trim(preg_replace('/[^\p{L}\p{N}_-]+/u', '-', $value), '-');
+        return $value !== '' ? mb_substr($value, 0, 60) : 'collector';
     }
 
     public function saveCollectorRules(Request $request)
@@ -291,12 +350,25 @@ class WhatsAppControlCenterController extends Controller
 
     public function previewCollectorReminders()
     {
-        return response()->json(CollectorReminderService::buildPreview($this->getCollectorRulesConfig()));
+        return response()->json(CollectorReminderService::buildPreview($this->getCollectorRulesConfig(), $this->getCollectorSettings()));
     }
 
-    public function sendCollectorRemindersNow()
+    public function sendCollectorRemindersNow(Request $request)
     {
-        $preview = CollectorReminderService::buildPreview($this->getCollectorRulesConfig());
+        $force = $request->boolean('force');
+
+        $lastSend = $this->getCollectorLastSend();
+        if ($lastSend && $lastSend['date'] === now()->toDateString() && !$force) {
+            return response()->json([
+                'success' => false,
+                'already_sent_today' => true,
+                'last_send' => $lastSend,
+                'message' => 'Collector reminders already sent today. Use force=true to send again.',
+            ]);
+        }
+
+        $settings = $this->getCollectorSettings();
+        $preview = CollectorReminderService::buildPreview($this->getCollectorRulesConfig(), $settings);
         $batchId = (string) Str::uuid();
         $queued = 0;
         $skipped = [];
@@ -330,6 +402,7 @@ class WhatsAppControlCenterController extends Controller
         if ($queued > 0) {
             $delay = (int) (DB::table('app_config')->where('key', 'whatsapp_auto_delay')->value('value') ?? 10);
             $this->startQueuedBatchProcessor($batchId, $delay);
+            $this->setCollectorLastSend($batchId, $queued);
         }
 
         return response()->json([
@@ -340,7 +413,77 @@ class WhatsAppControlCenterController extends Controller
             'redirect_url' => route('admin.whatsapp.queue'),
             'conflicts' => count($preview['conflicts'] ?? []),
             'unmatched' => count($preview['unmatched'] ?? []),
+            'already_sent_today' => false,
         ]);
+    }
+
+    private function getCollectorLastSend(): ?array
+    {
+        $raw = DB::table('app_config')->where('key', 'whatsapp_collector_last_send')->value('value');
+        if (!$raw) {
+            return null;
+        }
+        $decoded = json_decode($raw, true);
+        return is_array($decoded) ? $decoded : null;
+    }
+
+    private function setCollectorLastSend(string $batchId, int $queued): void
+    {
+        DB::table('app_config')->updateOrInsert(
+            ['key' => 'whatsapp_collector_last_send'],
+            [
+                'value' => json_encode([
+                    'date' => now()->toDateString(),
+                    'time' => now()->toTimeString(),
+                    'batch_id' => $batchId,
+                    'queued' => $queued,
+                ], JSON_UNESCAPED_UNICODE),
+                'updated_at' => now(),
+                'created_at' => now(),
+            ]
+        );
+    }
+
+    public function saveCollectorSettings(Request $request)
+    {
+        $settings = [
+            'enabled' => $request->boolean('enabled'),
+            'send_time' => $request->input('send_time', '08:00'),
+            'include_overdue' => $request->boolean('include_overdue', true),
+            'skip_empty_collectors' => $request->boolean('skip_empty_collectors', true),
+            'updated_at' => now()->toDateTimeString(),
+        ];
+
+        DB::table('app_config')->updateOrInsert(
+            ['key' => 'whatsapp_collector_settings'],
+            [
+                'value' => json_encode($settings, JSON_UNESCAPED_UNICODE),
+                'updated_at' => now(),
+                'created_at' => now(),
+            ]
+        );
+
+        return redirect()->route('admin.whatsapp.collectors')->with('success', 'Collector reminder settings saved.');
+    }
+
+    private function getCollectorSettings(): array
+    {
+        $raw = DB::table('app_config')->where('key', 'whatsapp_collector_settings')->value('value');
+        if (!$raw) {
+            return [
+                'enabled' => false,
+                'send_time' => '08:00',
+                'include_overdue' => true,
+                'skip_empty_collectors' => true,
+            ];
+        }
+        $decoded = json_decode($raw, true);
+        return is_array($decoded) ? $decoded : [
+            'enabled' => false,
+            'send_time' => '08:00',
+            'include_overdue' => true,
+            'skip_empty_collectors' => true,
+        ];
     }
 
     private function getCollectorRulesConfig(): array

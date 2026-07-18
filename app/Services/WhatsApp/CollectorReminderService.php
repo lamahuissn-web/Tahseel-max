@@ -45,9 +45,10 @@ class CollectorReminderService
         return $normalized;
     }
 
-    public static function buildPreview(array $rules): array
+    public static function buildPreview(array $rules, array $options = []): array
     {
         $rules = self::normalizeRules($rules);
+        $includeOverdue = filter_var($options['include_overdue'] ?? true, FILTER_VALIDATE_BOOL);
         $activeRules = collect($rules)->filter(fn ($rule) => ($rule['active'] ?? false) && !empty($rule['markers']))->values();
 
         $groups = [];
@@ -68,7 +69,7 @@ class CollectorReminderService
         $unmatched = [];
         $conflicts = [];
 
-        $dueCustomers = self::dueCustomerRows();
+        $dueCustomers = self::dueCustomerRows($includeOverdue);
 
         foreach ($dueCustomers as $client) {
             $matches = self::matchingRules($client->name, $activeRules);
@@ -107,6 +108,78 @@ class CollectorReminderService
                 'invoices' => collect($groups)->sum('invoice_count'),
                 'total_amount' => round((float) collect($groups)->sum('total_amount'), 2),
                 'unmatched' => count($unmatched),
+                'conflicts' => count($conflicts),
+            ],
+        ];
+    }
+
+    public static function buildAllMarkedCustomers(array $rules): array
+    {
+        $rules = self::normalizeRules($rules);
+        $activeRules = collect($rules)->filter(fn ($rule) => ($rule['active'] ?? false) && !empty($rule['markers']))->values();
+
+        $groups = [];
+        foreach ($activeRules as $index => $rule) {
+            $groups[$index] = [
+                'rule_index' => $index,
+                'admin_id' => $rule['admin_id'] ?? null,
+                'name' => $rule['name'],
+                'phone' => $rule['phone'],
+                'markers' => $rule['markers'],
+                'customers' => [],
+                'customer_count' => 0,
+                'invoice_count' => 0,
+                'total_amount' => 0.0,
+                'conflict_count' => 0,
+            ];
+        }
+
+        $conflicts = [];
+
+        foreach (self::allCustomerRows() as $client) {
+            $matches = self::matchingRules($client->name, $activeRules);
+            if ($matches->isEmpty()) {
+                continue;
+            }
+
+            $isConflict = $matches->count() > 1;
+            $customerData = self::allCustomerDataFromAggregate($client, $matches, $isConflict);
+
+            if ($isConflict) {
+                $conflicts[] = $customerData;
+            }
+
+            foreach ($matches as $match) {
+                $ruleIndex = $match['rule_index'];
+                $row = $customerData;
+                $row['row_number'] = count($groups[$ruleIndex]['customers']) + 1;
+                $row['matched_markers'] = self::matchedMarkers($client->name, $match['markers'] ?? []);
+                $groups[$ruleIndex]['customers'][] = $row;
+                $groups[$ruleIndex]['customer_count']++;
+                $groups[$ruleIndex]['invoice_count'] += $row['invoice_count'];
+                $groups[$ruleIndex]['total_amount'] += $row['total_amount'];
+                if ($isConflict) {
+                    $groups[$ruleIndex]['conflict_count']++;
+                }
+            }
+        }
+
+        $groups = collect($groups)->map(function ($group) {
+            $group['total_amount'] = round((float) $group['total_amount'], 2);
+            return $group;
+        })->values()->all();
+
+        return [
+            'rules' => $rules,
+            'groups' => $groups,
+            'conflicts' => $conflicts,
+            'summary' => [
+                'collectors' => count($groups),
+                'collectors_with_customers' => collect($groups)->where('customer_count', '>', 0)->count(),
+                'customers' => collect($groups)->sum('customer_count'),
+                'unique_customers' => collect($groups)->flatMap(fn ($group) => collect($group['customers'] ?? [])->pluck('id'))->unique()->count(),
+                'invoices' => collect($groups)->sum('invoice_count'),
+                'total_amount' => round((float) collect($groups)->sum('total_amount'), 2),
                 'conflicts' => count($conflicts),
             ],
         ];
@@ -240,15 +313,57 @@ class CollectorReminderService
         return preg_match('/(^|[^\p{L}\p{N}.])' . $escaped . '($|[^\p{L}\p{N}.])/iu', $clientName) === 1;
     }
 
-    private static function dueCustomerRows(): Collection
+    private static function matchedMarkers(string $clientName, array $markers): array
+    {
+        return collect($markers)
+            ->filter(fn ($marker) => self::containsMarker($clientName, (string) $marker))
+            ->values()
+            ->all();
+    }
+
+    private static function allCustomerRows(): Collection
     {
         return DB::table('tbl_clients as c')
+            ->leftJoin('tbl_invoices as i', function ($join) {
+                $join->on('i.client_id', '=', 'c.id')
+                    ->whereNull('i.deleted_at')
+                    ->whereIn('i.status', ['unpaid', 'partial']);
+            })
+            ->whereNull('c.deleted_at')
+            ->where('c.is_active', '1')
+            ->whereNotNull('c.name')
+            ->groupBy('c.id', 'c.client_code', 'c.name', 'c.phone', 'c.address1', 'c.address2', 'c.is_active')
+            ->orderBy('c.name')
+            ->get([
+                'c.id',
+                'c.client_code',
+                'c.name',
+                'c.phone',
+                'c.address1',
+                'c.address2',
+                'c.is_active',
+                DB::raw('COUNT(i.id) as invoice_count'),
+                DB::raw('COALESCE(SUM(i.remaining_amount), 0) as total_amount'),
+                DB::raw('MIN(i.due_date) as first_due_date'),
+            ]);
+    }
+
+    private static function dueCustomerRows(bool $includeOverdue = true): Collection
+    {
+        $query = DB::table('tbl_clients as c')
             ->join('tbl_invoices as i', 'i.client_id', '=', 'c.id')
             ->whereNull('c.deleted_at')
             ->whereNull('i.deleted_at')
             ->whereNotNull('c.name')
-            ->whereIn('i.status', ['unpaid', 'partial'])
-            ->where('i.due_date', '<=', Carbon::today())
+            ->whereIn('i.status', ['unpaid', 'partial']);
+
+        if ($includeOverdue) {
+            $query->where('i.due_date', '<=', Carbon::today());
+        } else {
+            $query->whereDate('i.due_date', Carbon::today());
+        }
+
+        return $query
             ->groupBy('c.id', 'c.name', 'c.phone')
             ->orderBy('c.name')
             ->get([
@@ -259,6 +374,27 @@ class CollectorReminderService
                 DB::raw('COALESCE(SUM(i.remaining_amount), 0) as total_amount'),
                 DB::raw('MIN(i.due_date) as first_due_date'),
             ]);
+    }
+
+    private static function allCustomerDataFromAggregate(object $client, Collection $matches, bool $isConflict = false): array
+    {
+        $firstDueDate = $client->first_due_date ?? null;
+
+        return [
+            'id' => $client->id,
+            'client_code' => $client->client_code ?? null,
+            'name' => $client->name,
+            'phone' => $client->phone,
+            'address1' => $client->address1 ?? null,
+            'address2' => $client->address2 ?? null,
+            'is_active' => $client->is_active ?? null,
+            'invoice_count' => (int) $client->invoice_count,
+            'total_amount' => round((float) $client->total_amount, 2),
+            'first_due_date' => $firstDueDate,
+            'first_due_date_formatted' => $firstDueDate ? Carbon::parse($firstDueDate)->format('d/m/Y') : '-',
+            'matched_collectors' => $matches->pluck('name')->values()->all(),
+            'conflict' => $isConflict,
+        ];
     }
 
     private static function customerDataFromAggregate(object $client): array

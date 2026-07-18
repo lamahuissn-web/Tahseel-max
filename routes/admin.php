@@ -251,6 +251,11 @@ Route::group(
                 Route::get('/send', [WhatsAppControlCenterController::class, 'send'])->name('send');
                 Route::get('/collectors', [WhatsAppControlCenterController::class, 'collectors'])->name('collectors');
                 Route::post('/collectors/rules', [WhatsAppControlCenterController::class, 'saveCollectorRules'])->name('collectors.rules.save');
+                Route::post('/collectors/settings', [WhatsAppControlCenterController::class, 'saveCollectorSettings'])->name('collectors.settings.save');
+                Route::get('/collectors/export', [WhatsAppControlCenterController::class, 'exportCollectorMarkedCustomers'])->name('collectors.export_all');
+                Route::get('/collectors/print', [WhatsAppControlCenterController::class, 'printCollectorMarkedCustomers'])->name('collectors.print_all');
+                Route::get('/collectors/{ruleIndex}/export', [WhatsAppControlCenterController::class, 'exportCollectorMarkedCustomers'])->whereNumber('ruleIndex')->name('collectors.export');
+                Route::get('/collectors/{ruleIndex}/print', [WhatsAppControlCenterController::class, 'printCollectorMarkedCustomers'])->whereNumber('ruleIndex')->name('collectors.print');
                 Route::get('/collectors/preview', [WhatsAppControlCenterController::class, 'previewCollectorReminders'])->name('collectors.preview');
                 Route::post('/collectors/send-now', [WhatsAppControlCenterController::class, 'sendCollectorRemindersNow'])->name('collectors.send_now');
                 Route::post('/send/broadcast', [WhatsAppControlCenterController::class, 'broadcast'])->name('send.broadcast');

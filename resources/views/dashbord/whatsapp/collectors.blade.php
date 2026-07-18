@@ -35,6 +35,7 @@
             <h4 class="mb-1">Collector Reminder MVP / تذكير المحصلين</h4>
             <div class="text-gray-700">
                 Safe mode: no new database tables, no finance data changes. Collector assignment is based only on markers inside customer names.
+                Excel/print exports include <strong>all marked customers</strong> for each collector, not only today's due reminder list.
             </div>
         </div>
     </div>
@@ -57,6 +58,74 @@
                     <span class="text-muted">No marker-like codes found in customer names.</span>
                 @endforelse
             </div>
+        </div>
+    </div>
+
+    <div class="card mb-8">
+        <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-gear me-2 text-secondary"></i>Settings / الإعدادات</h3>
+            <div class="card-toolbar">
+                <button type="button" class="btn btn-sm btn-light-primary" onclick="$('#collector-settings-body').toggleClass('d-none')">
+                    <i class="bi bi-chevron-down"></i>
+                </button>
+            </div>
+        </div>
+        <div class="card-body d-none" id="collector-settings-body">
+            <form method="POST" action="{{ route('admin.whatsapp.collectors.settings.save') }}">
+                @csrf
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <label class="form-check form-switch form-check-custom form-check-solid">
+                            <input class="form-check-input" type="checkbox" name="enabled" value="1" {{ ($collectorSettings['enabled'] ?? false) ? 'checked' : '' }}>
+                            <span class="form-check-label fw-semibold">Auto-send enabled</span>
+                        </label>
+                        <div class="form-text">Send collector reminders daily at the set time.</div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label fw-semibold">Send time</label>
+                        <input type="time" name="send_time" class="form-control" value="{{ $collectorSettings['send_time'] ?? '08:00' }}">
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-check form-switch form-check-custom form-check-solid">
+                            <input class="form-check-input" type="checkbox" name="include_overdue" value="1" {{ ($collectorSettings['include_overdue'] ?? true) ? 'checked' : '' }}>
+                            <span class="form-check-label fw-semibold">Include overdue</span>
+                        </label>
+                        <div class="form-text">Include overdue invoices in reminders.</div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-check form-switch form-check-custom form-check-solid">
+                            <input class="form-check-input" type="checkbox" name="skip_empty_collectors" value="1" {{ ($collectorSettings['skip_empty_collectors'] ?? true) ? 'checked' : '' }}>
+                            <span class="form-check-label fw-semibold">Skip empty collectors</span>
+                        </label>
+                        <div class="form-text">Don't send to collectors with no due customers.</div>
+                    </div>
+                </div>
+                <div class="text-end">
+                    <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-save me-1"></i> Save Settings</button>
+                </div>
+            </form>
+
+            @if($lastSend)
+                <hr>
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <span class="fw-bold">Last send:</span>
+                        {{ $lastSend['date'] ?? '-' }} at {{ $lastSend['time'] ?? '-' }}
+                        · Batch: <code>{{ Str::limit($lastSend['batch_id'] ?? '-', 12) }}</code>
+                        · Queued: <strong>{{ $lastSend['queued'] ?? 0 }}</strong>
+                        @if(($lastSend['source'] ?? 'manual') === 'cron')
+                            <span class="badge badge-light-secondary ms-2">Auto</span>
+                        @else
+                            <span class="badge badge-light-primary ms-2">Manual</span>
+                        @endif
+                    </div>
+                    @if(($lastSend['date'] ?? null) === now()->toDateString())
+                        <span class="badge badge-light-warning"><i class="bi bi-exclamation-triangle me-1"></i>Already sent today</span>
+                    @endif
+                </div>
+            @else
+                <div class="text-muted mt-2"><i class="bi bi-info-circle me-1"></i>No previous send recorded.</div>
+            @endif
         </div>
     </div>
 
@@ -132,7 +201,13 @@
             <div class="card card-xl-stretch mb-8">
                 <div class="card-header">
                     <h3 class="card-title"><i class="bi bi-eye me-2 text-info"></i>Preview Today</h3>
-                    <div class="card-toolbar d-flex gap-2">
+                    <div class="card-toolbar d-flex gap-2 flex-wrap">
+                        <a href="{{ route('admin.whatsapp.collectors.export_all') }}" class="btn btn-sm btn-light-success">
+                            <i class="bi bi-file-earmark-excel me-1"></i> Export All Marked
+                        </a>
+                        <a href="{{ route('admin.whatsapp.collectors.print_all') }}" target="_blank" class="btn btn-sm btn-light-dark">
+                            <i class="bi bi-printer me-1"></i> Print All
+                        </a>
                         <button type="button" class="btn btn-sm btn-light-primary" onclick="location.reload()">
                             <i class="bi bi-arrow-clockwise me-1"></i> Refresh Preview
                         </button>
@@ -164,7 +239,15 @@
                                     <div class="text-muted fs-7">{{ $group['phone'] ?: 'No phone' }} · Markers: {{ implode(', ', $group['markers'] ?? []) }}</div>
                                 </div>
                                 <div class="text-end">
-                                    <span class="badge badge-light-primary">{{ $group['customer_count'] }} customers</span>
+                                    <div class="mb-2">
+                                        <a href="{{ route('admin.whatsapp.collectors.export', $group['rule_index']) }}" class="btn btn-sm btn-light-success">
+                                            <i class="bi bi-file-earmark-excel me-1"></i> Export Excel
+                                        </a>
+                                        <a href="{{ route('admin.whatsapp.collectors.print', $group['rule_index']) }}" target="_blank" class="btn btn-sm btn-light-dark">
+                                            <i class="bi bi-printer me-1"></i> Print
+                                        </a>
+                                    </div>
+                                    <span class="badge badge-light-primary">{{ $group['customer_count'] }} due customers</span>
                                     <span class="badge badge-light-success">${{ number_format($group['total_amount'], 2) }}</span>
                                 </div>
                             </div>
@@ -199,6 +282,51 @@
                             No collector rules yet. Add rules to preview today's collection reminders.
                         </div>
                     @endforelse
+
+                    @if(($preview['summary']['unmatched'] ?? 0) > 0 && !empty($unmatchedPreview))
+                        <div class="mt-6">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="mb-0"><i class="bi bi-question-circle text-warning me-2"></i>Unmatched Customers (first {{ count($unmatchedPreview) }})</h5>
+                                <span class="badge badge-light-warning">{{ $preview['summary']['unmatched'] }} total unmatched</span>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-row-dashed align-middle">
+                                    <thead><tr><th>Customer</th><th>Phone</th><th>Amount</th><th>Suggested</th><th></th></tr></thead>
+                                    <tbody>
+                                    @foreach($unmatchedPreview as $uc)
+                                        @php
+                                            preg_match_all('/(?<![\p{L}\p{N}.])([A-Z]{1,4}(?:\.[A-Z]{1,4}){0,4})(?![\p{L}\p{N}.])/iu', (string) $uc['name'], $um);
+                                            $suggested = $um[1] ?? [];
+                                        @endphp
+                                        <tr>
+                                            <td>{{ $uc['name'] }}</td>
+                                            <td>{{ $uc['phone'] ?: '—' }}</td>
+                                            <td>${{ number_format($uc['total_amount'], 2) }}</td>
+                                            <td>
+                                                @forelse($suggested as $sg)
+                                                    <button type="button" class="btn btn-sm btn-outline-success py-0 px-1 me-1" onclick="addMarkerToFocusedRule('{{ $sg }}')">
+                                                        + {{ $sg }}
+                                                    </button>
+                                                @empty
+                                                    <span class="text-muted">—</span>
+                                                @endforelse
+                                            </td>
+                                            <td>
+                                                <button type="button" class="btn btn-sm btn-light-primary py-0" onclick="addMarkerToFocusedRule('{{ $suggested[0] ?? '' }}')">
+                                                    <i class="bi bi-plus-circle"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="text-muted fs-8">
+                                Click a suggested marker to add it to the focused rule's marker field.
+                                Make sure a collector rule is selected first.
+                            </div>
+                        </div>
+                    @endif
                 </div>
             </div>
         </div>
@@ -298,21 +426,55 @@ function removeCollectorRule(button) {
 
 function sendCollectorRemindersNow() {
     $('#send-collector-reminders-btn').prop('disabled', true);
-    $.post('{{ route('admin.whatsapp.collectors.send_now') }}', { _token: '{{ csrf_token() }}' })
-        .done(function(res) {
-            if (res.queued > 0) {
-                Swal.fire({ icon: 'success', text: 'Queued ' + res.queued + ' collector reminder messages.' });
-                setTimeout(function() { window.location.href = res.redirect_url; }, 900);
-            } else {
-                Swal.fire({ icon: 'info', text: 'No collector reminders were queued. Check rules, phones, and preview.' });
-            }
-        })
-        .fail(function(xhr) {
-            Swal.fire({ icon: 'error', text: (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Failed to queue collector reminders.' });
-        })
-        .always(function() {
-            $('#send-collector-reminders-btn').prop('disabled', false);
-        });
+
+    function doSend(force) {
+        const data = { _token: '{{ csrf_token() }}' };
+        if (force) {
+            data.force = true;
+        }
+
+        $.post('{{ route('admin.whatsapp.collectors.send_now') }}', data)
+            .done(function(res) {
+                if (res.already_sent_today && !force) {
+                    Swal.fire({
+                        icon: 'warning',
+                        text: res.message || 'Already sent today. Send again?',
+                        showCancelButton: true,
+                        confirmButtonText: 'Send Anyway',
+                        cancelButtonText: 'Cancel',
+                    }).then(function(result) {
+                        if (result.isConfirmed) {
+                            doSend(true);
+                        } else {
+                            $('#send-collector-reminders-btn').prop('disabled', false);
+                        }
+                    });
+                    return;
+                }
+
+                if (res.queued > 0) {
+                    Swal.fire({ icon: 'success', text: 'Queued ' + res.queued + ' collector reminder messages.' });
+                    setTimeout(function() { window.location.href = res.redirect_url; }, 900);
+                } else {
+                    let msg = 'No collector reminders were queued.';
+                    if (res.skipped && res.skipped.length) {
+                        msg += ' Skipped: ' + res.skipped.join(', ');
+                    }
+                    Swal.fire({ icon: 'info', text: msg });
+                    $('#send-collector-reminders-btn').prop('disabled', false);
+                }
+            })
+            .fail(function(xhr) {
+                Swal.fire({ icon: 'error', text: (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Failed to queue collector reminders.' });
+            })
+            .always(function() {
+                if (!window._collectorSendingLock) {
+                    $('#send-collector-reminders-btn').prop('disabled', false);
+                }
+            });
+    }
+
+    doSend(false);
 }
 </script>
 @endsection

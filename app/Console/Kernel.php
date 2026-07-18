@@ -4,9 +4,11 @@ namespace App\Console;
 
 use App\Console\Commands\SendOverdueReminders;
 use App\Console\Commands\WhatsAppRemindersCommand;
-use App\Models\Admin\AppConfig;
+use App\Console\Commands\CollectorReminderSendCommand;
+use App\Models\AppConfig;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
+use Illuminate\Support\Facades\DB;
 
 class Kernel extends ConsoleKernel
 {
@@ -17,6 +19,7 @@ class Kernel extends ConsoleKernel
      */
     protected $commands = [
         WhatsAppRemindersCommand::class,
+        CollectorReminderSendCommand::class,
     ];
 
     /**
@@ -81,6 +84,20 @@ class Kernel extends ConsoleKernel
             }
         } catch (\Exception $e) {
             // Settings not available yet — skip
+        }
+
+        // ── Collector Reminder Auto-Send ──
+        try {
+            $crSettingsRaw = DB::table('app_config')->where('key', 'whatsapp_collector_settings')->value('value');
+            if ($crSettingsRaw) {
+                $crSettings = json_decode($crSettingsRaw, true);
+                if (($crSettings['enabled'] ?? false) && !empty($crSettings['send_time'])) {
+                    $schedule->command(CollectorReminderSendCommand::class)
+                        ->dailyAt($crSettings['send_time']);
+                }
+            }
+        } catch (\Exception $e) {
+            // Config not ready yet
         }
     }
 
