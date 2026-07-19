@@ -592,7 +592,7 @@ class WhatsAppControlCenterController extends Controller
      */
     public function searchClients(Request $request)
     {
-        $term = $request->q;
+        $term = trim((string) $request->q);
         $clients = DB::table('tbl_clients')
             ->whereNull('deleted_at')
             ->where(function ($q) use ($term) {
@@ -600,15 +600,12 @@ class WhatsAppControlCenterController extends Controller
                   ->orWhere('phone', 'like', "%{$term}%")
                   ->orWhere('id', 'like', "%{$term}%");
             })
-            ->select('id', 'name', 'phone')
+            ->select('id', 'name', 'phone', 'is_active')
             ->limit(20)
             ->get();
 
         return response()->json([
-            'results' => $clients->map(fn($c) => [
-                'id' => $c->id,
-                'text' => "{$c->name} | {$c->phone}",
-            ]),
+            'results' => $this->enrichSmartSendClients($clients),
         ]);
     }
 
@@ -640,7 +637,20 @@ class WhatsAppControlCenterController extends Controller
 
             if ($request->filled('unpaid')) {
                 $unpaidCount = (int) $request->unpaid;
-                $query->whereRaw('(SELECT COUNT(*) FROM tbl_invoices WHERE tbl_invoices.client_id = tbl_clients.id AND tbl_invoices.status IN ("unpaid","partial")) >= ?', [$unpaidCount]);
+                $query->whereRaw('(SELECT COUNT(*) FROM tbl_invoices WHERE tbl_invoices.client_id = tbl_clients.id AND tbl_invoices.deleted_at IS NULL AND tbl_invoices.status IN ("unpaid","partial")) >= ?', [$unpaidCount]);
+            }
+
+            $invoiceScope = (string) $request->input('invoice_scope', 'all');
+            if ($invoiceScope === 'due_overdue') {
+                $query->whereRaw('EXISTS (SELECT 1 FROM tbl_invoices WHERE tbl_invoices.client_id = tbl_clients.id AND tbl_invoices.deleted_at IS NULL AND tbl_invoices.status IN ("unpaid","partial") AND DATE(tbl_invoices.due_date) <= ?)', [today()->format('Y-m-d')]);
+            } elseif ($invoiceScope === 'overdue') {
+                $query->whereRaw('EXISTS (SELECT 1 FROM tbl_invoices WHERE tbl_invoices.client_id = tbl_clients.id AND tbl_invoices.deleted_at IS NULL AND tbl_invoices.status IN ("unpaid","partial") AND DATE(tbl_invoices.due_date) < ?)', [today()->format('Y-m-d')]);
+            } elseif ($invoiceScope === 'due_today') {
+                $query->whereRaw('EXISTS (SELECT 1 FROM tbl_invoices WHERE tbl_invoices.client_id = tbl_clients.id AND tbl_invoices.deleted_at IS NULL AND tbl_invoices.status IN ("unpaid","partial") AND DATE(tbl_invoices.due_date) = ?)', [today()->format('Y-m-d')]);
+            } elseif ($invoiceScope === 'due_soon') {
+                $query->whereRaw('EXISTS (SELECT 1 FROM tbl_invoices WHERE tbl_invoices.client_id = tbl_clients.id AND tbl_invoices.deleted_at IS NULL AND tbl_invoices.status IN ("unpaid","partial") AND DATE(tbl_invoices.due_date) > ? AND DATE(tbl_invoices.due_date) <= ?)', [today()->format('Y-m-d'), today()->copy()->addDays(7)->format('Y-m-d')]);
+            } elseif ($invoiceScope === 'no_due') {
+                $query->whereRaw('NOT EXISTS (SELECT 1 FROM tbl_invoices WHERE tbl_invoices.client_id = tbl_clients.id AND tbl_invoices.deleted_at IS NULL AND tbl_invoices.status IN ("unpaid","partial") AND DATE(tbl_invoices.due_date) <= ?)', [today()->format('Y-m-d')]);
             }
 
             if ($request->filled('subscription')) {
@@ -648,24 +658,19 @@ class WhatsAppControlCenterController extends Controller
             }
 
             if ($request->filled('last_payment')) {
-                $query->whereRaw('(SELECT MAX(created_at) FROM tbl_payments WHERE tbl_payments.client_id = tbl_clients.id) <= ?', [$request->last_payment . ' 23:59:59']);
+                $query->whereRaw('(SELECT MAX(created_at) FROM tbl_revenues WHERE tbl_revenues.client_id = tbl_clients.id AND tbl_revenues.deleted_at IS NULL AND tbl_revenues.status = "paid") <= ?', [$request->last_payment . ' 23:59:59']);
             }
 
-            $clients = $query->select(
-                    'id', 'name', 'phone', 'is_active',
-                    DB::raw('(SELECT COUNT(*) FROM tbl_invoices WHERE tbl_invoices.client_id = tbl_clients.id AND tbl_invoices.status IN ("unpaid","partial")) as unpaid_count')
-                )
+            if ($request->filled('min_amount')) {
+                $query->whereRaw('(SELECT COALESCE(SUM(remaining_amount),0) FROM tbl_invoices WHERE tbl_invoices.client_id = tbl_clients.id AND tbl_invoices.deleted_at IS NULL AND tbl_invoices.status IN ("unpaid","partial") AND DATE(tbl_invoices.due_date) <= ?) >= ?', [today()->format('Y-m-d'), (float) $request->min_amount]);
+            }
+
+            $clients = $query->select('id', 'name', 'phone', 'is_active')
                 ->limit(200)
                 ->get();
 
             return response()->json([
-                'clients' => $clients->map(fn($c) => [
-                    'id' => $c->id,
-                    'name' => $c->name,
-                    'phone' => $c->phone,
-                    'is_active' => $c->is_active,
-                    'unpaid_count' => (int) $c->unpaid_count,
-                ]),
+                'clients' => $this->enrichSmartSendClients($clients),
             ]);
         }
 
@@ -675,9 +680,10 @@ class WhatsAppControlCenterController extends Controller
             'client_ids.*' => 'integer|exists:tbl_clients,id',
         ]);
 
-        $body = WhatsAppTemplateService::getBody($request->template_type);
+        $autoTemplate = $request->template_type === 'auto';
+        $body = $autoTemplate ? null : WhatsAppTemplateService::getBody($request->template_type);
 
-        if (empty($body)) {
+        if (!$autoTemplate && empty($body)) {
             return response()->json([
                 'sent' => 0,
                 'failed' => 0,
@@ -704,40 +710,38 @@ class WhatsAppControlCenterController extends Controller
                     continue;
                 }
 
-                $message = $body;
-                $message = str_replace('{name}', $client->name, $message);
-                $message = str_replace('{message_body}', $request->custom_message ?? '', $message);
+                $message = $body ?? '';
+                $templateType = $request->template_type;
+                $autoState = null;
+                $invoiceData = collect();
 
-                $unpaidInvoices = InvoiceEligibilityService::getEligibleInvoices($client->id);
-                $totalAmount = $unpaidInvoices->sum('remaining_amount');
-
-                if ($unpaidInvoices->isNotEmpty()) {
-                    $invoiceDetailsList = WhatsAppMessageBuilder::buildInvoiceDetailsList($unpaidInvoices);
-                    $message = WhatsAppMessageBuilder::buildMessage($message, $client->name, $totalAmount, $invoiceDetailsList);
-                    $dueDate = $unpaidInvoices->last()->due_date
-                        ? Carbon::parse($unpaidInvoices->last()->due_date)->format('Y-m-d')
-                        : Carbon::today()->format('Y-m-d');
-                } else {
-                    $dueDate = Carbon::today()->format('Y-m-d');
+                if ($autoTemplate) {
+                    $clientObj = (object) ['id' => $client->id, 'is_active' => $client->is_active ?? '1', 'phone' => $client->phone ?? ''];
+                    $invoiceData = DB::table('tbl_invoices')
+                        ->where('client_id', $client->id)
+                        ->whereNull('deleted_at')
+                        ->whereIn('status', ['unpaid', 'partial'])
+                        ->get();
+                    $autoState = $this->resolveAutoTemplateState($clientObj, $invoiceData);
+                    $templateType = $autoState['template'];
+                    $message = WhatsAppTemplateService::getBody($templateType) ?: '';
                 }
 
-                $message = str_replace('{total_amount}', number_format($totalAmount, 2), $message);
-                $message = str_replace('{invoice_details_list}', 'لا توجد فواتير مستحقة', $message);
-                $message = str_replace('{due_date}', $dueDate, $message);
-                $message = str_replace('{support_phone}', '96170781562', $message);
-                $message = str_replace('{amount}', number_format($totalAmount > 0 ? $totalAmount : 0, 2), $message);
-                $message = str_replace('{month}', now()->format('m'), $message);
-                $message = str_replace('{year}', now()->format('Y'), $message);
-                $message = str_replace('{collector}', auth('admin')->user()->name ?? 'الإدارة', $message);
-                $message = str_replace('{datetime}', now()->format('Y-m-d h:i A'), $message);
-                $message = str_replace('{balance_status}', 'الرصيد الحالي: $' . number_format($totalAmount, 2), $message);
+                $payload = $this->buildSmartSendMessage($client, $message, $templateType, $autoState, $invoiceData);
+                if ($payload['skip']) {
+                    $results['failed']++;
+                    $results['errors'][] = $client->name . ': ' . ($payload['reason'] ?? 'Skipped by Smart Auto');
+                    continue;
+                }
+                $message = $payload['message'];
+                $templateType = $payload['template_type'];
 
                 WhatsAppMessageLog::create([
                     'client_id' => $client->id,
                     'client_name' => $client->name,
                     'phone' => $client->phone,
                     'message' => $message,
-                    'template_type' => $request->template_type,
+                    'template_type' => $autoTemplate ? $templateType : $request->template_type,
                     'status' => 'pending',
                     'error' => null,
                     'sent_by' => 'admin:manual|batch:' . $batchId,
@@ -769,36 +773,31 @@ class WhatsAppControlCenterController extends Controller
                 continue;
             }
 
-            $message = $body;
-            $message = str_replace('{name}', $client->name, $message);
-            $message = str_replace('{message_body}', $request->custom_message ?? '', $message);
+            $message = $body ?? '';
+            $templateType = $request->template_type;
+            $autoState = null;
+            $invoiceData = collect();
 
-            // Use centralized eligibility check — only due/overdue invoices
-            $unpaidInvoices = InvoiceEligibilityService::getEligibleInvoices($client->id);
-
-            $totalAmount = $unpaidInvoices->sum('remaining_amount');
-
-            if ($unpaidInvoices->isNotEmpty()) {
-                $invoiceDetailsList = WhatsAppMessageBuilder::buildInvoiceDetailsList($unpaidInvoices);
-                $message = WhatsAppMessageBuilder::buildMessage($message, $client->name, $totalAmount, $invoiceDetailsList);
-                // Use the most recent invoice's actual due date
-                $dueDate = $unpaidInvoices->last()->due_date
-                    ? Carbon::parse($unpaidInvoices->last()->due_date)->format('Y-m-d')
-                    : Carbon::today()->format('Y-m-d');
-            } else {
-                $dueDate = Carbon::today()->format('Y-m-d');
+            if ($autoTemplate) {
+                $clientObj = (object) ['id' => $client->id, 'is_active' => $client->is_active ?? '1', 'phone' => $client->phone ?? ''];
+                $invoiceData = DB::table('tbl_invoices')
+                    ->where('client_id', $client->id)
+                    ->whereNull('deleted_at')
+                    ->whereIn('status', ['unpaid', 'partial'])
+                    ->get();
+                $autoState = $this->resolveAutoTemplateState($clientObj, $invoiceData);
+                $templateType = $autoState['template'];
+                $message = WhatsAppTemplateService::getBody($templateType) ?: '';
             }
 
-            $message = str_replace('{total_amount}', number_format($totalAmount, 2), $message);
-            $message = str_replace('{invoice_details_list}', 'لا توجد فواتير مستحقة', $message);
-            $message = str_replace('{due_date}', $dueDate, $message);
-            $message = str_replace('{support_phone}', '96170781562', $message);
-            $message = str_replace('{amount}', number_format($totalAmount > 0 ? $totalAmount : 0, 2), $message);
-            $message = str_replace('{month}', now()->format('m'), $message);
-            $message = str_replace('{year}', now()->format('Y'), $message);
-            $message = str_replace('{collector}', auth('admin')->user()->name ?? 'الإدارة', $message);
-            $message = str_replace('{datetime}', now()->format('Y-m-d h:i A'), $message);
-            $message = str_replace('{balance_status}', 'الرصيد الحالي: $' . number_format($totalAmount, 2), $message);
+            $payload = $this->buildSmartSendMessage($client, $message, $templateType, $autoState, $invoiceData);
+            if ($payload['skip']) {
+                $results['failed']++;
+                $results['errors'][] = $client->name . ': ' . ($payload['reason'] ?? 'Skipped by Smart Auto');
+                continue;
+            }
+            $message = $payload['message'];
+            $templateType = $payload['template_type'];
 
             $result = $service->send($client->phone, $message);
             $status = (isset($result['success']) && $result['success'] === true) ? 'sent' : 'failed';
@@ -808,7 +807,7 @@ class WhatsAppControlCenterController extends Controller
                 'client_name' => $client->name,
                 'phone' => $client->phone,
                 'message' => $message,
-                'template_type' => $request->template_type,
+                'template_type' => $autoTemplate ? $templateType : $request->template_type,
                 'status' => $status,
                 'error' => $status === 'failed' ? ($result['error'] ?? 'Unknown') : null,
                 'sent_by' => 'admin:' . auth('admin')->id(),
@@ -825,6 +824,232 @@ class WhatsAppControlCenterController extends Controller
         }
 
         return response()->json($results);
+    }
+
+    private function buildSmartSendMessage($client, string $body, string $templateType, array $autoState = null, $invoiceData = null): array
+    {
+        $message = $body;
+        $unpaidInvoices = InvoiceEligibilityService::getEligibleInvoices($client->id);
+        $totalAmount = (float) $unpaidInvoices->sum('remaining_amount');
+        $dueDate = Carbon::today()->format('Y-m-d');
+        $invoiceDetailsList = 'لا توجد فواتير مستحقة';
+        $balanceAmount = $totalAmount;
+        $datetime = now()->format('Y-m-d h:i A');
+
+        if ($autoState) {
+            if (in_array($autoState['state'] ?? '', ['blocked', 'skip_no_state'], true)) {
+                return [
+                    'skip' => true,
+                    'template_type' => $templateType,
+                    'message' => '',
+                    'reason' => $autoState['reason'] ?? 'Skipped by Smart Auto',
+                ];
+            }
+
+            if (($autoState['state'] ?? '') === 'future_invoice') {
+                $future = collect($invoiceData ?? [])->filter(function ($invoice) {
+                    return $invoice->due_date && Carbon::parse($invoice->due_date)->startOfDay()->gt(today());
+                })->sortBy('due_date')->first();
+
+                if ($future) {
+                    $totalAmount = (float) ($future->remaining_amount ?? $future->amount ?? 0);
+                    $dueDate = Carbon::parse($future->due_date)->format('Y-m-d');
+                    $invoiceDetailsList = "فاتورة جديدة بقيمة $" . number_format($totalAmount, 2) . " تستحق بتاريخ {$dueDate}";
+                }
+            } elseif (($autoState['state'] ?? '') === 'paid_receipt') {
+                $lastPayment = DB::table('tbl_revenues')
+                    ->where('client_id', $client->id)
+                    ->whereNull('deleted_at')
+                    ->where('status', 'paid')
+                    ->orderByDesc('created_at')
+                    ->first();
+
+                if ($lastPayment) {
+                    $totalAmount = (float) ($lastPayment->amount ?? 0);
+                    $balanceAmount = (float) ($lastPayment->remaining_amount ?? 0);
+                    $datetime = Carbon::parse($lastPayment->created_at)->format('Y-m-d h:i A');
+                }
+            }
+        }
+
+        if (!$autoState || ($autoState['state'] ?? '') === 'overdue_due') {
+            if ($unpaidInvoices->isNotEmpty()) {
+                $invoiceDetailsList = WhatsAppMessageBuilder::buildInvoiceDetailsList($unpaidInvoices);
+                $message = WhatsAppMessageBuilder::buildMessage($message, $client->name, $totalAmount, $invoiceDetailsList);
+                $dueDate = $unpaidInvoices->last()->due_date
+                    ? Carbon::parse($unpaidInvoices->last()->due_date)->format('Y-m-d')
+                    : Carbon::today()->format('Y-m-d');
+            }
+        }
+
+        $message = str_replace('{name}', $client->name, $message);
+        $message = str_replace('{message_body}', request('custom_message') ?? '', $message);
+        $message = str_replace('{total_amount}', number_format($totalAmount, 2), $message);
+        $message = str_replace('{invoice_details_list}', $invoiceDetailsList, $message);
+        $message = str_replace('{due_date}', $dueDate, $message);
+        $message = str_replace('{support_phone}', '96170781562', $message);
+        $message = str_replace('{amount}', number_format($totalAmount > 0 ? $totalAmount : 0, 2), $message);
+        $message = str_replace('{month}', now()->format('m'), $message);
+        $message = str_replace('{year}', now()->format('Y'), $message);
+        $message = str_replace('{collector}', auth('admin')->user()->name ?? 'الإدارة', $message);
+        $message = str_replace('{datetime}', $datetime, $message);
+        $message = str_replace('{balance_status}', 'الرصيد الحالي: $' . number_format($balanceAmount, 2), $message);
+
+        return [
+            'skip' => false,
+            'template_type' => $templateType,
+            'message' => $message,
+            'reason' => $autoState['reason'] ?? null,
+        ];
+    }
+
+    private function enrichSmartSendClients($clients): array
+    {
+        $clientIds = collect($clients)->pluck('id')->filter()->values();
+
+        $invoiceRows = DB::table('tbl_invoices')
+            ->whereIn('client_id', $clientIds)
+            ->whereNull('deleted_at')
+            ->whereIn('status', ['unpaid', 'partial'])
+            ->select('client_id', 'status', 'remaining_amount', 'due_date')
+            ->orderBy('due_date')
+            ->get()
+            ->groupBy('client_id');
+
+        return collect($clients)->map(function ($client) use ($invoiceRows) {
+            $allInvoices = $invoiceRows->get($client->id, collect());
+            $dueInvoices = $allInvoices->filter(function ($invoice) {
+                return $invoice->due_date && Carbon::parse($invoice->due_date)->startOfDay()->lte(today());
+            });
+            $futureInvoices = $allInvoices->filter(function ($invoice) {
+                return $invoice->due_date && Carbon::parse($invoice->due_date)->startOfDay()->gt(today());
+            });
+            $overdueInvoices = $dueInvoices->filter(function ($invoice) {
+                return $invoice->due_date && Carbon::parse($invoice->due_date)->startOfDay()->lt(today());
+            });
+            $dueTodayInvoices = $dueInvoices->filter(function ($invoice) {
+                return $invoice->due_date && Carbon::parse($invoice->due_date)->isSameDay(today());
+            });
+
+            $dueAmount = (float) $dueInvoices->sum('remaining_amount');
+            $allOpenAmount = (float) $allInvoices->sum('remaining_amount');
+            $firstDueDate = optional($dueInvoices->sortBy('due_date')->first())->due_date;
+            $nextDueDate = optional($futureInvoices->sortBy('due_date')->first())->due_date;
+            $hasPhone = trim((string) ($client->phone ?? '')) !== '';
+            $isActive = (string) ($client->is_active ?? '1') === '1';
+
+            $eligible = $hasPhone && $isActive && $dueInvoices->isNotEmpty();
+            $reason = 'No due invoice';
+            $recommendedTemplate = 'custom';
+            $badge = 'secondary';
+
+            if (!$hasPhone) {
+                $reason = 'Missing phone';
+                $badge = 'danger';
+            } elseif (!$isActive) {
+                $reason = 'Inactive customer';
+                $badge = 'danger';
+            } elseif ($overdueInvoices->isNotEmpty()) {
+                $oldest = Carbon::parse($overdueInvoices->min('due_date'));
+                $days = $oldest->diffInDays(today());
+                $reason = $days > 0 ? "Overdue {$days} days" : 'Overdue';
+                $recommendedTemplate = 'reminder';
+                $badge = 'danger';
+            } elseif ($dueTodayInvoices->isNotEmpty()) {
+                $reason = 'Due today';
+                $recommendedTemplate = 'reminder';
+                $badge = 'warning';
+            } elseif ($futureInvoices->isNotEmpty()) {
+                $date = Carbon::parse($nextDueDate)->format('Y-m-d');
+                $reason = "Future invoice due {$date}";
+                $recommendedTemplate = 'invoice_notification';
+                $badge = 'info';
+            }
+
+            return [
+                'id' => $client->id,
+                'name' => $client->name,
+                'phone' => $client->phone,
+                'text' => "{$client->name} | {$client->phone}",
+                'is_active' => $client->is_active ?? null,
+                'unpaid_count' => $allInvoices->count(),
+                'invoice_count' => $dueInvoices->count(),
+                'overdue_count' => $overdueInvoices->count(),
+                'due_today_count' => $dueTodayInvoices->count(),
+                'future_invoice_count' => $futureInvoices->count(),
+                'due_amount' => round($dueAmount, 2),
+                'open_amount' => round($allOpenAmount, 2),
+                'due_date' => $firstDueDate ? Carbon::parse($firstDueDate)->format('Y-m-d') : null,
+                'next_due_date' => $nextDueDate ? Carbon::parse($nextDueDate)->format('Y-m-d') : null,
+                'reason' => $reason,
+                'recommended_template' => $recommendedTemplate,
+                'eligibility' => [
+                    'eligible' => $eligible,
+                    'badge' => $badge,
+                    'label' => $eligible ? 'Eligible' : ($hasPhone && $isActive ? 'Not due' : 'Blocked'),
+                    'can_send' => $hasPhone && $isActive,
+                    'has_phone' => $hasPhone,
+                    'is_active' => $isActive,
+                ],
+                'auto_template' => $this->resolveAutoTemplateState($client, $invoiceRows->get($client->id, collect())),
+            ];
+        })->values()->all();
+    }
+
+    private function resolveAutoTemplateState($client, $allInvoices): array
+    {
+        $hasPhone = trim((string) ($client->phone ?? '')) !== '';
+        $isActive = (string) ($client->is_active ?? '1') === '1';
+
+        if (!$hasPhone || !$isActive) {
+            return ['state' => 'blocked', 'template' => 'custom', 'reason' => $hasPhone ? 'Inactive customer' : 'Missing phone'];
+        }
+
+        $dueInvoices = $allInvoices->filter(function ($invoice) {
+            return $invoice->due_date && Carbon::parse($invoice->due_date)->startOfDay()->lte(today());
+        });
+        $futureInvoices = $allInvoices->filter(function ($invoice) {
+            return $invoice->due_date && Carbon::parse($invoice->due_date)->startOfDay()->gt(today());
+        });
+        $overdueInvoices = $dueInvoices->filter(function ($invoice) {
+            return $invoice->due_date && Carbon::parse($invoice->due_date)->startOfDay()->lt(today());
+        });
+        $dueTodayInvoices = $dueInvoices->filter(function ($invoice) {
+            return $invoice->due_date && Carbon::parse($invoice->due_date)->isSameDay(today());
+        });
+
+        if ($overdueInvoices->isNotEmpty()) {
+            $oldest = Carbon::parse($overdueInvoices->min('due_date'));
+            $days = max(0, $oldest->diffInDays(today()));
+            $reason = $days > 0 ? "Overdue {$days} days" : 'Overdue';
+            return ['state' => 'overdue_due', 'template' => 'reminder', 'reason' => $reason];
+        }
+
+        if ($dueTodayInvoices->isNotEmpty()) {
+            return ['state' => 'overdue_due', 'template' => 'reminder', 'reason' => 'Due today'];
+        }
+
+        if ($futureInvoices->isNotEmpty()) {
+            $nextDate = Carbon::parse($futureInvoices->min('due_date'));
+            $diff = max(0, $nextDate->diffInDays(today()));
+            $reason = $diff > 0 ? "Future invoice due in {$diff} days" : 'Future invoice due soon';
+            return ['state' => 'future_invoice', 'template' => 'invoice_notification', 'reason' => $reason];
+        }
+
+        $lastPayment = DB::table('tbl_revenues')
+            ->where('client_id', $client->id)
+            ->whereNull('deleted_at')
+            ->where('status', 'paid')
+            ->orderByDesc('created_at')
+            ->first();
+
+        if ($lastPayment && (float) ($lastPayment->amount ?? 0) > 0) {
+            $paidDate = Carbon::parse($lastPayment->created_at)->format('Y-m-d');
+            $reason = "Last payment on {$paidDate}";
+            return ['state' => 'paid_receipt', 'template' => 'receipt', 'reason' => $reason];
+        }
+
+        return ['state' => 'skip_no_state', 'template' => 'custom', 'reason' => 'No due invoices and no recent payment'];
     }
 
     /**

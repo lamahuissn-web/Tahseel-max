@@ -70,6 +70,7 @@
                             <label class="form-label fw-bold">{{ trans('clients.whatsapp_template') ?? 'القالب' }}</label>
                             <select class="form-select" name="template_type" id="templateSelect" required>
                                 <option value="">{{ trans('clients.whatsapp_select_template') ?? 'اختر القالب...' }}</option>
+                                <option value="auto">Auto Smart Template</option>
                                 @foreach($templates as $type => $template)
                                 <option value="{{ $type }}">{{ app()->getLocale() == 'ar' ? $template['label'] : $template['label_en'] }}</option>
                                 @endforeach
@@ -134,6 +135,17 @@
                         </select>
                     </div>
                     <div class="col-md-4">
+                        <label class="form-label fw-bold fs-7">Invoice Scope</label>
+                        <select class="form-select" name="filter_invoice_scope" id="filterInvoiceScope">
+                            <option value="all">All with phone</option>
+                            <option value="due_overdue">Due / Overdue only</option>
+                            <option value="overdue">Overdue only</option>
+                            <option value="due_today">Due today</option>
+                            <option value="due_soon">Due soon ≤ 7 days</option>
+                            <option value="no_due">No due invoice</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
                         <label class="form-label fw-bold fs-7">{{ trans('clients.whatsapp_unpaid_bills') ?? 'فواتير unpaid' }}</label>
                         <select class="form-select" name="filter_unpaid" id="filterUnpaid">
                             <option value="">{{ trans('clients.all') ?? 'الكل' }}</option>
@@ -142,6 +154,10 @@
                             <option value="3">≥ 3</option>
                             <option value="5">≥ 5</option>
                         </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold fs-7">Minimum Due Amount</label>
+                        <input type="number" class="form-control" name="filter_min_amount" id="filterMinAmount" min="0" step="0.01" placeholder="0.00">
                     </div>
                     <div class="col-md-4">
                         <label class="form-label fw-bold fs-7">{{ trans('clients.status') ?? 'الحالة' }}</label>
@@ -192,12 +208,15 @@
                                 <th>{{ trans('clients.name') ?? 'الاسم' }}</th>
                                 <th>{{ trans('clients.phone') ?? 'الرقم' }}</th>
                                 <th>{{ trans('clients.status') ?? 'الحالة' }}</th>
-                                <th class="text-center">{{ trans('clients.whatsapp_send_unpaid_short') ?? ' unpaid' }}</th>
+                                <th class="text-end">Due Amount</th>
+                                <th>Due Date</th>
+                                <th>Reason</th>
+                                <th>Recommended</th>
                             </tr>
                         </thead>
                         <tbody id="filterResultsBody">
                             <tr>
-                                <td colspan="5" class="text-center text-muted py-6">
+                                <td colspan="8" class="text-center text-muted py-6">
                                     <i class="bi bi-search fs-2 d-block mb-2"></i>
                                     {{ trans('clients.whatsapp_no_results') ?? 'لا توجد نتائج' }}
                                 </td>
@@ -271,9 +290,19 @@ const templates = @json(collect($templates)->mapWithKeys(fn($t, $k) => [$k => $t
 
 $(document).ready(function() {
     // ── State ──
-    let selectedClients = new Map(); // id -> { name, phone }
+    let selectedClients = new Map(); // id -> enriched client object
     let filterResults = []; // smart filter results for review modal
+    let searchResults = new Map(); // latest typeahead results by id
     let searchTimeout;
+
+    function escapeHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
 
     // ── Typeahead Search ──
     $('#toInput').on('input', function() {
@@ -287,20 +316,26 @@ $(document).ready(function() {
             $.get('{{ route("admin.whatsapp.send.search_clients") }}', { q: q })
                 .done(function(res) {
                     const results = res.results || [];
+                    searchResults = new Map(results.map(r => [parseInt(r.id), r]));
                     if (results.length === 0) {
                         $('#typeaheadResults').addClass('d-none');
                         return;
                     }
                     const html = results.map(r => {
-                        const [name, phone] = r.text.split(' | ');
                         const isSelected = selectedClients.has(r.id);
+                        const badge = (r.eligibility && r.eligibility.badge) || 'secondary';
+                        const dueAmount = Number(r.due_amount || 0).toFixed(2);
                         return `
                             <div class="typeahead-item d-flex align-items-center justify-content-between px-3 py-2 border-bottom hover-bg-light"
-                                 data-id="${r.id}" data-name="${name}" data-phone="${phone}"
-                                 role="option" style="cursor: pointer;">
-                                <div>
-                                    <span class="fw-bold text-gray-800 fs-7">${name}</span>
-                                    <span class="text-muted fs-7 me-2">${phone}</span>
+                                 data-id="${r.id}" role="option" style="cursor: pointer;">
+                                <div class="min-w-0">
+                                    <div class="fw-bold text-gray-800 fs-7">${escapeHtml(r.name)}</div>
+                                    <div class="text-muted fs-8">${escapeHtml(r.phone || '-')} · ${escapeHtml(r.reason || 'No due invoice')}</div>
+                                    <div class="mt-1">
+                                        <span class="badge badge-light-${badge} fs-8">${escapeHtml((r.eligibility && r.eligibility.label) || 'Unknown')}</span>
+                                        <span class="badge badge-light-primary fs-8">$${dueAmount}</span>
+                                        ${r.due_date ? `<span class="badge badge-light-warning fs-8">${escapeHtml(r.due_date)}</span>` : ''}
+                                    </div>
                                 </div>
                                 ${isSelected
                                     ? '<span class="badge badge-light-success fs-8">مختار</span>'
@@ -316,9 +351,10 @@ $(document).ready(function() {
     // Typeahead item click
     $(document).on('click', '.typeahead-item', function() {
         const id = parseInt($(this).data('id'));
-        const name = $(this).data('name');
-        const phone = $(this).data('phone');
-        addClient(id, name, phone);
+        const client = searchResults.get(id);
+        if (client) {
+            addClient(client);
+        }
         $('#toInput').val('').focus();
         $('#typeaheadResults').addClass('d-none');
     });
@@ -375,6 +411,8 @@ $(document).ready(function() {
             client_type: $('#filterClientType').val(),
             subscription: $('#filterSubscription').val(),
             unpaid: $('#filterUnpaid').val(),
+            invoice_scope: $('#filterInvoiceScope').val(),
+            min_amount: $('#filterMinAmount').val(),
             status: $('#filterStatus').val(),
             last_payment: $('#filterLastPayment').val(),
         }).done(function(res) {
@@ -399,9 +437,10 @@ $(document).ready(function() {
     });
 
     // ── Selection Management ──
-    function addClient(id, name, phone) {
+    function addClient(client) {
+        const id = parseInt(client.id);
         if (selectedClients.has(id)) return;
-        selectedClients.set(id, { name, phone });
+        selectedClients.set(id, client);
         renderChips();
     }
 
@@ -432,9 +471,14 @@ $(document).ready(function() {
         $('#finalCount').text('{{ trans("clients.whatsapp_sending_to") ?? "سيتم الإرسال إلى" }} ' + size + ' {{ trans("clients.whatsapp_recipient") ?? "مستلم" }}');
 
         selectedClients.forEach((client, id) => {
+            const badge = (client.eligibility && client.eligibility.badge) || 'secondary';
+            const dueAmount = Number(client.due_amount || 0).toFixed(2);
+            const statusLabel = (client.eligibility && client.eligibility.label) || 'Unknown';
             container.append(`
-                <span class="chip d-inline-flex align-items-center bg-primary-light text-primary-emphasis rounded px-2 py-1 fs-7 fw-semibold">
-                    ${client.name}
+                <span class="chip d-inline-flex align-items-center bg-light border border-${badge} rounded px-2 py-1 fs-7 fw-semibold" title="${escapeHtml(client.reason || '')}">
+                    <span class="me-1">${escapeHtml(client.name)}</span>
+                    <span class="badge badge-light-${badge} fs-9 me-1">${escapeHtml(statusLabel)}</span>
+                    <span class="badge badge-light-primary fs-9 me-1">$${dueAmount}</span>
                     <button type="button" class="btn btn-sm btn-icon p-0 ms-1 chip-remove" data-id="${id}" style="line-height: 1;">
                         <i class="bi bi-x-lg" style="font-size: 10px;"></i>
                     </button>
@@ -464,7 +508,7 @@ $(document).ready(function() {
         if (count === 0) {
             tbody.html(`
                 <tr>
-                    <td colspan="5" class="text-center text-muted py-6">
+                    <td colspan="8" class="text-center text-muted py-6">
                         <i class="bi bi-search fs-2 d-block mb-2"></i>
                         {{ trans("clients.whatsapp_no_matching") ?? "لا يوجد زبائن متطابقين" }}
                     </td>
@@ -479,31 +523,34 @@ $(document).ready(function() {
         filterResults = clients;
 
         const rows = clients.map(c => {
-            // Sanitize name for HTML attribute — escape & and " only
-            const safeName = String(c.name).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
-            const safePhone = String(c.phone || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+            const badge = (c.eligibility && c.eligibility.badge) || 'secondary';
+            const dueAmount = Number(c.due_amount || 0).toFixed(2);
             return `
             <tr class="filter-result-row">
                 <td class="ps-4">
                     <div class="form-check">
-                        <input class="form-check-input filter-result-cb" type="checkbox" value="${c.id}"
-                               data-name="${safeName}" data-phone="${safePhone}">
+                        <input class="form-check-input filter-result-cb" type="checkbox" value="${c.id}">
                     </div>
                 </td>
                 <td>
-                    <span class="fw-semibold text-gray-800">${safeName}</span>
+                    <div class="fw-semibold text-gray-800">${escapeHtml(c.name)}</div>
+                    <div class="fs-8 text-muted">#${c.id}</div>
                 </td>
                 <td>
-                    <span class="text-muted">${c.phone || '-'}</span>
+                    <span class="text-muted">${escapeHtml(c.phone || '-')}</span>
                 </td>
                 <td>
                     ${c.is_active == 1 || c.is_active === true
                         ? '<span class="badge badge-light-success">{{ trans("clients.active") ?? "نشط" }}</span>'
                         : '<span class="badge badge-light-danger">{{ trans("clients.inactive") ?? "غير نشط" }}</span>'}
                 </td>
-                <td class="text-center">
-                    <span class="badge badge-light-${c.unpaid_count > 0 ? 'warning' : 'secondary'}">${c.unpaid_count}</span>
+                <td class="text-end">
+                    <span class="fw-bold text-gray-800">$${dueAmount}</span>
+                    <div class="fs-9 text-muted">${c.invoice_count || 0} due invoices</div>
                 </td>
+                <td>${c.due_date ? `<span class="badge badge-light-warning">${escapeHtml(c.due_date)}</span>` : '<span class="text-muted">—</span>'}</td>
+                <td><span class="badge badge-light-${badge}">${escapeHtml(c.reason || '-')}</span></td>
+                <td><span class="badge badge-light-primary">${escapeHtml(c.recommended_template || 'custom')}</span></td>
             </tr>`;
         }).join('');
 
@@ -555,7 +602,7 @@ $(document).ready(function() {
             // Look up client data from filterResults array (reliable, no HTML attr issues)
             const client = filterResults.find(c => c.id === id);
             if (client) {
-                addClient(id, client.name, client.phone || '');
+                addClient(client);
             }
         });
 
@@ -585,8 +632,99 @@ $(document).ready(function() {
         $('#selectAllResults').prop('checked', false);
     });
 
+    function selectedSummary(templateType) {
+        const clients = Array.from(selectedClients.values());
+        const blocked = clients.filter(c => !(c.eligibility && c.eligibility.can_send));
+        const dueClients = clients.filter(c => c.eligibility && c.eligibility.eligible);
+        const dueAmount = clients.reduce((sum, c) => sum + Number(c.due_amount || 0), 0);
+
+        if (templateType === 'auto') {
+            const autoReminders = clients.filter(c => (c.auto_template && c.auto_template.template === 'reminder'));
+            const autoReceipts = clients.filter(c => (c.auto_template && c.auto_template.template === 'receipt'));
+            const autoInvoiceNotes = clients.filter(c => (c.auto_template && c.auto_template.template === 'invoice_notification'));
+            const autoCustom = clients.filter(c => (c.auto_template && c.auto_template.template === 'custom') || !(c.auto_template && c.auto_template.template));
+            return {
+                clients,
+                blocked,
+                dueAmount,
+                dueClients,
+                mismatched: [],
+                notDue: [],
+                autoReminders,
+                autoReceipts,
+                autoInvoiceNotes,
+                autoCustom,
+            };
+        }
+
+        const notDue = clients.filter(c => !(c.eligibility && c.eligibility.eligible) && (c.eligibility && c.eligibility.can_send));
+        const invoiceTemplate = ['reminder', 'invoice_notification', 'disconnection'].includes(templateType);
+        const mismatched = invoiceTemplate ? notDue : [];
+
+        return { clients, blocked, notDue, dueAmount, dueClients, mismatched,
+            autoReminders: [], autoReceipts: [], autoInvoiceNotes: [], autoCustom: [] };
+    }
+
+    function confirmSmartSend(templateType) {
+        const summary = selectedSummary(templateType);
+        const warnings = [];
+
+        if (templateType === 'auto') {
+            const parts = [
+                `📋 ${summary.autoReminders.length} reminder`,
+                `💳 ${summary.autoReceipts.length} payment receipt`,
+                `📨 ${summary.autoInvoiceNotes.length} invoice notification`,
+                `🔧 ${summary.autoCustom.length} custom/skip`
+            ];
+            const html = `
+                <div class="text-start">
+                    <div class="row g-3 mb-3">
+                        <div class="col-4"><div class="border rounded p-3"><div class="text-muted fs-8">Recipients</div><div class="fs-4 fw-bold">${summary.clients.length}</div></div></div>
+                        <div class="col-4"><div class="border rounded p-3"><div class="text-muted fs-8">Due</div><div class="fs-4 fw-bold text-success">${summary.dueClients.length}</div></div></div>
+                        <div class="col-4"><div class="border rounded p-3"><div class="text-muted fs-8">Total due</div><div class="fs-4 fw-bold text-primary">$${summary.dueAmount.toFixed(2)}</div></div></div>
+                    </div>
+                    <div class="alert alert-light-primary py-2 mb-0"><strong>Auto Smart Routing:</strong><br>${parts.join('<br>')}</div>
+                </div>`;
+
+            return Swal.fire({
+                icon: 'question',
+                title: 'Confirm Smart Auto Send',
+                html: html,
+                showCancelButton: true,
+                confirmButtonText: 'Queue Smart Send',
+                cancelButtonText: 'Review Again',
+                confirmButtonColor: '#50cd89',
+            }).then(result => result.isConfirmed);
+        }
+
+        if (summary.blocked.length > 0) warnings.push(`${summary.blocked.length} blocked/missing-phone/inactive customers`);
+        if (summary.mismatched.length > 0) warnings.push(`${summary.mismatched.length} customers do not match invoice template`);
+        if (summary.notDue.length > 0) warnings.push(`${summary.notDue.length} customers have no due invoice`);
+
+        const htmlNonAuto = `
+            <div class="text-start">
+                <div class="row g-3 mb-3">
+                    <div class="col-6"><div class="border rounded p-3"><div class="text-muted fs-8">Recipients</div><div class="fs-4 fw-bold">${summary.clients.length}</div></div></div>
+                    <div class="col-6"><div class="border rounded p-3"><div class="text-muted fs-8">Due customers</div><div class="fs-4 fw-bold text-success">${summary.dueClients.length}</div></div></div>
+                    <div class="col-6"><div class="border rounded p-3"><div class="text-muted fs-8">Total due</div><div class="fs-4 fw-bold text-primary">$${summary.dueAmount.toFixed(2)}</div></div></div>
+                    <div class="col-6"><div class="border rounded p-3"><div class="text-muted fs-8">Warnings</div><div class="fs-4 fw-bold text-warning">${warnings.length}</div></div></div>
+                </div>
+                ${warnings.length ? `<div class="alert alert-warning py-2 mb-0"><strong>Check before sending:</strong><br>${warnings.map(escapeHtml).join('<br>')}</div>` : '<div class="alert alert-success py-2 mb-0">All selected recipients look compatible.</div>'}
+            </div>`;
+
+        return Swal.fire({
+            icon: warnings.length ? 'warning' : 'question',
+            title: 'Confirm Smart Send',
+            html: htmlNonAuto,
+            showCancelButton: true,
+            confirmButtonText: warnings.length ? 'Send Anyway' : 'Queue Send',
+            cancelButtonText: 'Review Again',
+            confirmButtonColor: warnings.length ? '#f1416c' : '#50cd89',
+        }).then(result => result.isConfirmed);
+    }
+
     // ── Submit Send ──
-    $('#broadcastForm').on('submit', function(e) {
+    $('#broadcastForm').on('submit', async function(e) {
         e.preventDefault();
 
         if (selectedClients.size === 0) {
@@ -599,6 +737,12 @@ $(document).ready(function() {
             return;
         }
 
+        const templateType = $('#templateSelect').val();
+        const confirmed = await confirmSmartSend(templateType);
+        if (!confirmed) {
+            return;
+        }
+
         const btn = $('#sendBtn');
         btn.prop('disabled', true).html('<i class="bi bi-arrow-repeat spinner"></i> {{ trans("clients.whatsapp_sending") ?? "جارٍ الإرسال..." }}');
 
@@ -606,7 +750,7 @@ $(document).ready(function() {
 
         $.post('{{ route("admin.whatsapp.send.broadcast") }}', {
             _token: '{{ csrf_token() }}',
-            template_type: $('#templateSelect').val(),
+            template_type: templateType,
             custom_message: $('#customMessage').val(),
             client_ids: clientIds
         }).done(function(res) {

@@ -78,10 +78,19 @@ The current WhatsApp settings page (`settings/whatsapp`) is a **single form-base
 
 **Acceptance Criteria:**
 1. Search field with typeahead — search by name, phone, or ID
-2. Selected clients shown as removable chips/list
-3. Filter panel: unpaid bills count (>= N), area/district, subscription type, last payment before date
-4. Combined flow: filter → manual add/remove → preview count → send
-5. Result summary after sending: X sent, Y failed
+2. Search results and selected chips show invoice eligibility: due amount, due date, reason, active/phone status, and recommended template
+3. Filter panel: unpaid bills count (>= N), invoice scope (due/overdue/due soon/no due), minimum due amount, area/district, subscription type, last payment before date
+4. Filter results review table shows Customer, Phone, Active status, Due Amount, Due Date, Reason, and Recommended Template before adding recipients
+5. Combined flow: filter → manual add/remove → compatibility/safety preview count → send
+6. Result summary after sending: X sent/queued, Y failed
+7. Invoice-oriented templates warn when selected customers have no due invoice or are blocked/missing phone
+8. Auto Smart Template option routes each customer to the correct template:
+   - overdue/due today → Reminder
+   - future unpaid invoice → New Invoice Notification
+   - recently paid, no due → Payment Receipt
+   - blocked/missing phone → Skipped
+   - no invoices, no payment → Skipped
+9. Auto Smart Routing shows per-template breakdown (reminders, receipts, invoice notifications, skipped/custom) in confirmation modal before queueing
 
 ---
 
