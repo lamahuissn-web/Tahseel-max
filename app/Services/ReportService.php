@@ -85,7 +85,42 @@ class ReportService
             $query->where('tbl_invoices.enshaa_date', '<=', $request->to_date);
         }
 
+        if ($request->filled('client_id') && !$this->hasExplicitDataTableOrder($request)) {
+            $query->orderByRaw("CASE
+                    WHEN tbl_invoices.status = 'unpaid' THEN 0
+                    WHEN tbl_invoices.status = 'partial' THEN 1
+                    WHEN tbl_invoices.status = 'paid' THEN 2
+                    ELSE 3
+                END")
+                ->orderByRaw("CASE
+                    WHEN tbl_invoices.status IN ('unpaid', 'partial') THEN tbl_invoices.due_date
+                    ELSE NULL
+                END DESC")
+                ->orderByRaw("CASE
+                    WHEN tbl_invoices.status = 'paid' THEN tbl_invoices.paid_date
+                    ELSE NULL
+                END DESC")
+                ->orderByDesc('tbl_invoices.id');
+        }
+
         return $query;
+    }
+
+    protected function hasExplicitDataTableOrder(Request $request): bool
+    {
+        $order = $request->input('order', []);
+
+        if (!is_array($order) || empty($order)) {
+            return false;
+        }
+
+        foreach ($order as $item) {
+            if (isset($item['column']) && $item['column'] !== '' && $item['column'] !== null) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function getTotals(Request $request)
