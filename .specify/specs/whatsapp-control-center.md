@@ -45,6 +45,8 @@ The current WhatsApp settings page (`settings/whatsapp`) is a **single form-base
 3. Last successful send timestamp
 4. Emergency state indicator clearly visible
 5. Quick action buttons: Emergency Stop, Restart Service
+6. Dedicated Monitor tab includes a separated Danger Zone for changing the connected WhatsApp phone
+7. Revoke Session action requires typing `REVOKE`, blocks when queue has pending/sending messages, logs the admin action, and shows QR after success
 
 ---
 

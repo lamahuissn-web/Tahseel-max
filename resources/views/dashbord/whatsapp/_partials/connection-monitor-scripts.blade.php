@@ -7,6 +7,7 @@
     var settingsStatusUrl = '{{ route("admin.settings.whatsapp.api_status") }}';
     var settingsQrUrl = '{{ route("admin.settings.whatsapp.api_qr") }}';
     var restartSessionUrl = '{{ route("admin.settings.whatsapp.restart") }}';
+    var revokeSessionUrl = '{{ route("admin.whatsapp.monitor.revoke_session") }}';
 
     function refreshConnectionMonitor(silent) {
         if (typeof silent === 'undefined') silent = false;
@@ -123,6 +124,72 @@
             .always(function() {
                 $('#monitor-restart-btn').prop('disabled', false);
             });
+    }
+
+    function revokeWhatsAppSession() {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Revoke WhatsApp session?',
+            html: '<div class="text-start">' +
+                '<p class="mb-2">This will logout the current WhatsApp phone immediately.</p>' +
+                '<p class="mb-2 text-danger fw-bold">Sending will stop until a new QR code is scanned.</p>' +
+                '<p class="mb-0">Type <code>REVOKE</code> to continue.</p>' +
+                '</div>',
+            input: 'text',
+            inputPlaceholder: 'REVOKE',
+            showCancelButton: true,
+            confirmButtonText: 'Revoke Session',
+            cancelButtonText: 'Cancel',
+            confirmButtonColor: '#d33',
+            preConfirm: function(value) {
+                if (String(value || '').trim() !== 'REVOKE') {
+                    Swal.showValidationMessage('Type REVOKE exactly to continue.');
+                    return false;
+                }
+                return value;
+            }
+        }).then(function(result) {
+            if (!result.isConfirmed) {
+                return;
+            }
+
+            $('#monitor-revoke-btn').prop('disabled', true);
+            Swal.fire({
+                title: 'Revoking session...',
+                html: '<div class="py-4"><div class="spinner-border text-danger mb-3" role="status"></div><div>Please wait. Do not close this page.</div></div>',
+                showConfirmButton: false,
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+            });
+
+            $.post(revokeSessionUrl, { _token: '{{ csrf_token() }}', confirmation: 'REVOKE' })
+                .done(function(res) {
+                    if (res.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Session revoked',
+                            text: res.message || 'Scan the new QR code to connect another phone.',
+                            confirmButtonText: 'Show QR'
+                        }).then(function() {
+                            fetchMonitorQR();
+                            setTimeout(function() { location.reload(); }, 3000);
+                        });
+                    } else {
+                        Swal.fire({ icon: 'warning', title: 'Revoke not completed', text: res.message || 'OpenWA did not revoke the session.' });
+                    }
+                })
+                .fail(function(xhr) {
+                    var res = xhr.responseJSON || {};
+                    Swal.fire({
+                        icon: res.blocked ? 'warning' : 'error',
+                        title: res.blocked ? 'Queue active' : 'Revoke failed',
+                        text: res.message || 'Failed to revoke WhatsApp session.'
+                    });
+                })
+                .always(function() {
+                    $('#monitor-revoke-btn').prop('disabled', false);
+                });
+        });
     }
 
     $(document).ready(function() {

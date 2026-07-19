@@ -14,6 +14,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -34,6 +35,49 @@ class WhatsAppControlCenterController extends Controller
         $dashboardData = $this->buildDashboardMonitorData();
 
         return view('dashbord.whatsapp.monitor', $dashboardData);
+    }
+
+    public function revokeWhatsAppSession(Request $request)
+    {
+        $request->validate([
+            'confirmation' => 'required|string',
+        ]);
+
+        if (trim((string) $request->input('confirmation')) !== 'REVOKE') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Type REVOKE exactly to revoke the WhatsApp session.',
+            ], 422);
+        }
+
+        $pending = WhatsAppMessageLog::where('status', 'pending')->count();
+        $sending = WhatsAppMessageLog::where('status', 'sending')->count();
+
+        if (($pending + $sending) > 0) {
+            return response()->json([
+                'success' => false,
+                'blocked' => true,
+                'message' => "Cannot revoke while queue is active. Pending: {$pending}, Sending: {$sending}. Process or cancel the queue first.",
+                'pending' => $pending,
+                'sending' => $sending,
+            ], 409);
+        }
+
+        Log::warning('Admin requested WhatsApp session revoke', [
+            'admin_id' => auth('admin')->id(),
+            'ip' => $request->ip(),
+        ]);
+
+        $result = app(WhatsAppService::class)->revokeSession();
+
+        Log::warning('WhatsApp session revoke result', [
+            'admin_id' => auth('admin')->id(),
+            'success' => $result['success'] ?? false,
+            'action' => $result['action'] ?? null,
+            'attempts' => $result['attempts'] ?? [],
+        ]);
+
+        return response()->json($result, ($result['success'] ?? false) ? 200 : 502);
     }
 
     private function buildDashboardMonitorData(): array

@@ -107,11 +107,32 @@
 
         <div class="separator separator-dashed my-6"></div>
 
-        <div class="alert alert-light-primary d-flex align-items-start p-5 mb-0">
+        <div class="alert alert-light-primary d-flex align-items-start p-5 mb-6">
             <i class="bi bi-info-circle-fill fs-2 me-4 text-primary"></i>
             <div class="d-flex flex-column">
                 <h4 class="mb-1 text-gray-900">Recommended admin action</h4>
                 <span class="text-gray-700">{{ $monitor['recommended_action'] }}</span>
+            </div>
+        </div>
+
+        <div class="alert alert-light-danger border border-danger d-flex align-items-start p-5 mb-0">
+            <i class="bi bi-shield-exclamation fs-2 me-4 text-danger"></i>
+            <div class="d-flex flex-column flex-grow-1">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                    <div>
+                        <h4 class="mb-1 text-danger">Danger Zone: Change WhatsApp Phone</h4>
+                        <div class="text-gray-700">
+                            Revoke logs out the current WhatsApp session immediately. Sending stops until a new phone scans the QR code.
+                            Use this only when changing the connected phone or repairing a broken session.
+                        </div>
+                        <div class="text-muted fs-8 mt-2">
+                            Safety: blocked when queue has pending/sending messages. Requires typing <code>REVOKE</code>.
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-danger" id="monitor-revoke-btn" onclick="revokeWhatsAppSession()">
+                        <i class="bi bi-door-open me-1"></i> Revoke Session / Change Phone
+                    </button>
+                </div>
             </div>
         </div>
     </div>

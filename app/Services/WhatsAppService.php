@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\AppConfig;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -15,7 +16,8 @@ class WhatsAppService
     {
         $this->baseUrl = rtrim(config('app.openwa_api_url', env('OPENWA_API_URL', 'http://192.168.0.75:2785/api')), '/');
         $this->apiKey = config('app.openwa_api_key', env('OPENWA_API_KEY', ''));
-        $this->sessionId = config('app.openwa_session_id', env('OPENWA_SESSION_ID', ''));
+        $sessionOverride = AppConfig::where('key', 'whatsapp_openwa_session_id')->value('value');
+        $this->sessionId = $sessionOverride ?: config('app.openwa_session_id', env('OPENWA_SESSION_ID', ''));
     }
 
     protected function headers()
@@ -206,6 +208,194 @@ class WhatsAppService
             Log::error('OpenWA send failed: ' . $e->getMessage());
             return ['success' => false, 'error' => $e->getMessage()];
         }
+    }
+
+    public function revokeSession(): array
+    {
+        $attempts = [];
+        $oldSessionId = $this->sessionId;
+        $sessionName = 'tahseel-max-recovery';
+
+        try {
+            $currentResponse = Http::withHeaders($this->headers())
+                ->timeout(8)
+                ->get("{$this->baseUrl}/sessions/{$oldSessionId}");
+            $currentData = $currentResponse->json();
+            $currentData = is_array($currentData) ? $currentData : [];
+            $sessionName = $currentData['name'] ?? $sessionName;
+
+            $attempts[] = [
+                'action' => 'get-current-session',
+                'status_code' => $currentResponse->status(),
+                'message' => $currentData['status'] ?? $currentData['message'] ?? 'current session checked',
+            ];
+        } catch (\Exception $e) {
+            $attempts[] = [
+                'action' => 'get-current-session',
+                'status_code' => null,
+                'message' => $e->getMessage(),
+            ];
+        }
+
+        try {
+            $deleteResponse = Http::withHeaders($this->headers())
+                ->timeout(20)
+                ->delete("{$this->baseUrl}/sessions/{$oldSessionId}");
+            $deleteData = $deleteResponse->json();
+            $deleteData = is_array($deleteData) ? $deleteData : [];
+
+            $attempts[] = [
+                'action' => 'delete-session',
+                'status_code' => $deleteResponse->status(),
+                'message' => $deleteData['message'] ?? $deleteData['status'] ?? ('OpenWA HTTP ' . $deleteResponse->status()),
+            ];
+
+            if (!$deleteResponse->successful()) {
+                return [
+                    'success' => false,
+                    'message' => $deleteData['message'] ?? 'OpenWA failed to delete the old session.',
+                    'qr_required' => false,
+                    'attempts' => $attempts,
+                    'status' => $this->status(),
+                ];
+            }
+        } catch (\Exception $e) {
+            $attempts[] = [
+                'action' => 'delete-session',
+                'status_code' => null,
+                'message' => $e->getMessage(),
+            ];
+
+            return [
+                'success' => false,
+                'message' => 'OpenWA delete session failed: ' . $e->getMessage(),
+                'qr_required' => false,
+                'attempts' => $attempts,
+                'status' => $this->status(),
+            ];
+        }
+
+        try {
+            $createResponse = Http::withHeaders($this->headers())
+                ->timeout(20)
+                ->post("{$this->baseUrl}/sessions", [
+                    'name' => $sessionName,
+                ]);
+            $createData = $createResponse->json();
+            $createData = is_array($createData) ? $createData : [];
+            $newSessionId = $createData['id'] ?? $createData['sessionId'] ?? null;
+
+            $attempts[] = [
+                'action' => 'create-session',
+                'status_code' => $createResponse->status(),
+                'message' => $newSessionId ?: ($createData['message'] ?? 'session creation response did not include id'),
+            ];
+
+            if (!$createResponse->successful() || !$newSessionId) {
+                return [
+                    'success' => false,
+                    'message' => $createData['message'] ?? 'Old session was deleted, but OpenWA failed to create a replacement session. Create a new session in OpenWA dashboard and update Tahseel session ID.',
+                    'qr_required' => false,
+                    'attempts' => $attempts,
+                    'status' => [
+                        'reachable' => true,
+                        'connected' => false,
+                        'phone' => null,
+                        'status' => 'session_deleted',
+                        'message' => 'Old session deleted; replacement creation failed.',
+                    ],
+                ];
+            }
+
+            AppConfig::updateOrCreate(
+                ['key' => 'whatsapp_openwa_session_id'],
+                ['value' => $newSessionId]
+            );
+
+            $this->sessionId = $newSessionId;
+            $this->startSessionAfterRevoke();
+            sleep(2);
+
+            return [
+                'success' => true,
+                'action' => 'delete-and-create-session',
+                'message' => 'WhatsApp session revoked. Scan the new QR code to connect another phone.',
+                'qr_required' => true,
+                'old_session_id' => $oldSessionId,
+                'new_session_id' => $newSessionId,
+                'status' => $this->status(),
+                'qr' => $this->getQR(),
+                'attempts' => $attempts,
+            ];
+        } catch (\Exception $e) {
+            $attempts[] = [
+                'action' => 'create-session',
+                'status_code' => null,
+                'message' => $e->getMessage(),
+            ];
+
+            return [
+                'success' => false,
+                'message' => 'Old session may be deleted, but creating the replacement session failed: ' . $e->getMessage(),
+                'qr_required' => false,
+                'attempts' => $attempts,
+                'status' => [
+                    'reachable' => true,
+                    'connected' => false,
+                    'phone' => null,
+                    'status' => 'session_deleted',
+                    'message' => 'Old session may be deleted; replacement creation failed.',
+                ],
+            ];
+        }
+    }
+
+    public function restartSession(): array
+    {
+        try {
+            Http::withHeaders($this->headers())
+                ->timeout(10)
+                ->post("{$this->baseUrl}/sessions/{$this->sessionId}/stop");
+
+            sleep(2);
+
+            $response = Http::withHeaders($this->headers())
+                ->timeout(10)
+                ->post("{$this->baseUrl}/sessions/{$this->sessionId}/start");
+
+            if ($response->successful()) {
+                return ['success' => true, 'message' => trans('clients.whatsapp_restarted')];
+            }
+
+            $data = $response->json();
+            $data = is_array($data) ? $data : [];
+
+            return ['success' => false, 'message' => $data['message'] ?? 'Failed to restart session'];
+        } catch (\Exception $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    private function startSessionAfterRevoke(): void
+    {
+        try {
+            Http::withHeaders($this->headers())
+                ->timeout(10)
+                ->post("{$this->baseUrl}/sessions/{$this->sessionId}/start");
+        } catch (\Exception $e) {
+            Log::warning('OpenWA start after revoke failed: ' . $e->getMessage());
+        }
+    }
+
+    private function looksAlreadyLoggedOut(string $message): bool
+    {
+        $message = strtolower($message);
+
+        return str_contains($message, 'not authenticated')
+            || str_contains($message, 'not logged')
+            || str_contains($message, 'logged out')
+            || str_contains($message, 'qr')
+            || str_contains($message, 'scan');
     }
 
     public function getLogs($limit = 50)

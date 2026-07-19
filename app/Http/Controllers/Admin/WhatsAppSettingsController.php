@@ -152,28 +152,9 @@ class WhatsAppSettingsController extends Controller
 
     public function restartService()
     {
-        try {
-            $sessionId = env('OPENWA_SESSION_ID', '');
-            $baseUrl = rtrim(env('OPENWA_API_URL', ''), '/');
-            $apiKey = env('OPENWA_API_KEY', '');
+        $result = $this->whatsapp->restartSession();
 
-            Http::withHeaders(['X-API-Key' => $apiKey])
-                ->timeout(10)
-                ->post("{$baseUrl}/sessions/{$sessionId}/stop");
-
-            sleep(2);
-
-            $response = Http::withHeaders(['X-API-Key' => $apiKey])
-                ->timeout(10)
-                ->post("{$baseUrl}/sessions/{$sessionId}/start");
-
-            if ($response->successful()) {
-                return response()->json(['success' => true, 'message' => trans('clients.whatsapp_restarted')]);
-            }
-            return response()->json(['success' => false, 'message' => 'Failed to restart session']);
-        } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => $e->getMessage()]);
-        }
+        return response()->json($result, ($result['success'] ?? false) ? 200 : 502);
     }
 
     public function apiStatus()

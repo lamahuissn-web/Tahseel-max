@@ -245,6 +245,7 @@ Route::group(
             Route::prefix('whatsapp')->name('whatsapp.')->group(function () {
                 Route::get('/dashboard', [WhatsAppControlCenterController::class, 'dashboard'])->name('dashboard');
                 Route::get('/monitor', [WhatsAppControlCenterController::class, 'monitor'])->name('monitor');
+                Route::post('/monitor/revoke-session', [WhatsAppControlCenterController::class, 'revokeWhatsAppSession'])->name('monitor.revoke_session');
                 Route::get('/templates', [WhatsAppControlCenterController::class, 'templates'])->name('templates');
                 Route::post('/templates/save', [WhatsAppControlCenterController::class, 'saveTemplate'])->name('templates.save');
                 Route::post('/templates/test', [WhatsAppControlCenterController::class, 'testTemplate'])->name('templates.test');
