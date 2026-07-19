@@ -3,6 +3,7 @@
 
 
 /storage
+/public/files
 /vendor
 .env.backup
 .env.production
