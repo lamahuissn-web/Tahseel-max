@@ -70,6 +70,36 @@
         vertical-align: middle;
     }
 
+    .remaining-amount-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 78px;
+        padding: 5px 10px;
+        border-radius: 999px;
+        font-weight: 700;
+        cursor: pointer;
+        border: 1px solid transparent;
+    }
+
+    .remaining-amount-pill.is-clear {
+        color: #6b7280;
+        background: #f3f4f6;
+        border-color: #e5e7eb;
+    }
+
+    .remaining-amount-pill.has-balance {
+        color: #b45309;
+        background: #fff7ed;
+        border-color: #fed7aa;
+    }
+
+    .remaining-amount-pill.has-high-balance {
+        color: #b91c1c;
+        background: #fef2f2;
+        border-color: #fecaca;
+    }
+
     #clientDetailTabs .nav-link {
         font-size: 14px;
         padding: 8px 16px;
@@ -110,11 +140,39 @@
 @section('content')
 
 <div id="kt_app_content_container" class="app-container container-xxl">
-    <div class="card shadow-sm mb-4 border-top border-4 border-primary">
-        <div class="card-body text-center">
-            <div>
-                <span class="fs-6 text-gray-600 d-block mb-2">إجمالي العملاء</span>
-                <span class="fs-1 fw-bolder text-primary" id="clientsCount">0</span>
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-xl-3">
+            <div class="card shadow-sm h-100 border-top border-4 border-primary">
+                <div class="card-body text-center py-4">
+                    <span class="fs-7 text-gray-600 d-block mb-2">إجمالي العملاء</span>
+                    <span class="fs-2 fw-bolder text-primary" id="clientsCount">0</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-xl-3">
+            <div class="card shadow-sm h-100 border-top border-4 border-success">
+                <div class="card-body text-center py-4">
+                    <span class="fs-7 text-gray-600 d-block mb-2">نشط / غير نشط</span>
+                    <span class="fs-4 fw-bolder text-success" id="clientsActiveSummary">0</span>
+                    <span class="text-muted mx-1">/</span>
+                    <span class="fs-4 fw-bolder text-danger" id="clientsInactiveSummary">0</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-xl-3">
+            <div class="card shadow-sm h-100 border-top border-4 border-warning">
+                <div class="card-body text-center py-4">
+                    <span class="fs-7 text-gray-600 d-block mb-2">إجمالي المتبقي</span>
+                    <span class="fs-3 fw-bolder text-warning" id="clientsRemainingSummary">0</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-xl-3">
+            <div class="card shadow-sm h-100 border-top border-4 border-info">
+                <div class="card-body text-center py-4">
+                    <span class="fs-7 text-gray-600 d-block mb-2">متوسط المتبقي</span>
+                    <span class="fs-3 fw-bolder text-info" id="clientsAvgSummary">0</span>
+                </div>
             </div>
         </div>
     </div>
@@ -155,11 +213,43 @@
                 </div>
 
                 <div class="col-md-3">
+                    <label for="balanceFilter" class="form-label">حالة المتبقي</label>
+                    <div class="input-group flex-nowrap">
+                        <span class="input-group-text"><i class="bi bi-wallet2"></i></span>
+                        <select class="form-select" id="balanceFilter">
+                            <option value="">كل الأرصدة</option>
+                            <option value="has_balance">عليه متبقي</option>
+                            <option value="no_balance">بدون متبقي</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <label for="subscriptionFilter" class="form-label">{{ trans('clients.subscription') }}</label>
+                    <div class="input-group flex-nowrap">
+                        <span class="input-group-text">{!! form_icon('select2') !!}</span>
+                        <select class="form-select" id="subscriptionFilter">
+                            <option value="">كل الاشتراكات</option>
+                            @foreach(($subscriptions ?? []) as $subscription)
+                                <option value="{{ $subscription->id }}">{{ $subscription->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+
+
+                <div class="col-md-3">
                     <label class="form-check-label ms-2" for="showInactiveOnly" style="cursor: pointer;">
                         <strong>{{ trans('clients.show_inactive_only') }}</strong>
                     </label>
-                    <div class="form-check form-switch mt-2">
-                        <input class="form-check-input toggle-switch-sm" type="checkbox" id="showInactiveOnly" style="cursor: pointer;">
+                    <div class="d-flex align-items-center gap-3 mt-2">
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input toggle-switch-sm" type="checkbox" id="showInactiveOnly" style="cursor: pointer;">
+                        </div>
+                        <button type="button" class="btn btn-light-primary btn-sm" id="resetClientFilters">
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                            إعادة ضبط الفلاتر
+                        </button>
                     </div>
                 </div>
 
@@ -494,19 +584,25 @@
             "ajax": {
                 url: "{{ route('admin.clients.index') }}",
                 data: function(d) {
-                    d.name_search = $('#nameSearch').val();
-                    d.other_fields_search = $('#otherFieldsSearch').val();
-                    d.client_type_filter = $('#clientTypeFilter').val();
+                    d.name_search = $('#nameSearch').val() || '';
+                    d.other_fields_search = $('#otherFieldsSearch').val() || '';
+                    d.client_type_filter = $('#clientTypeFilter').val() || '';
+                    d.balance_filter = $('#balanceFilter').val() || '';
+                    d.subscription_filter = $('#subscriptionFilter').val() || '';
                     d.show_inactive_only = $('#showInactiveOnly').is(':checked') ? 1 : 0;
                 },
                 dataSrc: function(json) {
                     $('#clientsCount').text(json.recordsFiltered);
                     $('#clientsCountSummary').text(json.recordsFiltered);
-                    const totalRemaining = json.total_remaining ?? 0;
+                    const totalRemaining = parseFloat(json.total_remaining ?? 0) || 0;
+                    const activeCount = parseInt(json.active_count ?? 0, 10) || 0;
+                    const inactiveCount = parseInt(json.inactive_count ?? 0, 10) || 0;
                     const currency = "{{ get_app_config_data('currency') }}";
                     const formatNumber = (num) => {
                         return new Intl.NumberFormat('ar-EG').format(num);
                     };
+                    $('#clientsActiveSummary').text(formatNumber(activeCount));
+                    $('#clientsInactiveSummary').text(formatNumber(inactiveCount));
                     $('#clientsRemainingSummary').html(formatNumber(totalRemaining.toFixed(2)) + ' ' + currency);
                     const avgRemaining = json.recordsFiltered > 0 ? (totalRemaining / json.recordsFiltered) : 0;
                     $('#clientsAvgSummary').html(formatNumber(avgRemaining.toFixed(2)) + ' ' + currency);
@@ -593,8 +689,11 @@
                     render: function(data, type, row) {
                         if (type === 'display') {
                             var displayVal = data || '0.00';
-                            return '<span class="d-none d-lg-block">' + displayVal + '</span>' +
-                                '<span class="d-lg-none remaining-mobile-trigger" onclick="showRemainingInvoices(' + row.id + ')">' + displayVal + ' &#9654;</span>';
+                            var numericVal = parseFloat(String(displayVal).replace(/,/g, '')) || 0;
+                            var pillClass = numericVal <= 0 ? 'is-clear' : (numericVal >= 100 ? 'has-high-balance' : 'has-balance');
+                            var escapedVal = $('<span>').text(displayVal).html();
+                            return '<span class="d-none d-lg-inline-flex remaining-amount-pill ' + pillClass + '" onclick="showRemainingInvoices(' + row.id + ')" title="عرض الفواتير المتبقية">' + escapedVal + '</span>' +
+                                '<span class="d-lg-none remaining-mobile-trigger remaining-amount-pill ' + pillClass + '" onclick="showRemainingInvoices(' + row.id + ')">' + escapedVal + ' &#9654;</span>';
                         }
                         return data;
                     }
@@ -726,14 +825,26 @@
             table.ajax.reload(null, false);
         });
 
-        // تحديث الجدول عند تغيير نوع العميل
-        $('#clientTypeFilter').on('change', function() {
+        // تحديث الجدول عند تغيير الفلاتر
+        $('#clientTypeFilter, #balanceFilter, #subscriptionFilter').on('change', function() {
             table.ajax.reload(null, false);
         });
 
         // تحديث الجدول عند تغيير checkbox
         $('#showInactiveOnly').on('change', function() {
             table.ajax.reload(null, false);
+        });
+
+        $('#resetClientFilters').on('click', function() {
+            $('#nameSearch').val('');
+            $('#otherFieldsSearch').val('');
+            $('#clientTypeFilter').val('');
+            $('#balanceFilter').val('');
+            $('#subscriptionFilter').val('');
+            $('#showInactiveOnly').prop('checked', false);
+            table.search('');
+            table.columns().search('');
+            table.ajax.reload(null, true);
         });
 
         $("input").change(function() {

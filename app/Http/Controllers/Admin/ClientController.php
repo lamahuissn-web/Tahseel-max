@@ -63,6 +63,25 @@ class ClientController extends Controller
     {
         if ($request->ajax()) {
             
+            $invoiceRemainingSubquery = DB::table('tbl_invoices')
+                ->select('client_id', DB::raw('SUM(remaining_amount) as remaining_amount_total'))
+                ->whereNull('deleted_at')
+                ->groupBy('client_id');
+
+            $normalizeFilter = function ($value) {
+                if ($value === null) {
+                    return null;
+                }
+
+                $value = trim((string) $value);
+
+                return in_array(strtolower($value), ['', 'null', 'undefined'], true) ? null : $value;
+            };
+
+            $clientTypeFilter = $normalizeFilter($request->input('client_type_filter'));
+            $subscriptionFilter = $normalizeFilter($request->input('subscription_filter'));
+            $balanceFilter = $normalizeFilter($request->input('balance_filter'));
+
             $query = Clients::select([
                 'tbl_clients.id',
                 'tbl_clients.name',
@@ -77,10 +96,13 @@ class ClientController extends Controller
                 'tbl_clients.is_active',
                 'tbl_clients.subscription_id',
                 'tbl_clients.sas_username',
-                'tbl_clients.created_at'
+                'tbl_clients.created_at',
+                DB::raw('COALESCE(invoice_remaining.remaining_amount_total, 0) as remaining_amount_total'),
             ])
-            ->with(['subscription:id,name']) 
-            ->withSum('invoices as remaining_amount_total', 'remaining_amount');
+            ->leftJoinSub($invoiceRemainingSubquery, 'invoice_remaining', function ($join) {
+                $join->on('invoice_remaining.client_id', '=', 'tbl_clients.id');
+            })
+            ->with(['subscription:id,name']);
 
     
             if ($request->has('show_inactive_only') && $request->show_inactive_only == '1') {
@@ -92,8 +114,18 @@ class ClientController extends Controller
             }
 
      
-            if ($request->has('client_type_filter') && !empty($request->client_type_filter)) {
-                $query->where('tbl_clients.client_type', $request->client_type_filter);
+            if ($clientTypeFilter !== null) {
+                $query->where('tbl_clients.client_type', $clientTypeFilter);
+            }
+
+            if ($subscriptionFilter !== null) {
+                $query->where('tbl_clients.subscription_id', $subscriptionFilter);
+            }
+
+            if ($balanceFilter === 'has_balance') {
+                $query->whereRaw('COALESCE(invoice_remaining.remaining_amount_total, 0) > 0');
+            } elseif ($balanceFilter === 'no_balance') {
+                $query->whereRaw('COALESCE(invoice_remaining.remaining_amount_total, 0) <= 0');
             }
       
             if ($request->has('name_search') && !empty($request->name_search)) {
@@ -117,7 +149,56 @@ class ClientController extends Controller
                 });
             }
 
-           
+            $summaryQuery = Clients::query()
+                ->leftJoinSub($invoiceRemainingSubquery, 'invoice_remaining', function ($join) {
+                    $join->on('invoice_remaining.client_id', '=', 'tbl_clients.id');
+                });
+
+            if ($request->has('show_inactive_only') && $request->show_inactive_only == '1') {
+                $summaryQuery->where('tbl_clients.is_active', '0');
+            } else {
+                $summaryQuery->where('tbl_clients.is_active', '1');
+            }
+
+            if ($clientTypeFilter !== null) {
+                $summaryQuery->where('tbl_clients.client_type', $clientTypeFilter);
+            }
+
+            if ($subscriptionFilter !== null) {
+                $summaryQuery->where('tbl_clients.subscription_id', $subscriptionFilter);
+            }
+
+            if ($request->has('name_search') && !empty($request->name_search)) {
+                $summaryQuery->where('tbl_clients.name', 'like', '%' . $request->name_search . '%');
+            }
+
+            if ($request->has('other_fields_search') && !empty($request->other_fields_search)) {
+                $searchTerm = $request->other_fields_search;
+                $summaryQuery->where(function($q) use ($searchTerm) {
+                    $q->where('tbl_clients.phone', 'like', '%' . $searchTerm . '%')
+                    ->orWhere('tbl_clients.address1', 'like', '%' . $searchTerm . '%')
+                    ->orWhere('tbl_clients.notes', 'like', '%' . $searchTerm . '%')
+                    ->orWhere('tbl_clients.client_type', 'like', '%' . $searchTerm . '%')
+                    ->orWhere('tbl_clients.price', 'like', '%' . $searchTerm . '%')
+                    ->orWhere('tbl_clients.box_switch', 'like', '%' . $searchTerm . '%')
+                    ->orWhere('tbl_clients.start_date', 'like', '%' . $searchTerm . '%')
+                    ->orWhere('tbl_clients.user', 'like', '%' . $searchTerm . '%')
+                    ->orWhereHas('subscription', function($subQuery) use ($searchTerm) {
+                        $subQuery->where('name', 'like', '%' . $searchTerm . '%');
+                    });
+                });
+            }
+
+            if ($balanceFilter === 'has_balance') {
+                $summaryQuery->whereRaw('COALESCE(invoice_remaining.remaining_amount_total, 0) > 0');
+            } elseif ($balanceFilter === 'no_balance') {
+                $summaryQuery->whereRaw('COALESCE(invoice_remaining.remaining_amount_total, 0) <= 0');
+            }
+
+            $totalRemaining = (float) (clone $summaryQuery)->sum(DB::raw('COALESCE(invoice_remaining.remaining_amount_total, 0)'));
+            $activeCount = (clone $summaryQuery)->where('tbl_clients.is_active', '1')->count();
+            $inactiveCount = (clone $summaryQuery)->where('tbl_clients.is_active', '0')->count();
+
             return Datatables::of($query)
                 ->addIndexColumn()
                 ->addColumn('id', function ($row) {
@@ -227,9 +308,16 @@ class ClientController extends Controller
                     return $actionButtons;
                 })
                 ->rawColumns(['subscription', 'action', 'status', 'sas4_status'])
+                ->with([
+                    'total_remaining' => round($totalRemaining, 2),
+                    'active_count' => $activeCount,
+                    'inactive_count' => $inactiveCount,
+                ])
                 ->make(true);
         }
-        return view($this->admin_view . '.index');
+        $subscriptions = Subscription::select('id', 'name')->orderBy('name')->get();
+
+        return view($this->admin_view . '.index', compact('subscriptions'));
     }
 
     /***********************************************/
