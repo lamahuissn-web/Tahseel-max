@@ -147,7 +147,7 @@
                     </div>
                     <div class="col-md-4">
                         <label class="form-label fw-bold fs-7">{{ trans('clients.whatsapp_unpaid_bills') ?? 'فواتير unpaid' }}</label>
-                        <select class="form-select" name="filter_unpaid" id="filterUnpaid">
+                        <select class="form-select" name="min_unpaid" id="filterMinUnpaid">
                             <option value="">{{ trans('clients.all') ?? 'الكل' }}</option>
                             <option value="1">≥ 1</option>
                             <option value="2">≥ 2</option>
@@ -410,7 +410,7 @@ $(document).ready(function() {
             preview: true,
             client_type: $('#filterClientType').val(),
             subscription: $('#filterSubscription').val(),
-            unpaid: $('#filterUnpaid').val(),
+            min_unpaid: $('#filterMinUnpaid').val(),
             invoice_scope: $('#filterInvoiceScope').val(),
             min_amount: $('#filterMinAmount').val(),
             status: $('#filterStatus').val(),

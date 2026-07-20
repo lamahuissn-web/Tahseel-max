@@ -133,9 +133,9 @@
                                                 <select class="form-select form-select-sm filter-select"
                                                         id="filter_type_whatsapp_remind_before"
                                                         data-rule="whatsapp_remind_before">
-                                                    <option value="all" {{ ($r1['filter_client_type'] ?? 'all') == 'all' ? 'selected' : '' }}>الكل</option>
-                                                    <option value="internet" {{ ($r1['filter_client_type'] ?? '') == 'internet' ? 'selected' : '' }}>إنترنت</option>
-                                                    <option value="satellite" {{ ($r1['filter_client_type'] ?? '') == 'satellite' ? 'selected' : '' }}>ساتلايت</option>
+                                                    <option value="all" {{ ($r1['filter_client_type'] ?? 'all') == 'all' ? 'selected' : '' }}>{{ trans('clients.all') ?? 'الكل' }}</option>
+                                                    <option value="internet" {{ ($r1['filter_client_type'] ?? '') == 'internet' ? 'selected' : '' }}>{{ trans('clients.internet') ?? 'إنترنت' }}</option>
+                                                    <option value="satellite" {{ ($r1['filter_client_type'] ?? '') == 'satellite' ? 'selected' : '' }}>{{ trans('clients.satellite') ?? 'ساتلايت' }}</option>
                                                 </select>
                                             </div>
                                             {{-- Subscription --}}
@@ -144,7 +144,7 @@
                                                 <select class="form-select form-select-sm filter-select"
                                                         id="filter_sub_whatsapp_remind_before"
                                                         data-rule="whatsapp_remind_before">
-                                                    <option value="all">الكل</option>
+                                                    <option value="all">{{ trans('clients.all') ?? 'الكل' }}</option>
                                                     @foreach($subscriptions as $sub)
                                                         <option value="{{ $sub->id }}"
                                                             {{ ($r1['filter_subscription_id'] ?? '') == $sub->id ? 'selected' : '' }}>
@@ -168,9 +168,9 @@
                                                 <select class="form-select form-select-sm filter-select"
                                                         id="filter_status_whatsapp_remind_before"
                                                         data-rule="whatsapp_remind_before">
-                                                    <option value="all">الكل</option>
-                                                    <option value="active" {{ ($r1['filter_client_status'] ?? '') == 'active' ? 'selected' : '' }}>نشط</option>
-                                                    <option value="inactive" {{ ($r1['filter_client_status'] ?? '') == 'inactive' ? 'selected' : '' }}>غير نشط</option>
+                                                    <option value="all">{{ trans('clients.all') ?? 'الكل' }}</option>
+                                                    <option value="active" {{ ($r1['filter_client_status'] ?? '') == 'active' ? 'selected' : '' }}>{{ trans('clients.active') ?? 'نشط' }}</option>
+                                                    <option value="inactive" {{ ($r1['filter_client_status'] ?? '') == 'inactive' ? 'selected' : '' }}>{{ trans('clients.inactive') ?? 'غير نشط' }}</option>
                                                 </select>
                                             </div>
                                         </div>
@@ -278,9 +278,9 @@
                                                 <select class="form-select form-select-sm filter-select"
                                                         id="filter_type_whatsapp_overdue"
                                                         data-rule="whatsapp_overdue">
-                                                    <option value="all" {{ ($r2['filter_client_type'] ?? 'all') == 'all' ? 'selected' : '' }}>الكل</option>
-                                                    <option value="internet" {{ ($r2['filter_client_type'] ?? '') == 'internet' ? 'selected' : '' }}>إنترنت</option>
-                                                    <option value="satellite" {{ ($r2['filter_client_type'] ?? '') == 'satellite' ? 'selected' : '' }}>ساتلايت</option>
+                                                    <option value="all" {{ ($r2['filter_client_type'] ?? 'all') == 'all' ? 'selected' : '' }}>{{ trans('clients.all') ?? 'الكل' }}</option>
+                                                    <option value="internet" {{ ($r2['filter_client_type'] ?? '') == 'internet' ? 'selected' : '' }}>{{ trans('clients.internet') ?? 'إنترنت' }}</option>
+                                                    <option value="satellite" {{ ($r2['filter_client_type'] ?? '') == 'satellite' ? 'selected' : '' }}>{{ trans('clients.satellite') ?? 'ساتلايت' }}</option>
                                                 </select>
                                             </div>
                                             {{-- Subscription --}}
@@ -289,7 +289,7 @@
                                                 <select class="form-select form-select-sm filter-select"
                                                         id="filter_sub_whatsapp_overdue"
                                                         data-rule="whatsapp_overdue">
-                                                    <option value="all">الكل</option>
+                                                    <option value="all">{{ trans('clients.all') ?? 'الكل' }}</option>
                                                     @foreach($subscriptions as $sub)
                                                         <option value="{{ $sub->id }}"
                                                             {{ ($r2['filter_subscription_id'] ?? '') == $sub->id ? 'selected' : '' }}>
@@ -313,9 +313,9 @@
                                                 <select class="form-select form-select-sm filter-select"
                                                         id="filter_status_whatsapp_overdue"
                                                         data-rule="whatsapp_overdue">
-                                                    <option value="all">الكل</option>
-                                                    <option value="active" {{ ($r2['filter_client_status'] ?? '') == 'active' ? 'selected' : '' }}>نشط</option>
-                                                    <option value="inactive" {{ ($r2['filter_client_status'] ?? '') == 'inactive' ? 'selected' : '' }}>غير نشط</option>
+                                                    <option value="all">{{ trans('clients.all') ?? 'الكل' }}</option>
+                                                    <option value="active" {{ ($r2['filter_client_status'] ?? '') == 'active' ? 'selected' : '' }}>{{ trans('clients.active') ?? 'نشط' }}</option>
+                                                    <option value="inactive" {{ ($r2['filter_client_status'] ?? '') == 'inactive' ? 'selected' : '' }}>{{ trans('clients.inactive') ?? 'غير نشط' }}</option>
                                                 </select>
                                             </div>
                                         </div>

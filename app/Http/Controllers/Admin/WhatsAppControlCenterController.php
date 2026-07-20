@@ -636,8 +636,8 @@ class WhatsAppControlCenterController extends Controller
                 $query->where('is_active', $request->status);
             }
 
-            if ($request->filled('unpaid')) {
-                $unpaidCount = (int) $request->unpaid;
+            if ($request->filled('min_unpaid')) {
+                $unpaidCount = (int) $request->min_unpaid;
                 $query->whereRaw('(SELECT COUNT(*) FROM tbl_invoices WHERE tbl_invoices.client_id = tbl_clients.id AND tbl_invoices.deleted_at IS NULL AND tbl_invoices.status IN ("unpaid","partial")) >= ?', [$unpaidCount]);
             }
 
