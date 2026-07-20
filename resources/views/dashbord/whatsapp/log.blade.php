@@ -228,7 +228,7 @@ $(document).ready(function() {
         const id = $(this).data('id');
         const btn = $(this);
         btn.prop('disabled', true).html('<i class="bi bi-arrow-repeat spinner"></i>');
-        $.post('{{ url("admin/whatsapp/log") }}/' + id + '/resend', {
+        $.post('{{ route("admin.whatsapp.log.resend", "__ID__") }}'.replace('__ID__', id), {
             _token: '{{ csrf_token() }}'
         }).done(function(res) {
             Swal.fire({ icon: res.success ? 'success' : 'error', text: res.message });
@@ -246,7 +246,7 @@ $(document).ready(function() {
         const id = $(this).data('id');
         const btn = $(this);
         btn.prop('disabled', true).html('<i class="bi bi-arrow-repeat spinner"></i>');
-        $.post('{{ url("admin/whatsapp/log") }}/' + id + '/resend', {
+        $.post('{{ route("admin.whatsapp.log.resend", "__ID__") }}'.replace('__ID__', id), {
             _token: '{{ csrf_token() }}'
         }).done(function(res) {
             Swal.fire({ icon: res.success ? 'success' : 'error', text: res.message });

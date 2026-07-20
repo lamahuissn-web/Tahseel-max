@@ -335,15 +335,25 @@
                 </div>
                 <div class="card-body">
                     <div class="d-flex flex-wrap gap-6">
+                        @php
+                            $r1 = $rules['whatsapp_remind_before'] ?? null;
+                            $r2 = $rules['whatsapp_overdue'] ?? null;
+                            $r1Enabled = $r1['enabled'] ?? false;
+                            $r2Enabled = $r2['enabled'] ?? false;
+                        @endphp
                         <div class="d-flex align-items-center">
-                            <span class="badge {{ $connectionStatus ? 'badge-success' : 'badge-secondary' }} me-2 fs-7">
-                                {{ $connectionStatus ? '🟢' : '⚪' }}
+                            <span class="badge {{ $r1Enabled ? 'badge-success' : 'badge-secondary' }} me-2 fs-7">
+                                {{ $r1Enabled ? '🟢' : '⚪' }}
                             </span>
                             <span>{{ trans('clients.whatsapp_auto_reminders') ?? 'التذكيرات التلقائية' }}</span>
+                            <small class="text-muted ms-2 fs-8">{{ $r1['label'] ?? '' }}</small>
                         </div>
                         <div class="d-flex align-items-center">
-                            <span class="badge badge-success me-2 fs-7">🟢</span>
-                            <span>{{ trans('clients.whatsapp_auto_receipts') ?? 'إيصالات الدفع التلقائية' }}</span>
+                            <span class="badge {{ $r2Enabled ? 'badge-success' : 'badge-secondary' }} me-2 fs-7">
+                                {{ $r2Enabled ? '🟢' : '⚪' }}
+                            </span>
+                            <span>{{ trans('clients.whatsapp_overdue') ?? 'التذكير بالمتأخرات' }}</span>
+                            <small class="text-muted ms-2 fs-8">{{ $r2['label'] ?? '' }}</small>
                         </div>
                     </div>
                 </div>

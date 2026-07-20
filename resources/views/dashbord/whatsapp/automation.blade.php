@@ -578,20 +578,38 @@ $(document).ready(function() {
             });
     });
 
-    // -- Run Rule --
+    // -- Run Rule (with confirmation) --
     $('.run-rule').on('click', function() {
         var id = $(this).data('id');
         var btn = $(this);
-        btn.prop('disabled', true).html('<i class="bi bi-arrow-repeat spinner"></i>');
-        Swal.fire({ icon: 'info', text: '{{ trans("clients.whatsapp_running") ?? "جارٍ التشغيل..." }}', showConfirmButton: false });
-        $.post('{{ route("admin.whatsapp.automation.run", "__ID__") }}'.replace('__ID__', id), {
-            _token: '{{ csrf_token() }}'
-        }).done(function(res) {
-            Swal.fire({ icon: res.success ? 'success' : 'error', text: res.output || res.error });
-        }).fail(function() {
-            Swal.fire({ icon: 'error', text: '{{ trans("clients.whatsapp_test_error") ?? "حدث خطأ" }}' });
-        }).always(function() {
-            btn.prop('disabled', false).html('<i class="bi bi-play-fill"></i> {{ trans("clients.whatsapp_run_now") ?? "تشغيل الآن" }}');
+        var $card = btn.closest('.card');
+        var ruleName = $card.find('h5').text().trim();
+
+        Swal.fire({
+            icon: 'warning',
+            title: '{{ trans("clients.whatsapp_run_now") ?? "تشغيل القاعدة" }}',
+            html: '<div class="text-start">' +
+                '<p>{{ trans("clients.whatsapp_confirm_send") ?? "هل أنت متأكد من تشغيل القاعدة" }}: <b>' + escapeHtml(ruleName) + '</b>؟</p>' +
+                '<p class="text-warning fw-semibold mb-0">{{ trans("clients.whatsapp_test_message") ?? "سيتم إضافة رسائل التذكير إلى طابور الإرسال." }}</p>' +
+                '</div>',
+            showCancelButton: true,
+            confirmButtonText: '{{ trans("clients.whatsapp_run_now") ?? "تشغيل" }}',
+            cancelButtonText: '{{ trans("clients.cancel") ?? "إلغاء" }}',
+            confirmButtonColor: '#50cd89',
+        }).then(function(result) {
+            if (!result.isConfirmed) return;
+
+            btn.prop('disabled', true).html('<i class="bi bi-arrow-repeat spinner"></i>');
+            Swal.fire({ icon: 'info', text: '{{ trans("clients.whatsapp_running") ?? "جارٍ التشغيل..." }}', showConfirmButton: false });
+            $.post('{{ route("admin.whatsapp.automation.run", "__ID__") }}'.replace('__ID__', id), {
+                _token: '{{ csrf_token() }}'
+            }).done(function(res) {
+                Swal.fire({ icon: res.success ? 'success' : 'error', text: res.output || res.error });
+            }).fail(function() {
+                Swal.fire({ icon: 'error', text: '{{ trans("clients.whatsapp_test_error") ?? "حدث خطأ" }}' });
+            }).always(function() {
+                btn.prop('disabled', false).html('<i class="bi bi-play-fill"></i> {{ trans("clients.whatsapp_run_now") ?? "تشغيل الآن" }}');
+            });
         });
     });
 
@@ -670,61 +688,80 @@ $(document).ready(function() {
         $('#previewModal').modal('show');
     });
 
-    // -- Send from Preview --
+    // -- Send from Preview (with confirmation) --
     $('#previewSendBtn').on('click', function() {
         if (!currentPreviewId) return;
         var btn = $(this);
-        btn.prop('disabled', true).html('<i class="bi bi-arrow-repeat spinner"></i> جاري الإرسال...');
-
-        var sendUrl = '{{ route("admin.whatsapp.automation.send_from_preview", "__ID__") }}'.replace('__ID__', currentPreviewId);
 
         if (!currentPreviewClientIds || currentPreviewClientIds.length === 0) {
             Swal.fire({ icon: 'error', text: 'لا يوجد زبائن للإرسال' });
-            btn.prop('disabled', false).html('<i class="bi bi-send"></i> {{ trans("clients.whatsapp_send_reminder") ?? "إرسال التذكيرات" }}');
             return;
         }
 
-        $.post(sendUrl, {
-            _token: '{{ csrf_token() }}',
-            client_ids: currentPreviewClientIds
-        })
-            .done(function(res) {
-                var msg = 'تمت إضافة ' + (res.queued || 0) + ' رسالة إلى الطابور';
-                if ((res.skipped || 0) > 0) {
-                    msg += '<br>تم تخطي: ' + res.skipped;
-                }
-                if ((res.failed || 0) > 0) {
-                    msg += '<br>فشل قبل الإضافة: ' + res.failed;
-                }
+        var count = currentPreviewClientIds.length;
+        var totalAmt = $('#previewTotalAmount').text();
 
-                Swal.fire({ icon: 'success', html: msg, timer: 1500, showConfirmButton: false });
-                $('#previewModal').modal('hide');
+        Swal.fire({
+            icon: 'question',
+            title: '{{ trans("clients.whatsapp_confirm_send") ?? "تأكيد الإرسال" }}',
+            html: '<div class="text-start">' +
+                '<p>{{ trans("clients.whatsapp_send_reminders") ?? "سيتم إرسال تذكيرات واتساب إلى" }}:</p>' +
+                '<ul><li><strong>' + count + '</strong> {{ trans("clients.clients") ?? "زبون" }}</li>' +
+                '<li>{{ trans("clients.total_amount") ?? "إجمالي المبلغ" }}: <strong>' + totalAmt + '</strong></li></ul>' +
+                '<p class="text-warning fw-semibold mb-0">{{ trans("clients.whatsapp_test_message") ?? "سيتم إضافة الرسائل إلى طابور الإرسال." }}</p>' +
+                '</div>',
+            showCancelButton: true,
+            confirmButtonText: '{{ trans("clients.whatsapp_send_reminder") ?? "إرسال التذكيرات" }}',
+            cancelButtonText: '{{ trans("clients.cancel") ?? "إلغاء" }}',
+            confirmButtonColor: '#50cd89',
+        }).then(function(result) {
+            if (!result.isConfirmed) return;
 
-                if (res.redirect_url) {
-                    setTimeout(function() {
-                        window.location.href = res.redirect_url;
-                    }, 900);
-                }
+            btn.prop('disabled', true).html('<i class="bi bi-arrow-repeat spinner"></i> جاري الإرسال...');
+            var sendUrl = '{{ route("admin.whatsapp.automation.send_from_preview", "__ID__") }}'.replace('__ID__', currentPreviewId);
+
+            $.post(sendUrl, {
+                _token: '{{ csrf_token() }}',
+                client_ids: currentPreviewClientIds
             })
-            .fail(function(xhr) {
-                var errorText = '{{ trans("clients.whatsapp_test_error") ?? "حدث خطأ في الإرسال" }}';
-                if (xhr.responseJSON) {
-                    if (xhr.responseJSON.message) {
-                        errorText = xhr.responseJSON.message;
+                .done(function(res) {
+                    var msg = 'تمت إضافة ' + (res.queued || 0) + ' رسالة إلى الطابور';
+                    if ((res.skipped || 0) > 0) {
+                        msg += '<br>تم تخطي: ' + res.skipped;
                     }
-                    if (xhr.responseJSON.errors) {
-                        var firstKey = Object.keys(xhr.responseJSON.errors)[0];
-                        if (firstKey && xhr.responseJSON.errors[firstKey] && xhr.responseJSON.errors[firstKey][0]) {
-                            errorText = xhr.responseJSON.errors[firstKey][0];
+                    if ((res.failed || 0) > 0) {
+                        msg += '<br>فشل قبل الإضافة: ' + res.failed;
+                    }
+
+                    Swal.fire({ icon: 'success', html: msg, timer: 1500, showConfirmButton: false });
+                    $('#previewModal').modal('hide');
+
+                    if (res.redirect_url) {
+                        setTimeout(function() {
+                            window.location.href = res.redirect_url;
+                        }, 900);
+                    }
+                })
+                .fail(function(xhr) {
+                    var errorText = '{{ trans("clients.whatsapp_test_error") ?? "حدث خطأ في الإرسال" }}';
+                    if (xhr.responseJSON) {
+                        if (xhr.responseJSON.message) {
+                            errorText = xhr.responseJSON.message;
+                        }
+                        if (xhr.responseJSON.errors) {
+                            var firstKey = Object.keys(xhr.responseJSON.errors)[0];
+                            if (firstKey && xhr.responseJSON.errors[firstKey] && xhr.responseJSON.errors[firstKey][0]) {
+                                errorText = xhr.responseJSON.errors[firstKey][0];
+                            }
                         }
                     }
-                }
-                Swal.fire({ icon: 'error', text: errorText });
-            })
-            .always(function() {
-                btn.prop('disabled', false).html('<i class="bi bi-send"></i> {{ trans("clients.whatsapp_send_reminder") ?? "إرسال التذكيرات" }}');
-            });
-    });
+                    Swal.fire({ icon: 'error', text: errorText });
+                })
+                .always(function() {
+                    btn.prop('disabled', false).html('<i class="bi bi-send"></i> {{ trans("clients.whatsapp_send_reminder") ?? "إرسال التذكيرات" }}');
+                });
+        }); // end .then() confirmation
+    }); // end previewSendBtn click
 
     // =================================================================
     //  TAB 2: MONTHLY CALENDAR

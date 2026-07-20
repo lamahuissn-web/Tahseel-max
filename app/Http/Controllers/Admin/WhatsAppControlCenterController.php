@@ -26,8 +26,9 @@ class WhatsAppControlCenterController extends Controller
     public function dashboard()
     {
         $dashboardData = $this->buildDashboardMonitorData();
+        $rules = $this->getAutomationRulesConfig();
 
-        return view('dashbord.whatsapp.dashboard', $dashboardData);
+        return view('dashbord.whatsapp.dashboard', array_merge($dashboardData, compact('rules')));
     }
 
     public function monitor()
