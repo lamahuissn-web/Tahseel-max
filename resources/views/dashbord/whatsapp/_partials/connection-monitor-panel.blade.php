@@ -18,6 +18,9 @@
             <button type="button" class="btn btn-sm btn-light-warning" id="monitor-qr-btn" onclick="fetchMonitorQR()">
                 <i class="bi bi-qr-code-scan me-1"></i> Show QR
             </button>
+            <button type="button" class="btn btn-sm btn-light-primary" onclick="refreshQRCode()">
+                <i class="bi bi-arrow-clockwise me-1"></i> New QR
+            </button>
             <button type="button" class="btn btn-sm btn-light-success" id="monitor-restart-btn" onclick="restartWhatsAppSession()">
                 <i class="bi bi-arrow-repeat me-1"></i> Restart Session
             </button>

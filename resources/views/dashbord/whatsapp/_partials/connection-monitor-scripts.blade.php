@@ -26,7 +26,11 @@
                 }
 
                 $('#monitor-last-checked').text('Last checked: just now');
-                setTimeout(function() { location.reload(); }, silent ? 300 : 700);
+                setTimeout(function() {
+                    if (!Swal.isVisible()) {
+                        location.reload();
+                    }
+                }, silent ? 300 : 700);
             })
             .fail(function() {
                 if (!silent) {
@@ -44,7 +48,7 @@
         }
 
         monitorAutoRefreshInterval = setInterval(function() {
-            if (document.visibilityState === 'visible') {
+            if (document.visibilityState === 'visible' && !Swal.isVisible()) {
                 refreshConnectionMonitor(true);
             }
         }, 30000);
@@ -62,51 +66,225 @@
         $.get(settingsQrUrl)
             .done(function(res) {
                 if (res.connected) {
-                    Swal.update({
+                    Swal.fire({
                         icon: 'success',
+                        title: 'Connected',
                         html: '<div class="py-2"><div class="fw-bold text-success mb-2">Session already connected — no QR needed.</div><div class="text-muted fs-7">' + (res.message || '') + '</div></div>',
                         showConfirmButton: true,
-                        confirmButtonText: 'OK'
+                        confirmButtonText: 'OK',
+                        width: 520
                     });
                     return;
                 }
 
                 if (res.qr) {
-                    var qrHtml = '';
-                    if (String(res.qr).startsWith('data:')) {
-                        qrHtml = '<img src="' + res.qr + '" class="img-fluid rounded border p-2" style="max-width:280px; width:100%;">';
-                    } else if (String(res.qr).startsWith('http')) {
-                        qrHtml = '<img src="' + res.qr + '" class="img-fluid rounded border p-2" style="max-width:280px; width:100%;">';
-                    } else if (String(res.qr).length > 100) {
-                        qrHtml = '<img src="data:image/png;base64,' + res.qr + '" class="img-fluid rounded border p-2" style="max-width:280px; width:100%;">';
-                    } else {
-                        qrHtml = '<pre class="border p-3 bg-white rounded d-inline-block text-start" style="font-size:12px; line-height:1.2; direction:ltr;">' + res.qr + '</pre>';
-                    }
-
-                    Swal.update({
-                        icon: 'info',
-                        html: '<div class="text-center">' + qrHtml + '<div class="text-muted fs-7 mt-3">Scan this QR with the WhatsApp phone.</div></div>',
-                        showConfirmButton: true,
-                        confirmButtonText: 'Close'
-                    });
+                    showQRSwal(res.qr);
                     return;
                 }
 
-                Swal.update({
+                Swal.fire({
                     icon: 'warning',
+                    title: 'QR unavailable',
                     html: '<div class="py-2 text-muted">' + (res.message || 'QR not available right now.') + '</div>',
                     showConfirmButton: true,
-                    confirmButtonText: 'OK'
+                    confirmButtonText: 'OK',
+                    width: 520
                 });
             })
             .fail(function(xhr) {
                 var message = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to load QR state.';
-                Swal.update({
+                Swal.fire({
                     icon: 'error',
+                    title: 'Error',
                     html: '<div class="py-2 text-danger">' + message + '</div>',
-                    showConfirmButton: true,
-                    confirmButtonText: 'OK'
+                    confirmButtonText: 'OK',
+                    width: 520
                 });
+            });
+    }
+
+    function showQRSwal(qrData) {
+        startMonitorAutoRefresh();
+
+        var qrSrc = '';
+        if (String(qrData).startsWith('data:')) {
+            qrSrc = qrData;
+        } else if (String(qrData).startsWith('http')) {
+            qrSrc = qrData;
+        } else if (String(qrData).length > 100) {
+            qrSrc = 'data:image/png;base64,' + qrData;
+        }
+
+        if (qrSrc) {
+            Swal.fire({
+                title: 'Scan QR Code',
+                html: '<div class="text-center">' +
+                      '<div style="display:inline-block; background:#fff; padding:12px; border-radius:8px; line-height:0;">' +
+                      '<img src="' + qrSrc + '" alt="WhatsApp QR" ' +
+                      'style="width:320px; max-width:100%; height:auto; aspect-ratio:1; display:block; ' +
+                      'image-rendering:-webkit-optimize-contrast; image-rendering:crisp-edges; image-rendering:pixelated;">' +
+                      '</div>' +
+                      '<p class="text-muted fs-7 mt-3 mb-1">Scan this QR with the WhatsApp phone.</p>' +
+                      '<p class="mt-0 mb-0"><a href="#" onclick="refreshQRCode(event)" class="text-primary fw-semibold fs-6">↻ Refresh QR (if expired)</a></p>' +
+                      '</div>',
+                confirmButtonText: 'Close',
+                showCloseButton: true,
+                didOpen: function() {
+                    var c = Swal.getHtmlContainer();
+                    if (c) {
+                        c.style.maxHeight = 'none';
+                        c.style.overflow = 'hidden';
+                        c.style.margin = '0.5em 1em 0';
+                        c.style.padding = '0';
+                    }
+                    var p = Swal.getPopup();
+                    if (p) {
+                        p.style.maxHeight = 'none';
+                        p.style.overflowY = 'hidden';
+                    }
+                }
+            });
+        } else {
+            Swal.fire({
+                title: 'QR Code',
+                html: '<pre class="border p-3 bg-white rounded d-inline-block text-start" style="font-size:12px; line-height:1.2; direction:ltr;">' + qrData + '</pre>',
+                confirmButtonText: 'Close',
+                showCloseButton: true
+            });
+        }
+    }
+
+    function refreshQRCode(event) {
+        if (event) {
+            event.preventDefault();
+        }
+
+        if (monitorAutoRefreshInterval) {
+            clearInterval(monitorAutoRefreshInterval);
+            monitorAutoRefreshInterval = null;
+        }
+
+        Swal.fire({
+            title: 'Refreshing QR...',
+            html: '<div class="py-4"><div class="spinner-border text-primary mb-3" role="status"></div><div>Checking for a new QR code...</div></div>',
+            showConfirmButton: false,
+            allowOutsideClick: false,
+            allowEscapeKey: false
+        });
+
+        pollQRCode(0, false);
+    }
+
+    function pollQRCode(attempt, restarted) {
+        $.get(settingsQrUrl)
+            .done(function(res) {
+                if (res.connected) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Connected',
+                        html: '<div class="py-2"><div class="fw-bold text-success mb-2">Session already connected — no QR needed.</div></div>',
+                        confirmButtonText: 'OK',
+                        width: 520
+                    }).then(function() { startMonitorAutoRefresh(); });
+                    return;
+                }
+
+                if (res.qr) {
+                    showQRSwal(res.qr);
+                    return;
+                }
+
+                var qrMessage = String(res.message || 'OpenWA did not return a QR yet.');
+                var sessionNeedsStart = qrMessage.toLowerCase().indexOf('not started') !== -1;
+
+                if (!restarted && sessionNeedsStart) {
+                    askRestartForQRCode(qrMessage);
+                    return;
+                }
+
+                if (attempt < 8) {
+                    Swal.update({
+                        title: 'QR not ready yet',
+                        html: '<div class="py-4"><div class="spinner-border text-primary mb-3" role="status"></div><div>' + qrMessage + '</div><div class="text-muted fs-8 mt-2">Attempt ' + (attempt + 1) + ' of 9</div></div>'
+                    });
+                    setTimeout(function() { pollQRCode(attempt + 1, restarted); }, 2000);
+                    return;
+                }
+
+                if (!restarted) {
+                    askRestartForQRCode(qrMessage);
+                    return;
+                }
+
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'QR unavailable',
+                    html: '<div class="py-2 text-muted">' + (res.message || 'QR not available yet. Try again in a moment.') + '</div>',
+                    confirmButtonText: 'OK',
+                    width: 520
+                }).then(function() { startMonitorAutoRefresh(); });
+            })
+            .fail(function(xhr) {
+                if (attempt < 8) {
+                    Swal.update({
+                        title: 'Waiting for QR...',
+                        html: '<div class="py-4"><div class="spinner-border text-primary mb-3" role="status"></div><div>OpenWA QR endpoint is not ready yet.</div><div class="text-muted fs-8 mt-2">Attempt ' + (attempt + 1) + ' of 9</div></div>'
+                    });
+                    setTimeout(function() { pollQRCode(attempt + 1, restarted); }, 2000);
+                    return;
+                }
+
+                var message = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to retrieve QR code.';
+                Swal.fire({
+                    icon: 'error',
+                    title: 'QR fetch failed',
+                    html: '<div class="py-2 text-danger">' + message + '</div>',
+                    confirmButtonText: 'OK',
+                    width: 520
+                }).then(function() { startMonitorAutoRefresh(); });
+            });
+    }
+
+    function askRestartForQRCode(message) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'QR still not ready',
+            html: '<div class="py-2 text-muted">' + message + '</div><div class="mt-3">Restart the session and try generating a new QR?</div>',
+            showCancelButton: true,
+            confirmButtonText: 'Restart and fetch QR',
+            cancelButtonText: 'Cancel',
+            width: 560
+        }).then(function(result) {
+            if (result.isConfirmed) {
+                restartForNewQRCode();
+            } else {
+                startMonitorAutoRefresh();
+            }
+        });
+    }
+
+    function restartForNewQRCode() {
+        Swal.fire({
+            title: 'Restarting session...',
+            html: '<div class="py-4"><div class="spinner-border text-primary mb-3" role="status"></div><div>Generating a fresh QR code. Please wait...</div></div>',
+            showConfirmButton: false,
+            allowOutsideClick: false,
+            allowEscapeKey: false
+        });
+
+        $.post(restartSessionUrl, { _token: '{{ csrf_token() }}' })
+            .done(function() {
+                setTimeout(function() { pollQRCode(0, true); }, 2000);
+            })
+            .fail(function(xhr) {
+                var message = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Failed to restart session.';
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Restart failed',
+                    html: '<div class="py-2 text-danger">' + message + '</div>',
+                    confirmButtonText: 'OK',
+                    width: 520
+                }).then(function() { startMonitorAutoRefresh(); });
             });
     }
 
