@@ -48,6 +48,7 @@
     const doneTypingInterval = 500;
     const $input = $('#client_search');
     const $container = $('#clients_container_wrapper');
+    const sasStatusUrl = "{{ route('admin.sas4.online_status') }}";
     let page = 1;
     let loading = false;
     let hasMorePages = true;
@@ -118,6 +119,7 @@
                     } else {
                         $container.append(data);
                     }
+                    loadMobileSasStatuses();
                 }
                 $container.css('opacity', '1');
                 loading = false;
@@ -131,5 +133,66 @@
             }
         });
     }
+
+    function updateMobileSasBadge($badge, cssClass, label) {
+        $badge
+            .removeClass('badge-light-warning badge-light-success badge-light-secondary badge-light-danger')
+            .addClass(cssClass)
+            .text(label)
+            .attr('data-loaded', '1');
+    }
+
+    function loadMobileSasStatuses() {
+        const $badges = $('.mobile-sas-indicator').not('[data-loaded="1"]');
+        if (!$badges.length) return;
+
+        let usernames = [];
+        let badgeMap = {};
+
+        $badges.each(function() {
+            const $badge = $(this);
+            const username = $badge.data('username');
+            if (username) {
+                if (!badgeMap[username]) {
+                    usernames.push(username);
+                    badgeMap[username] = [];
+                }
+                badgeMap[username].push($badge);
+            }
+        });
+
+        if (!usernames.length) return;
+
+        $.ajax({
+            url: sasStatusUrl,
+            type: 'POST',
+            data: { usernames: usernames },
+            dataType: 'json',
+            success: function(response) {
+                usernames.forEach(function(username) {
+                    const badges = badgeMap[username] || [];
+                    const info = response[username];
+                    badges.forEach(function($badge) {
+                        if (!info) {
+                            updateMobileSasBadge($badge, 'badge-light-secondary', 'غير معروف');
+                        } else if (String(info.enabled) === '0') {
+                            updateMobileSasBadge($badge, 'badge-light-danger', 'موقوف');
+                        } else if (String(info.online) === '1') {
+                            updateMobileSasBadge($badge, 'badge-light-success', 'متصل');
+                        } else {
+                            updateMobileSasBadge($badge, 'badge-light-secondary', 'غير متصل');
+                        }
+                    });
+                });
+            },
+            error: function() {
+                $badges.each(function() {
+                    updateMobileSasBadge($(this), 'badge-light-secondary', 'غير معروف');
+                });
+            }
+        });
+    }
+
+    loadMobileSasStatuses();
 </script>
 @endsection

@@ -37,6 +37,27 @@
                 </div>
                 @endif
 
+                <!-- SAS Username / Status -->
+                <div class="d-flex align-items-center justify-content-between gap-2 mobile-sas-row">
+                    <div class="d-flex align-items-center min-w-0">
+                        <i class="bi bi-router fs-6 text-gray-500 me-2"></i>
+                        <span class="text-gray-700 fs-7 me-1 flex-shrink-0">SAS:</span>
+                        @if(!empty($client->sas_username))
+                            <span class="fw-bold text-gray-900 fs-7 dir-ltr text-truncate">{{ $client->sas_username }}</span>
+                        @else
+                            <span class="text-muted fs-7">غير مربوط</span>
+                        @endif
+                    </div>
+                    @if(!empty($client->sas_username))
+                        <span class="badge badge-light-warning fs-9 flex-shrink-0 mobile-sas-indicator"
+                              data-username="{{ e($client->sas_username) }}">
+                            جاري الفحص
+                        </span>
+                    @else
+                        <span class="badge badge-light-secondary fs-9 flex-shrink-0">غير مربوط</span>
+                    @endif
+                </div>
+
                 <!-- Address -->
                 @if($client->address1)
                 <div class="d-flex align-items-start">
