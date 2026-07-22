@@ -8,6 +8,7 @@ use App\Models\Clients;
 use App\Services\WhatsAppMessageBuilder;
 use App\Services\WhatsAppService;
 use App\Services\WhatsApp\InvoiceEligibilityService;
+use App\Services\WhatsApp\MetaWhatsAppService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -148,6 +149,69 @@ class WhatsAppSettingsController extends Controller
         }
 
         return response()->json(['success' => false, 'message' => $result['error'] ?? trans('clients.whatsapp_test_failed')]);
+    }
+
+    /**
+     * Send a test message via Meta WhatsApp Cloud API.
+     */
+    public function metaTestSend(Request $request)
+    {
+        $request->validate([
+            'test_phone' => 'required|string',
+            'test_message' => 'required|string',
+        ]);
+
+        $meta = new MetaWhatsAppService();
+
+        if (!$meta->isConfigured()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Meta API not configured. Set META_PHONE_NUMBER_ID and META_API_TOKEN in .env',
+            ]);
+        }
+
+        $result = $meta->sendText($request->test_phone, $request->test_message);
+
+        DB::table('whatsapp_message_logs')->insert([
+            'client_id' => null,
+            'invoice_id' => null,
+            'phone' => $request->test_phone,
+            'message' => '[Meta API test] ' . $request->test_message,
+            'status' => $result['success'] ? 'sent' : 'failed',
+            'error' => $result['error'] ?? null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        if ($result['success']) {
+            return response()->json(['success' => true, 'message' => '✅ Meta API test message sent!']);
+        }
+
+        return response()->json(['success' => false, 'message' => $result['error'] ?? 'Meta API test failed']);
+    }
+
+    /**
+     * Check Meta WhatsApp API connection status.
+     */
+    public function metaStatus()
+    {
+        $meta = new MetaWhatsAppService();
+        $status = $meta->status();
+
+        // Also fetch registered templates if configured
+        $templates = [];
+        if ($meta->isConfigured()) {
+            $tplResult = $meta->getTemplates();
+            if ($tplResult['success'] ?? false) {
+                $templates = $tplResult['templates'];
+            }
+        }
+
+        return response()->json([
+            'meta' => $status,
+            'configured' => $meta->isConfigured(),
+            'templates' => $templates,
+        ]);
     }
 
     public function restartService()

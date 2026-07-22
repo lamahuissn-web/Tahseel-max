@@ -424,6 +424,42 @@
             </div>
         </div>
 
+        {{-- Meta API Test Send --}}
+        <div class="col-12 mt-3">
+            <div class="wa-card shadow-sm border border-primary">
+                <div class="wa-card-header bg-primary bg-opacity-10">
+                    <i class="bi bi-meta text-primary me-2"></i> 🧪 Meta WhatsApp API Test
+                    <span class="badge bg-primary ms-2">Beta</span>
+                </div>
+                <div class="wa-card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">{{ trans('clients.whatsapp_test_phone') }}</label>
+                            <input type="text" class="form-control" id="meta_test_phone" placeholder="+961**" dir="ltr">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">{{ trans('clients.whatsapp_test_message') }}</label>
+                            <input type="text" class="form-control" id="meta_test_message" placeholder="Test message via Meta API">
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button class="btn btn-primary btn-sm w-100" onclick="metaTestSend()">
+                                <i class="bi bi-meta me-1"></i> Test Meta API
+                            </button>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-12">
+                            <button class="btn btn-outline-primary btn-sm" onclick="checkMetaStatus()">
+                                <i class="bi bi-activity me-1"></i> Check Meta Status
+                            </button>
+                            <span class="ms-2 small text-muted" id="meta_status_label">Not checked</span>
+                        </div>
+                    </div>
+                    <div class="wa-test-result" id="meta_test_result"></div>
+                </div>
+            </div>
+        </div>
+
         {{-- Message Logs --}}
         <div class="col-12">
             <div class="wa-card shadow-sm">
@@ -525,6 +561,61 @@ function testSend() {
         error: function() {
             $result.removeClass('success error').addClass('error')
                 .show().text('{{ trans('clients.whatsapp_test_error') }}');
+        }
+    });
+}
+
+// 🧪 Meta API Test
+function metaTestSend() {
+    var phone = $('#meta_test_phone').val();
+    var message = $('#meta_test_message').val();
+    var $result = $('#meta_test_result');
+
+    if (!phone || !message) {
+        $result.removeClass('success error').addClass('error').show().text('Phone and message are required.');
+        return;
+    }
+
+    $result.hide();
+    $.ajax({
+        url: '{{ route('admin.settings.whatsapp.meta_test') }}',
+        type: 'POST',
+        data: { _token: '{{ csrf_token() }}', test_phone: phone, test_message: message },
+        success: function(res) {
+            $result.removeClass('success error').addClass(res.success ? 'success' : 'error')
+                .show().text(res.message);
+        },
+        error: function(xhr) {
+            var msg = 'Meta API request failed';
+            try { msg = JSON.parse(xhr.responseText).message || msg; } catch(e) {}
+            $result.removeClass('success error').addClass('error')
+                .show().text(msg);
+        }
+    });
+}
+
+function checkMetaStatus() {
+    var $label = $('#meta_status_label');
+    $label.text('Checking...');
+
+    $.ajax({
+        url: '{{ route('admin.settings.whatsapp.meta_status') }}',
+        type: 'GET',
+        success: function(res) {
+            var meta = res.meta || {};
+            if (meta.reachable && meta.connected) {
+                $label.html('<span class="text-success fw-semibold">✅ ' + meta.message + '</span>');
+            } else if (res.configured) {
+                $label.html('<span class="text-warning fw-semibold">⚠️ ' + (meta.message || 'Connection issue') + '</span>');
+            } else {
+                $label.html('<span class="text-muted">⏸️ Not configured (add META_* keys to .env)</span>');
+            }
+            if (res.templates && res.templates.length > 0) {
+                $label.append('<br><small class="text-info">Templates: ' + res.templates.map(function(t) { return t.name; }).join(', ') + '</small>');
+            }
+        },
+        error: function() {
+            $label.html('<span class="text-danger fw-semibold">❌ Status check failed</span>');
         }
     });
 }

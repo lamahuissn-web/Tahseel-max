@@ -225,6 +225,9 @@ Route::group(
             Route::post('settings/whatsapp', [WhatsAppSettingsController::class, 'update'])->name('settings.whatsapp.update');
             Route::post('settings/whatsapp/preview', [WhatsAppSettingsController::class, 'preview'])->name('settings.whatsapp.preview');
             Route::post('settings/whatsapp/test', [WhatsAppSettingsController::class, 'testSend'])->name('settings.whatsapp.test');
+            // 🧪 Meta WhatsApp API test
+            Route::post('settings/whatsapp/meta-test', [WhatsAppSettingsController::class, 'metaTestSend'])->name('settings.whatsapp.meta_test');
+            Route::get('settings/whatsapp/meta-status', [WhatsAppSettingsController::class, 'metaStatus'])->name('settings.whatsapp.meta_status');
             Route::post('settings/whatsapp/restart', [WhatsAppSettingsController::class, 'restartService'])->name('settings.whatsapp.restart');
             Route::get('settings/whatsapp/status', [WhatsAppSettingsController::class, 'apiStatus'])->name('settings.whatsapp.api_status');
             Route::get('settings/whatsapp/qr-code', [WhatsAppSettingsController::class, 'apiQR'])->name('settings.whatsapp.api_qr');
