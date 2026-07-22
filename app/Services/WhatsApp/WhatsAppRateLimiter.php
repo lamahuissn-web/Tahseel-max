@@ -33,6 +33,33 @@ class WhatsAppRateLimiter
         ];
     }
 
+    public function status(): array
+    {
+        $settings = $this->settings();
+        $hourlySent = $this->sentCountSince(now()->subHour());
+        $dailySent = $this->sentCountSince(Carbon::today());
+        $delayMin = max(0, $settings['base_delay'] - (int) round($settings['base_delay'] * ($settings['jitter_percent'] / 100)));
+        $delayMax = max($delayMin, $settings['base_delay'] + (int) round($settings['base_delay'] * ($settings['jitter_percent'] / 100)));
+        $hourlyPercent = $settings['hourly_limit'] > 0 ? min(100, round(($hourlySent / $settings['hourly_limit']) * 100)) : 100;
+        $dailyPercent = $settings['daily_limit'] > 0 ? min(100, round(($dailySent / $settings['daily_limit']) * 100)) : 100;
+        $limitCheck = $this->checkLimits();
+
+        return [
+            'enabled' => $settings['enabled'],
+            'allowed' => $limitCheck['allowed'] ?? false,
+            'reason' => $limitCheck['reason'] ?? null,
+            'settings' => $settings,
+            'hourly_sent' => $hourlySent,
+            'daily_sent' => $dailySent,
+            'hourly_percent' => $hourlyPercent,
+            'daily_percent' => $dailyPercent,
+            'delay_min_seconds' => $delayMin,
+            'delay_max_seconds' => $delayMax,
+            'risk_level' => $this->riskLevel($settings, $hourlyPercent, $dailyPercent, $limitCheck),
+            'checked_at' => now(),
+        ];
+    }
+
     public function checkLimits(): array
     {
         $settings = $this->settings();
@@ -143,6 +170,31 @@ class WhatsAppRateLimiter
         $max = max($min, $base + $jitter);
 
         return random_int($min, $max);
+    }
+
+    private function sentCountSince($since): int
+    {
+        return WhatsAppMessageLog::query()
+            ->where('status', 'sent')
+            ->where('updated_at', '>=', $since)
+            ->count();
+    }
+
+    private function riskLevel(array $settings, int $hourlyPercent, int $dailyPercent, array $limitCheck): string
+    {
+        if (!$settings['enabled']) {
+            return 'disabled';
+        }
+
+        if (!($limitCheck['allowed'] ?? false)) {
+            return 'paused';
+        }
+
+        if ($hourlyPercent >= 80 || $dailyPercent >= 80) {
+            return 'warning';
+        }
+
+        return 'safe';
     }
 
     private function configValue(string $key, $default = null)

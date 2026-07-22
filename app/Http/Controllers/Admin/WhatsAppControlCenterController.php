@@ -6,6 +6,7 @@ use App\Exports\CollectorMarkedCustomersExport;
 use App\Http\Controllers\Controller;
 use App\Models\WhatsAppMessageLog;
 use App\Services\WhatsApp\CollectorReminderService;
+use App\Services\WhatsApp\WhatsAppRateLimiter;
 use App\Services\WhatsApp\WhatsAppTemplateService;
 use App\Services\WhatsAppMessageBuilder;
 use App\Services\WhatsAppService;
@@ -36,6 +37,26 @@ class WhatsAppControlCenterController extends Controller
         $dashboardData = $this->buildDashboardMonitorData();
 
         return view('dashbord.whatsapp.monitor', $dashboardData);
+    }
+
+    public function safety()
+    {
+        $rateLimiter = app(WhatsAppRateLimiter::class);
+        $rateLimit = $rateLimiter->status();
+        $pendingQueueCount = WhatsAppMessageLog::where('status', 'pending')->count();
+        $sendingQueueCount = WhatsAppMessageLog::where('status', 'sending')->count();
+        $failedToday = WhatsAppMessageLog::where('status', 'failed')->whereDate('created_at', today())->count();
+        $lastSent = WhatsAppMessageLog::where('status', 'sent')->latest('updated_at')->first();
+        $lastFailed = WhatsAppMessageLog::where('status', 'failed')->latest('updated_at')->first();
+
+        return view('dashbord.whatsapp.safety', compact(
+            'rateLimit',
+            'pendingQueueCount',
+            'sendingQueueCount',
+            'failedToday',
+            'lastSent',
+            'lastFailed'
+        ));
     }
 
     public function revokeWhatsAppSession(Request $request)

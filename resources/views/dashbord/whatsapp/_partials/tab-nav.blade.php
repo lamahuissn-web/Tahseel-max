@@ -3,6 +3,7 @@
     $tabs = [
         ['route' => 'admin.whatsapp.dashboard', 'label' => 'لوحة التحكم', 'icon' => 'bi-kanban', 'emoji' => '📊'],
         ['route' => 'admin.whatsapp.monitor', 'label' => 'المراقبة', 'icon' => 'bi-activity', 'emoji' => '🩺'],
+        ['route' => 'admin.whatsapp.safety', 'label' => 'الأمان', 'icon' => 'bi-shield-check', 'emoji' => '🛡️'],
         ['route' => 'admin.whatsapp.templates', 'label' => 'القوالب', 'icon' => 'bi-pencil-square', 'emoji' => '📝'],
         ['route' => 'admin.whatsapp.send', 'label' => 'إرسال', 'icon' => 'bi-send', 'emoji' => '📨'],
         ['route' => 'admin.whatsapp.collectors', 'label' => 'المحصلين', 'icon' => 'bi-person-badge', 'emoji' => '🧾'],
