@@ -800,7 +800,12 @@ class WhatsAppControlCenterController extends Controller
             $message = $payload['message'];
             $templateType = $payload['template_type'];
 
-            $result = $service->send($client->phone, $message);
+            $result = $service->send($client->phone, $message, [
+                'rate_context' => [
+                    'sent_in_batch' => $results['sent'] + $results['failed'],
+                    'source' => 'control-center-send',
+                ],
+            ]);
             $status = (isset($result['success']) && $result['success'] === true) ? 'sent' : 'failed';
 
             WhatsAppMessageLog::create([
@@ -821,7 +826,6 @@ class WhatsAppControlCenterController extends Controller
                 $results['errors'][] = $client->name . ': ' . ($result['error'] ?? 'Unknown');
             }
 
-            usleep(1000000);
         }
 
         return response()->json($results);
@@ -1736,8 +1740,13 @@ class WhatsAppControlCenterController extends Controller
         $service = app(WhatsAppService::class);
         $results = ['resent' => 0, 'still_failed' => 0];
 
-        foreach ($failed as $log) {
-            $result = $service->send($log->phone, $log->message);
+        foreach ($failed as $index => $log) {
+            $result = $service->send($log->phone, $log->message, [
+                'rate_context' => [
+                    'sent_in_batch' => $index,
+                    'source' => 'resend-failed',
+                ],
+            ]);
             if (isset($result['success']) && $result['success'] === true) {
                 $log->update(['status' => 'sent', 'error' => null]);
                 $results['resent']++;
@@ -1745,7 +1754,6 @@ class WhatsAppControlCenterController extends Controller
                 $log->update(['error' => $result['error'] ?? 'Unknown']);
                 $results['still_failed']++;
             }
-            usleep(500000);
         }
 
         return response()->json($results);
@@ -2009,7 +2017,12 @@ class WhatsAppControlCenterController extends Controller
             $message = str_replace('{datetime}', now()->format('Y-m-d h:i A'), $message);
             $message = str_replace('{balance_status}', 'الرصيد الحالي: $' . number_format($totalAmount, 2), $message);
 
-            $result = $service->send($client->phone, $message);
+            $result = $service->send($client->phone, $message, [
+                'rate_context' => [
+                    'sent_in_batch' => $results['sent'] + $results['failed'],
+                    'source' => 'calendar-send',
+                ],
+            ]);
             $status = (isset($result['success']) && $result['success'] === true) ? 'sent' : 'failed';
 
             WhatsAppMessageLog::create([
@@ -2033,7 +2046,6 @@ class WhatsAppControlCenterController extends Controller
                 }
             }
 
-            usleep(1000000);
         }
 
         return response()->json($results);

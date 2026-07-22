@@ -130,7 +130,7 @@ class WhatsAppSettingsController extends Controller
         $phone = $request->test_phone;
         $message = $request->test_message;
 
-        $result = $this->whatsapp->send($phone, $message);
+        $result = $this->whatsapp->send($phone, $message, ['rate_context' => ['sent_in_batch' => 0]]);
 
         DB::table('whatsapp_message_logs')->insert([
             'client_id' => null,
@@ -382,9 +382,6 @@ class WhatsAppSettingsController extends Controller
                 continue;
             }
 
-            if ($currentIndex > 0) {
-                sleep(10);
-            }
 
             $totalAmount = $clientInvoices->sum('remaining_amount');
             $invoiceDetailsList = WhatsAppMessageBuilder::buildInvoiceDetailsList($clientInvoices);
@@ -392,7 +389,7 @@ class WhatsAppSettingsController extends Controller
             $phone = preg_replace('/[^0-9]/', '', $client->phone);
             $invoiceIds = $clientInvoices->pluck('id')->toArray();
 
-            $result = $this->whatsapp->send($phone, $message);
+            $result = $this->whatsapp->send($phone, $message, ['rate_context' => ['sent_in_batch' => $currentIndex]]);
 
             DB::table('whatsapp_message_logs')->insert([
                 'client_id' => $clientId,
@@ -618,9 +615,6 @@ class WhatsAppSettingsController extends Controller
         if (!$client || !$client->phone) continue;
         if (!$this->isValidPhone($client->phone)) continue;
     
-        if ($currentIndex > 0) {
-            sleep(10);
-        }
     
         $totalAmount = $clientInvoices->sum('remaining_amount');
         $invoiceDetailsList = WhatsAppMessageBuilder::buildInvoiceDetailsList($clientInvoices);
@@ -628,7 +622,7 @@ class WhatsAppSettingsController extends Controller
         $phone = preg_replace('/[^0-9]/', '', $client->phone);
         $invoiceIds = $clientInvoices->pluck('id')->toArray();
     
-        $result = $this->whatsapp->send($phone, $message);
+        $result = $this->whatsapp->send($phone, $message, ['rate_context' => ['sent_in_batch' => $currentIndex]]);
     
         DB::table('whatsapp_message_logs')->insert([
             'client_id' => $clientId,
@@ -844,9 +838,6 @@ class WhatsAppSettingsController extends Controller
             if (!$client || !$client->phone) continue;
             if (!$this->isValidPhone($client->phone)) continue;
 
-            if ($currentIndex > 0) {
-                sleep(10);
-            }
 
             $totalAmount = $clientInvoices->sum('remaining_amount');
             $invoiceDetailsList = WhatsAppMessageBuilder::buildInvoiceDetailsList($clientInvoices);
@@ -854,7 +845,7 @@ class WhatsAppSettingsController extends Controller
             $phone = preg_replace('/[^0-9]/', '', $client->phone);
             $invoiceIds = $clientInvoices->pluck('id')->toArray();
 
-            $result = $this->whatsapp->send($phone, $message);
+            $result = $this->whatsapp->send($phone, $message, ['rate_context' => ['sent_in_batch' => $currentIndex]]);
 
             DB::table('whatsapp_message_logs')->insert([
                 'client_id' => $clientId,
@@ -958,9 +949,6 @@ class WhatsAppSettingsController extends Controller
             if (!$client || !$client->phone) continue;
             if (!$this->isValidPhone($client->phone)) continue;
 
-            if ($currentIndex > 0) {
-                sleep(10);
-            }
 
             $totalAmount = $clientInvoices->sum('remaining_amount');
             $invoiceDetailsList = WhatsAppMessageBuilder::buildInvoiceDetailsList($clientInvoices);
@@ -968,7 +956,7 @@ class WhatsAppSettingsController extends Controller
             $phone = preg_replace('/[^0-9]/', '', $client->phone);
             $invoiceIds = $clientInvoices->pluck('id')->toArray();
 
-            $result = $this->whatsapp->send($phone, $message);
+            $result = $this->whatsapp->send($phone, $message, ['rate_context' => ['sent_in_batch' => $currentIndex]]);
 
             DB::table('whatsapp_message_logs')->insert([
                 'client_id' => $clientId,
@@ -1048,7 +1036,7 @@ class WhatsAppSettingsController extends Controller
         $phone = preg_replace('/[^0-9]/', '', $client->phone);
         $invoiceIds = $unpaidInvoices->pluck('id')->toArray();
 
-        $result = $this->whatsapp->send($phone, $message);
+        $result = $this->whatsapp->send($phone, $message, ['rate_context' => ['sent_in_batch' => 0]]);
 
         DB::table('whatsapp_message_logs')->insert([
             'client_id' => $id,

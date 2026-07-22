@@ -59,10 +59,9 @@ class ReminderService
         $failed = 0;
         $skipped = 0;
         $details = [];
-        $delaySeconds = (int) ($options['delay_seconds'] ?? 10);
         $sentBy = $options['sent_by'] ?? 'admin:automation';
 
-        foreach ($clientIds as $index => $clientId) {
+        foreach ($clientIds as $clientId) {
             $client = Clients::find($clientId);
             if (!$client || empty($client->phone)) {
                 $failed++;
@@ -91,8 +90,27 @@ class ReminderService
 
             $message = $this->buildMessage($client, $invoices, $template);
             $service = app(WhatsAppService::class);
-            $result = $service->send($client->phone, $message);
+            $result = $service->send($client->phone, $message, [
+                'rate_context' => [
+                    'rule_id' => $ruleId,
+                    'sent_in_batch' => $sent,
+                ],
+            ]);
             $success = isset($result['success']) && $result['success'] === true;
+
+            if (($result['rate_limited'] ?? false) === true) {
+                $skipped++;
+                $details[] = [
+                    'client_id' => $clientId,
+                    'client_name' => $client->name,
+                    'phone' => $client->phone,
+                    'status' => 'skipped',
+                    'error' => $result['error'] ?? 'Paused by WhatsApp safety rate limiter',
+                    'invoice_count' => $invoices->count(),
+                    'total_amount' => $this->sumInvoiceAmounts($invoices),
+                ];
+                break;
+            }
 
             $this->logMessage($client, $invoices, $message, $template, $success, $result['error'] ?? null, $sentBy);
 
@@ -113,9 +131,6 @@ class ReminderService
                 'total_amount' => $this->sumInvoiceAmounts($invoices),
             ];
 
-            if ($index < count($clientIds) - 1 && $delaySeconds > 0) {
-                sleep($delaySeconds);
-            }
         }
 
         return [

@@ -9,14 +9,13 @@ use Illuminate\Console\Command;
 
 class ProcessWhatsAppPendingBatch extends Command
 {
-    protected $signature = 'whatsapp:process-pending {batch : Batch UUID} {--delay=10 : Seconds between sends}';
+    protected $signature = 'whatsapp:process-pending {batch : Batch UUID} {--delay=10 : Legacy option; centralized safety limiter controls actual pacing}';
 
     protected $description = 'Process a queued WhatsApp batch created from the control center preview.';
 
     public function handle()
     {
         $batchId = (string) $this->argument('batch');
-        $delay = (int) max(0, (int) $this->option('delay'));
         $batchSuffix = '|batch:' . $batchId;
 
         $logs = WhatsAppMessageLog::where('sent_by', 'like', '%' . $batchSuffix)
@@ -50,8 +49,23 @@ class ProcessWhatsAppPendingBatch extends Command
                 'error' => null,
             ]);
 
-            $result = $service->send($log->phone, $log->message);
+            $result = $service->send($log->phone, $log->message, [
+                'rate_context' => [
+                    'batch_id' => $batchId,
+                    'sent_in_batch' => $index,
+                ],
+            ]);
             $success = isset($result['success']) && $result['success'] === true;
+
+            if (($result['rate_limited'] ?? false) === true) {
+                $log->update([
+                    'status' => 'pending',
+                    'error' => $result['error'] ?? 'Paused by WhatsApp safety rate limiter',
+                ]);
+
+                $this->warn($result['error'] ?? 'Paused by WhatsApp safety rate limiter. Remaining messages stay pending.');
+                return Command::SUCCESS;
+            }
 
             $log->update([
                 'status' => $success ? 'sent' : 'failed',
@@ -62,10 +76,6 @@ class ProcessWhatsAppPendingBatch extends Command
                 Invoice::query()
                     ->whereIn('id', array_filter(array_map('intval', $log->invoice_ids)))
                     ->update(['last_notified_at' => now()]);
-            }
-
-            if ($index < $logs->count() - 1 && $delay > 0) {
-                sleep($delay);
             }
         }
 

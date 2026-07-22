@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\AppConfig;
+use App\Services\WhatsApp\WhatsAppRateLimiter;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -147,9 +148,21 @@ class WhatsAppService
         }
     }
 
-    public function send($phone, $message)
+    public function send($phone, $message, array $options = [])
     {
         try {
+            if (!($options['skip_rate_limit'] ?? false)) {
+                $rateLimit = app(WhatsAppRateLimiter::class)->waitBeforeSend($options['rate_context'] ?? []);
+                if (!($rateLimit['allowed'] ?? false)) {
+                    return [
+                        'success' => false,
+                        'rate_limited' => true,
+                        'error' => $rateLimit['reason'] ?? 'WhatsApp sending paused by safety rate limiter',
+                        'retry_after_seconds' => $rateLimit['retry_after_seconds'] ?? null,
+                    ];
+                }
+            }
+
             $cleanPhone = preg_replace('/[^0-9]/', '', $phone);
             $chatId = "{$cleanPhone}@c.us";
 
