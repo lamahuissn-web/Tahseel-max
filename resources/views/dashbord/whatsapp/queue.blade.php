@@ -191,7 +191,8 @@
                             <th>{{ trans('clients.whatsapp_template_type') ?? 'القالب' }}</th>
                             <th>{{ trans('clients.status') ?? 'الحالة' }}</th>
                             <th>{{ trans('clients.sender') ?? 'الدفعة' }}</th>
-                            <th>{{ trans('clients.date') ?? 'التاريخ' }}</th>
+                            <th>وقت الإدخال</th>
+                            <th>وقت الإرسال</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -261,10 +262,13 @@
                                 </div>
                             </td>
                             <td class="text-muted fs-7">{{ $log->created_at->format('Y-m-d h:i:s A') }}</td>
+                            <td class="text-muted fs-7">
+                                {{ $log->status === 'sent' ? $log->updated_at->format('Y-m-d h:i:s A') : '-' }}
+                            </td>
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="6" class="text-center text-muted py-6">
+                            <td colspan="7" class="text-center text-muted py-6">
                                 {{ trans('clients.whatsapp_no_messages') ?? 'لا توجد رسائل بعد' }}
                             </td>
                         </tr>
