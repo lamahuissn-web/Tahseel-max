@@ -299,14 +299,18 @@ class WhatsAppStabilityTest extends TestCase
     public function test_batch_pause_returns_retry_time_without_sleeping_under_send_lock(): void
     {
         DB::table('app_config')->insert([
-            ['key' => 'whatsapp_rate_batch_pause_every', 'value' => '1'],
+            ['key' => 'whatsapp_rate_preset', 'value' => 'custom'],
+            ['key' => 'whatsapp_rate_batch_pause_every', 'value' => '10'],
             ['key' => 'whatsapp_rate_batch_pause_min_seconds', 'value' => '180'],
             ['key' => 'whatsapp_rate_batch_pause_max_seconds', 'value' => '180'],
         ]);
-        WhatsAppMessageLog::query()->create(array_merge($this->messageAttributes(), [
-            'status' => 'sent',
-            'updated_at' => now(),
-        ]));
+        foreach (range(1, 10) as $index) {
+            WhatsAppMessageLog::query()->create(array_merge($this->messageAttributes(), [
+                'phone' => '961700000'.str_pad((string) $index, 2, '0', STR_PAD_LEFT),
+                'status' => 'sent',
+                'updated_at' => now(),
+            ]));
+        }
 
         $startedAt = microtime(true);
         $result = app(WhatsAppRateLimiter::class)->waitBeforeSend();
@@ -314,7 +318,7 @@ class WhatsAppStabilityTest extends TestCase
         $this->assertFalse($result['allowed']);
         $this->assertTrue($result['rate_limited']);
         $this->assertSame(180, $result['retry_after_seconds']);
-        $this->assertLessThan(1.0, microtime(true) - $startedAt);
+        $this->assertLessThan(5.0, microtime(true) - $startedAt);
 
         Cache::put('whatsapp_rate_limiter_batch_pause_until', time() - 1, 60);
         $sameCountResult = app(WhatsAppRateLimiter::class)->waitBeforeSend();

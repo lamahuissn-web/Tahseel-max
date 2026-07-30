@@ -21,6 +21,24 @@ WhatsApp Safety
 @section('content')
 @include('dashbord.whatsapp._partials.tab-nav')
 
+@if(session('success'))
+    <div class="alert alert-success d-flex align-items-center mb-6">
+        <i class="bi bi-check-circle-fill fs-2 me-3"></i>
+        <span>{{ session('success') }}</span>
+    </div>
+@endif
+
+@if($errors->any())
+    <div class="alert alert-danger mb-6">
+        <div class="fw-bold mb-2">لم يتم حفظ الإعدادات:</div>
+        <ul class="mb-0">
+            @foreach($errors->all() as $error)
+                <li>{{ $error }}</li>
+            @endforeach
+        </ul>
+    </div>
+@endif
+
 @php
     $riskLevel = $rateLimit['risk_level'] ?? 'safe';
     $riskMap = [
@@ -31,6 +49,7 @@ WhatsApp Safety
     ];
     $risk = $riskMap[$riskLevel] ?? $riskMap['safe'];
     $settings = $rateLimit['settings'] ?? [];
+    $canUpdateSafety = auth('admin')->user()?->can('update_whatsapp_safety_settings') === true;
 @endphp
 
 <div id="kt_app_content_container" class="app-container container-xxxl">
@@ -56,7 +75,7 @@ WhatsApp Safety
                             <div class="text-muted fs-7">Hourly cap usage</div>
                         </div>
                     </div>
-                    <div class="fs-2x fw-bold text-gray-900">{{ $rateLimit['hourly_sent'] ?? 0 }} / {{ $settings['hourly_limit'] ?? 60 }}</div>
+                    <div class="fs-2x fw-bold text-gray-900" dir="ltr">{{ $rateLimit['hourly_sent'] ?? 0 }} / {{ $settings['hourly_limit'] ?? 60 }}</div>
                     <div class="progress h-8px mt-3">
                         <div class="progress-bar bg-primary" role="progressbar" style="width: {{ $rateLimit['hourly_percent'] ?? 0 }}%"></div>
                     </div>
@@ -75,7 +94,7 @@ WhatsApp Safety
                             <div class="text-muted fs-7">Daily cap usage</div>
                         </div>
                     </div>
-                    <div class="fs-2x fw-bold text-gray-900">{{ $rateLimit['daily_sent'] ?? 0 }} / {{ $settings['daily_limit'] ?? 300 }}</div>
+                    <div class="fs-2x fw-bold text-gray-900" dir="ltr">{{ $rateLimit['daily_sent'] ?? 0 }} / {{ $settings['daily_limit'] ?? 300 }}</div>
                     <div class="progress h-8px mt-3">
                         <div class="progress-bar bg-info" role="progressbar" style="width: {{ $rateLimit['daily_percent'] ?? 0 }}%"></div>
                     </div>
@@ -94,7 +113,7 @@ WhatsApp Safety
                             <div class="text-muted fs-7">Randomized anti-pattern timing</div>
                         </div>
                     </div>
-                    <div class="fs-2x fw-bold text-gray-900">{{ $rateLimit['delay_min_seconds'] ?? 0 }}–{{ $rateLimit['delay_max_seconds'] ?? 0 }}s</div>
+                    <div class="fs-2x fw-bold text-gray-900" dir="ltr">{{ $rateLimit['delay_min_seconds'] ?? 0 }}–{{ $rateLimit['delay_max_seconds'] ?? 0 }}s</div>
                     <div class="text-muted fs-8 mt-2">Base {{ $settings['base_delay'] ?? 10 }}s, jitter ±{{ $settings['jitter_percent'] ?? 40 }}%</div>
                 </div>
             </div>
@@ -110,12 +129,125 @@ WhatsApp Safety
                             <div class="text-muted fs-7">Messages waiting / sending</div>
                         </div>
                     </div>
-                    <div class="fs-2x fw-bold text-gray-900">{{ $pendingQueueCount }} / {{ $sendingQueueCount }}</div>
+                    <div class="fs-2x fw-bold text-gray-900" dir="ltr">{{ $pendingQueueCount }} / {{ $sendingQueueCount }}</div>
                     <div class="text-muted fs-8 mt-2">pending / sending</div>
                 </div>
             </div>
         </div>
     </div>
+
+    <form method="POST" action="{{ route('admin.whatsapp.safety.update') }}" id="whatsapp-safety-form" class="card mb-8" dir="rtl">
+        @csrf
+        <div class="card-header border-0 pt-6">
+            <div class="card-title d-flex flex-column align-items-start">
+                <h3 class="fw-bold text-gray-900 mb-1">إعدادات التوقيت الآمن</h3>
+                <span class="text-muted fs-7">غيّر سرعة الإرسال ضمن حدود تمنع القيم الخطرة وتحافظ على الرقم.</span>
+            </div>
+            <div class="card-toolbar">
+                @if($canUpdateSafety)
+                <button type="button" class="btn btn-light-warning" id="restore-balanced">
+                    <i class="bi bi-arrow-counterclockwise"></i> استعادة الوضع المتوازن
+                </button>
+                @endif
+            </div>
+        </div>
+        <div class="card-body pt-4">
+            @php($selectedPreset = old('preset', $settings['preset'] ?? 'balanced'))
+            <div class="row g-4 mb-7">
+                <div class="col-lg-4">
+                    <label class="card border border-2 h-100 p-5 cursor-pointer safety-preset-card" data-preset="very_safe">
+                        <div class="form-check form-check-custom form-check-solid mb-3">
+                            <input class="form-check-input safety-preset" type="radio" name="preset" value="very_safe" {{ $selectedPreset === 'very_safe' ? 'checked' : '' }} {{ $canUpdateSafety ? '' : 'disabled' }}>
+                            <span class="form-check-label fw-bold fs-5 me-2">آمن جدًا</span>
+                        </div>
+                        <span class="text-muted">للإرسال الكبير أو عندما تكون أولوية الحماية أعلى من السرعة.</span>
+                    </label>
+                </div>
+                <div class="col-lg-4">
+                    <label class="card border border-2 h-100 p-5 cursor-pointer safety-preset-card" data-preset="balanced">
+                        <div class="form-check form-check-custom form-check-solid mb-3">
+                            <input class="form-check-input safety-preset" type="radio" name="preset" value="balanced" {{ $selectedPreset === 'balanced' ? 'checked' : '' }} {{ $canUpdateSafety ? '' : 'disabled' }}>
+                            <span class="form-check-label fw-bold fs-5 me-2">متوازن — موصى به</span>
+                        </div>
+                        <span class="text-muted">الإعدادات التي نجحت في تجربة إيصالات الدفع الحية.</span>
+                    </label>
+                </div>
+                <div class="col-lg-4">
+                    <label class="card border border-2 h-100 p-5 cursor-pointer safety-preset-card" data-preset="custom">
+                        <div class="form-check form-check-custom form-check-solid mb-3">
+                            <input class="form-check-input safety-preset" type="radio" name="preset" value="custom" {{ $selectedPreset === 'custom' ? 'checked' : '' }} {{ $canUpdateSafety ? '' : 'disabled' }}>
+                            <span class="form-check-label fw-bold fs-5 me-2">مخصص</span>
+                        </div>
+                        <span class="text-muted">تحكم يدوي مع فرض الحدود الآمنة من الخادم.</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="alert alert-primary d-flex align-items-center mb-7">
+                <i class="bi bi-stopwatch fs-2x me-4"></i>
+                <div>
+                    <div class="fw-bold">النطاق الفعلي المتوقع بين الرسائل</div>
+                    <div class="fs-3 fw-bold" id="delay-preview" dir="ltr">—</div>
+                    <div class="text-muted" id="pause-preview"></div>
+                </div>
+            </div>
+
+            <div id="custom-safety-fields">
+                <div class="row g-5">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">التأخير الأساسي — ثانية</label>
+                        <input type="number" class="form-control safety-setting-input" name="base_delay" value="{{ old('base_delay', $settings['base_delay'] ?? 10) }}" min="{{ $safetyLimits['base_delay'][0] }}" max="{{ $safetyLimits['base_delay'][1] }}">
+                        <div class="form-text">المسموح: {{ $safetyLimits['base_delay'][0] }}–{{ $safetyLimits['base_delay'][1] }} ثانية.</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">التفاوت العشوائي ±%</label>
+                        <input type="number" class="form-control safety-setting-input" name="jitter_percent" value="{{ old('jitter_percent', $settings['jitter_percent'] ?? 40) }}" min="{{ $safetyLimits['jitter_percent'][0] }}" max="{{ $safetyLimits['jitter_percent'][1] }}">
+                        <div class="form-text">يمنع نمط الإرسال الثابت الذي يبدو آليًا.</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">استراحة بعد كل — رسالة</label>
+                        <input type="number" class="form-control safety-setting-input" name="batch_pause_every" value="{{ old('batch_pause_every', $settings['batch_pause_every'] ?? 25) }}" min="{{ $safetyLimits['batch_pause_every'][0] }}" max="{{ $safetyLimits['batch_pause_every'][1] }}">
+                        <div class="form-text">المسموح: {{ $safetyLimits['batch_pause_every'][0] }}–{{ $safetyLimits['batch_pause_every'][1] }} رسالة.</div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">الحد الأقصى بالساعة</label>
+                        <input type="number" class="form-control safety-setting-input" name="hourly_limit" value="{{ old('hourly_limit', $settings['hourly_limit'] ?? 60) }}" min="{{ $safetyLimits['hourly_limit'][0] }}" max="{{ $safetyLimits['hourly_limit'][1] }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">الحد الأقصى باليوم</label>
+                        <input type="number" class="form-control safety-setting-input" name="daily_limit" value="{{ old('daily_limit', $settings['daily_limit'] ?? 300) }}" min="{{ $safetyLimits['daily_limit'][0] }}" max="{{ $safetyLimits['daily_limit'][1] }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">أقل استراحة — ثانية</label>
+                        <input type="number" class="form-control safety-setting-input" name="batch_pause_min_seconds" value="{{ old('batch_pause_min_seconds', $settings['batch_pause_min_seconds'] ?? 180) }}" min="{{ $safetyLimits['batch_pause_seconds'][0] }}" max="{{ $safetyLimits['batch_pause_seconds'][1] }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">أطول استراحة — ثانية</label>
+                        <input type="number" class="form-control safety-setting-input" name="batch_pause_max_seconds" value="{{ old('batch_pause_max_seconds', $settings['batch_pause_max_seconds'] ?? 420) }}" min="{{ $safetyLimits['batch_pause_seconds'][0] }}" max="{{ $safetyLimits['batch_pause_seconds'][1] }}">
+                    </div>
+                </div>
+            </div>
+
+            <div class="notice d-flex bg-light-warning rounded border-warning border border-dashed p-5 mt-7">
+                <i class="bi bi-shield-lock fs-2x text-warning me-4"></i>
+                <div class="text-gray-800">
+                    <strong>الحماية إلزامية:</strong> لا يمكن تعطيل محدد السرعة أو تجاوز حد 60 رسالة بالساعة و300 رسالة باليوم. توقف الدفعات الطويل لا يحجز Worker؛ تبقى الرسائل Pending وتُستأنف تلقائيًا.
+                </div>
+            </div>
+
+            @if($canUpdateSafety)
+            <div class="d-flex justify-content-end mt-7">
+                <button type="submit" class="btn btn-primary px-8">
+                    <i class="bi bi-shield-check"></i> حفظ وتطبيق الإعدادات
+                </button>
+            </div>
+            @else
+            <div class="alert alert-secondary mt-7 mb-0">
+                هذه الإعدادات للعرض فقط. يلزم امتلاك صلاحية تحديث إعدادات أمان WhatsApp لإجراء تغييرات.
+            </div>
+            @endif
+        </div>
+    </form>
 
     <div class="row g-5 g-xl-8">
         <div class="col-xl-6">
@@ -134,7 +266,7 @@ WhatsApp Safety
                                 <tr><td class="fw-semibold text-gray-700">Hourly cap</td><td class="text-end fw-bold">{{ $settings['hourly_limit'] ?? 60 }}</td></tr>
                                 <tr><td class="fw-semibold text-gray-700">Daily cap</td><td class="text-end fw-bold">{{ $settings['daily_limit'] ?? 300 }}</td></tr>
                                 <tr><td class="fw-semibold text-gray-700">Batch pause every</td><td class="text-end fw-bold">{{ $settings['batch_pause_every'] ?? 25 }} messages</td></tr>
-                                <tr><td class="fw-semibold text-gray-700">Batch pause duration</td><td class="text-end fw-bold">{{ $settings['batch_pause_min_seconds'] ?? 180 }}–{{ $settings['batch_pause_max_seconds'] ?? 420 }}s</td></tr>
+                                <tr><td class="fw-semibold text-gray-700">Batch pause duration</td><td class="text-end fw-bold" dir="ltr">{{ $settings['batch_pause_min_seconds'] ?? 180 }}–{{ $settings['batch_pause_max_seconds'] ?? 420 }}s</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -184,5 +316,101 @@ WhatsApp Safety
             </div>
         </div>
     </div>
+
+    <div class="card mt-8">
+        <div class="card-header border-0 pt-5">
+            <h3 class="card-title align-items-start flex-column">
+                <span class="card-label fw-bold text-gray-900">آخر تغييرات إعدادات الحماية</span>
+                <span class="text-muted mt-1 fw-semibold fs-7">سجل تدقيق يوضح من غيّر الإعدادات ومتى.</span>
+            </h3>
+        </div>
+        <div class="card-body pt-0">
+            @forelse($recentSafetyChanges as $change)
+                @php($changedSettings = json_decode($change->new_data ?? '{}', true) ?: [])
+                <div class="d-flex justify-content-between align-items-center border-bottom py-4">
+                    <div>
+                        <div class="fw-bold text-gray-800">{{ optional($change->user)->name ?? 'System' }}</div>
+                        <div class="text-muted fs-8">{{ $change->ip_address ?? '—' }}</div>
+                    </div>
+                    <div class="text-center">
+                        <span class="badge badge-light-primary">{{ $changedSettings['preset'] ?? 'custom' }}</span>
+                    </div>
+                    <div class="text-end text-muted">{{ optional($change->created_at)->format('Y-m-d H:i:s') }}</div>
+                </div>
+            @empty
+                <div class="text-center text-muted py-7">لا توجد تغييرات مسجلة بعد.</div>
+            @endforelse
+        </div>
+    </div>
 </div>
+@endsection
+
+@section('js')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const presets = {!! json_encode($safetyPresets, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) !!};
+    const canUpdateSafety = {!! json_encode($canUpdateSafety) !!};
+    const fieldNames = [
+        'base_delay', 'jitter_percent', 'hourly_limit', 'daily_limit',
+        'batch_pause_every', 'batch_pause_min_seconds', 'batch_pause_max_seconds'
+    ];
+    const radios = document.querySelectorAll('.safety-preset');
+    const fields = document.querySelectorAll('.safety-setting-input');
+
+    function selectedPreset() {
+        return document.querySelector('.safety-preset:checked').value;
+    }
+
+    function fieldValue(name) {
+        return Number(document.querySelector(`[name="${name}"]`).value || 0);
+    }
+
+    function updatePreview() {
+        const base = fieldValue('base_delay');
+        const jitter = fieldValue('jitter_percent');
+        const jitterSeconds = Math.round(base * (jitter / 100));
+        const minimum = Math.max(0, base - jitterSeconds);
+        const maximum = base + jitterSeconds;
+        const pauseEvery = fieldValue('batch_pause_every');
+        const pauseMin = fieldValue('batch_pause_min_seconds') / 60;
+        const pauseMax = fieldValue('batch_pause_max_seconds') / 60;
+
+        document.getElementById('delay-preview').textContent = `${minimum}–${maximum} ثانية`;
+        document.getElementById('pause-preview').textContent = `استراحة بعد كل ${pauseEvery} رسالة لمدة ${pauseMin.toFixed(1)}–${pauseMax.toFixed(1)} دقيقة`;
+    }
+
+    function applyPreset(preset) {
+        if (preset !== 'custom') {
+            fieldNames.forEach(function (name) {
+                document.querySelector(`[name="${name}"]`).value = presets[preset][name];
+            });
+        }
+
+        fields.forEach(function (field) {
+            field.disabled = !canUpdateSafety || preset !== 'custom';
+        });
+        document.getElementById('custom-safety-fields').classList.toggle('opacity-50', !canUpdateSafety || preset !== 'custom');
+        document.querySelectorAll('.safety-preset-card').forEach(function (card) {
+            card.classList.toggle('border-primary', card.dataset.preset === preset);
+        });
+        updatePreview();
+    }
+
+    radios.forEach(function (radio) {
+        radio.addEventListener('change', function () {
+            applyPreset(radio.value);
+        });
+    });
+    fields.forEach(function (field) {
+        field.addEventListener('input', updatePreview);
+    });
+    document.getElementById('restore-balanced')?.addEventListener('click', function () {
+        const balanced = document.querySelector('.safety-preset[value="balanced"]');
+        balanced.checked = true;
+        applyPreset('balanced');
+    });
+
+    applyPreset(selectedPreset());
+});
+</script>
 @endsection

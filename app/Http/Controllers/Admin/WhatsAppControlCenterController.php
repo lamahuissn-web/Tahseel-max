@@ -4,11 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Exports\CollectorMarkedCustomersExport;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\UpdateWhatsAppSafetySettingsRequest;
+use App\Models\Log as ActivityLog;
 use App\Models\WhatsAppMessageLog;
 use App\Services\WhatsApp\CollectorReminderService;
 use App\Services\WhatsApp\InvoiceEligibilityService;
 use App\Services\WhatsApp\WhatsAppMessageDispatcher;
 use App\Services\WhatsApp\WhatsAppRateLimiter;
+use App\Services\WhatsApp\WhatsAppSafetySettings;
 use App\Services\WhatsApp\WhatsAppTemplateService;
 use App\Services\WhatsAppMessageBuilder;
 use App\Services\WhatsAppService;
@@ -44,11 +47,19 @@ class WhatsAppControlCenterController extends Controller
     {
         $rateLimiter = app(WhatsAppRateLimiter::class);
         $rateLimit = $rateLimiter->status();
+        $safetySettings = app(WhatsAppSafetySettings::class);
+        $safetyPresets = $safetySettings->presets();
+        $safetyLimits = $safetySettings->limits();
         $pendingQueueCount = WhatsAppMessageLog::where('status', 'pending')->count();
         $sendingQueueCount = WhatsAppMessageLog::where('status', 'sending')->count();
         $failedToday = WhatsAppMessageLog::where('status', 'failed')->whereDate('created_at', today())->count();
         $lastSent = WhatsAppMessageLog::where('status', 'sent')->latest('updated_at')->first();
         $lastFailed = WhatsAppMessageLog::where('status', 'failed')->latest('updated_at')->first();
+        $recentSafetyChanges = ActivityLog::with('user:id,name')
+            ->where('action', 'whatsapp_safety_settings_updated')
+            ->latest()
+            ->limit(5)
+            ->get();
 
         return view('dashbord.whatsapp.safety', compact(
             'rateLimit',
@@ -56,8 +67,29 @@ class WhatsAppControlCenterController extends Controller
             'sendingQueueCount',
             'failedToday',
             'lastSent',
-            'lastFailed'
+            'lastFailed',
+            'safetyPresets',
+            'safetyLimits',
+            'recentSafetyChanges'
         ));
+    }
+
+    public function updateSafety(
+        UpdateWhatsAppSafetySettingsRequest $request,
+        WhatsAppSafetySettings $safetySettings
+    ) {
+        $safetySettings->save(
+            $request->validated(),
+            [
+                'admin_id' => auth('admin')->id(),
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]
+        );
+
+        return redirect()
+            ->route('admin.whatsapp.safety')
+            ->with('success', 'تم تطبيق إعدادات توقيت WhatsApp الآمنة بنجاح.');
     }
 
     public function revokeWhatsAppSession(Request $request)

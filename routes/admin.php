@@ -246,6 +246,9 @@ Route::group(
                 Route::get('/dashboard', [WhatsAppControlCenterController::class, 'dashboard'])->name('dashboard');
                 Route::get('/monitor', [WhatsAppControlCenterController::class, 'monitor'])->name('monitor');
                 Route::get('/safety', [WhatsAppControlCenterController::class, 'safety'])->name('safety');
+                Route::post('/safety', [WhatsAppControlCenterController::class, 'updateSafety'])
+                    ->middleware('can:update_whatsapp_safety_settings')
+                    ->name('safety.update');
                 Route::post('/monitor/revoke-session', [WhatsAppControlCenterController::class, 'revokeWhatsAppSession'])->name('monitor.revoke_session');
                 Route::get('/templates', [WhatsAppControlCenterController::class, 'templates'])->name('templates');
                 Route::post('/templates/save', [WhatsAppControlCenterController::class, 'saveTemplate'])->name('templates.save');

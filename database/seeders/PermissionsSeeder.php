@@ -357,6 +357,11 @@ class PermissionsSeeder extends Seeder
                 'title' => ['ar' => 'حفظ إعدادات الحساب', 'en' => 'save account settings'],
                 'guard_name' => 'admin',
             ],
+            [
+                'name' => 'update_whatsapp_safety_settings',
+                'title' => ['ar' => 'تحديث إعدادات أمان WhatsApp', 'en' => 'update WhatsApp safety settings'],
+                'guard_name' => 'admin',
+            ],
 
             // Financial Transactions permissions
             [

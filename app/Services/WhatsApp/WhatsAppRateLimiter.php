@@ -5,7 +5,6 @@ namespace App\Services\WhatsApp;
 use App\Models\WhatsAppMessageLog;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 
 class WhatsAppRateLimiter
 {
@@ -15,26 +14,11 @@ class WhatsAppRateLimiter
 
     private const CACHE_LAST_BATCH_PAUSE_MARKER = 'whatsapp_rate_limiter_last_batch_pause_count';
 
+    public function __construct(private readonly WhatsAppSafetySettings $safetySettings) {}
+
     public function settings(): array
     {
-        $baseDelay = (int) $this->configValue('whatsapp_rate_base_delay', $this->configValue('whatsapp_auto_delay', 10));
-        $jitterPercent = (int) $this->configValue('whatsapp_rate_jitter_percent', 40);
-        $hourlyLimit = (int) $this->configValue('whatsapp_rate_hourly_limit', 60);
-        $dailyLimit = (int) $this->configValue('whatsapp_rate_daily_limit', 300);
-        $batchPauseEvery = (int) $this->configValue('whatsapp_rate_batch_pause_every', 25);
-        $batchPauseMin = (int) $this->configValue('whatsapp_rate_batch_pause_min_seconds', 180);
-        $batchPauseMax = (int) $this->configValue('whatsapp_rate_batch_pause_max_seconds', 420);
-
-        return [
-            'enabled' => $this->configValue('whatsapp_rate_limiter_enabled', '1') === '1',
-            'base_delay' => max(0, min($baseDelay, 120)),
-            'jitter_percent' => max(0, min($jitterPercent, 90)),
-            'hourly_limit' => max(1, min($hourlyLimit, 1000)),
-            'daily_limit' => max(1, min($dailyLimit, 5000)),
-            'batch_pause_every' => max(0, min($batchPauseEvery, 500)),
-            'batch_pause_min_seconds' => max(0, min($batchPauseMin, 3600)),
-            'batch_pause_max_seconds' => max(0, min($batchPauseMax, 3600)),
-        ];
+        return $this->safetySettings->settings();
     }
 
     public function status(): array
@@ -254,12 +238,5 @@ class WhatsAppRateLimiter
         }
 
         return 'safe';
-    }
-
-    private function configValue(string $key, $default = null)
-    {
-        $value = DB::table('app_config')->where('key', $key)->value('value');
-
-        return $value !== null ? $value : $default;
     }
 }

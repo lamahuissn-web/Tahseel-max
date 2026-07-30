@@ -226,6 +226,10 @@ class RolesController extends Controller
                 'save_account_settings',
             ])->get(),
 
+            'WhatsApp Safety' => Permission::whereIn('name', [
+                'update_whatsapp_safety_settings',
+            ])->get(),
+
             'Financial Transactions' => Permission::whereIn('name', [
                 'view_financial_transactions',
             ])->get(),
