@@ -1,0 +1,18 @@
+[Unit]
+Description=Tahseel serialized WhatsApp queue worker
+After=network-online.target mariadb.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/html/tahseel
+ExecStart=/usr/bin/php artisan queue:work whatsapp_database --queue=whatsapp --sleep=2 --tries=0 --timeout=650 --max-time=3600
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=660
+
+[Install]
+WantedBy=multi-user.target

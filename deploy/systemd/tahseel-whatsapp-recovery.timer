@@ -1,0 +1,11 @@
+[Unit]
+Description=Recover pending Tahseel WhatsApp receipts every minute
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+Persistent=true
+Unit=tahseel-whatsapp-recovery.service
+
+[Install]
+WantedBy=timers.target

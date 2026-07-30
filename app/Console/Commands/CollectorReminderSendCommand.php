@@ -2,10 +2,8 @@
 
 namespace App\Console\Commands;
 
-use App\Http\Controllers\Admin\WhatsAppControlCenterController;
-use App\Services\WhatsApp\CollectorReminderService;
 use App\Models\WhatsAppMessageLog;
-use Carbon\Carbon;
+use App\Services\WhatsApp\CollectorReminderService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -25,8 +23,9 @@ class CollectorReminderSendCommand extends Command
         $settings = $settingsRaw ? json_decode($settingsRaw, true) : [];
 
         $enabled = $settings['enabled'] ?? false;
-        if (!$enabled) {
+        if (! $enabled) {
             $this->warn('Collector reminders are disabled in settings.');
+
             return Command::SUCCESS;
         }
 
@@ -34,10 +33,11 @@ class CollectorReminderSendCommand extends Command
         $currentTime = now()->format('H:i');
 
         // Allow running any time if forced, otherwise check approximate time match
-        if (!$this->option('force')) {
+        if (! $this->option('force')) {
             $currentMin = now()->format('H:i');
             if ($currentMin !== $sendTime) {
                 $this->warn("Scheduled time is {$sendTime}, current time is {$currentMin}. Use --force to send anyway.");
+
                 return Command::SUCCESS;
             }
         }
@@ -46,8 +46,9 @@ class CollectorReminderSendCommand extends Command
         $lastSendRaw = DB::table('app_config')->where('key', 'whatsapp_collector_last_send')->value('value');
         $lastSend = $lastSendRaw ? json_decode($lastSendRaw, true) : null;
 
-        if (!$this->option('force') && $lastSend && ($lastSend['date'] ?? null) === now()->toDateString()) {
+        if (! $this->option('force') && $lastSend && ($lastSend['date'] ?? null) === now()->toDateString()) {
             $this->warn('Already sent today. Use --force to send again.');
+
             return Command::SUCCESS;
         }
 
@@ -56,6 +57,7 @@ class CollectorReminderSendCommand extends Command
 
         if (empty($rules)) {
             $this->warn('No collector rules configured.');
+
             return Command::SUCCESS;
         }
 
@@ -73,12 +75,14 @@ class CollectorReminderSendCommand extends Command
                 if ($skipEmpty) {
                     continue;
                 }
+
                 // Even if empty, send a "no customers today" message? No, skip.
                 continue;
             }
 
             if (empty($group['phone'])) {
-                $skipped[] = ($group['name'] ?: 'Collector') . ': missing WhatsApp phone';
+                $skipped[] = ($group['name'] ?: 'Collector').': missing WhatsApp phone';
+
                 continue;
             }
 
@@ -91,7 +95,7 @@ class CollectorReminderSendCommand extends Command
                     'template_type' => 'collector_reminder',
                     'status' => 'pending',
                     'error' => null,
-                    'sent_by' => 'system:collector_reminder|batch:' . $batchId,
+                    'sent_by' => 'system:collector_reminder|batch:'.$batchId,
                 ]);
                 $queued++;
             }
@@ -118,24 +122,16 @@ class CollectorReminderSendCommand extends Command
             );
         }
 
-        $this->info("Queued: {$queued}, Skipped: " . count($skipped));
+        $this->info("Queued: {$queued}, Skipped: ".count($skipped));
 
         return Command::SUCCESS;
     }
 
     private function startQueuedBatchProcessor(string $batchId, int $delaySeconds): void
     {
-        $pidFile = storage_path("framework/cache/whatsapp_batch_{$batchId}.pid");
-        file_put_contents($pidFile, '1');
-
-        $artisanPath = defined('ARTISAN_PATH') ? ARTISAN_PATH : base_path('artisan');
-        $phpBinary = '/usr/bin/php';
-
-        $batchArg = escapeshellarg($batchId);
-        $delayArg = (int) max(0, $delaySeconds);
-        $logFile = '/tmp/whatsapp-batch-' . preg_replace('/[^A-Za-z0-9_-]/', '-', $batchId) . '.log';
-
-        $command = "nohup {$phpBinary} {$artisanPath} whatsapp:process-pending {$batchArg} --delay={$delayArg} > " . escapeshellarg($logFile) . " 2>&1 &";
-        exec($command);
+        $this->call('whatsapp:process-pending', [
+            'batch' => $batchId,
+            '--delay' => max(0, $delaySeconds),
+        ]);
     }
 }

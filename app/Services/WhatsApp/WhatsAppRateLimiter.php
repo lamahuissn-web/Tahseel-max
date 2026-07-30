@@ -11,6 +11,10 @@ class WhatsAppRateLimiter
 {
     private const CACHE_NEXT_ALLOWED_AT = 'whatsapp_rate_limiter_next_allowed_at';
 
+    private const CACHE_BATCH_PAUSE_UNTIL = 'whatsapp_rate_limiter_batch_pause_until';
+
+    private const CACHE_LAST_BATCH_PAUSE_MARKER = 'whatsapp_rate_limiter_last_batch_pause_count';
+
     public function settings(): array
     {
         $baseDelay = (int) $this->configValue('whatsapp_rate_base_delay', $this->configValue('whatsapp_auto_delay', 10));
@@ -63,7 +67,7 @@ class WhatsAppRateLimiter
     public function checkLimits(): array
     {
         $settings = $this->settings();
-        if (!$settings['enabled']) {
+        if (! $settings['enabled']) {
             return ['allowed' => true, 'reason' => null, 'settings' => $settings];
         }
 
@@ -109,11 +113,11 @@ class WhatsAppRateLimiter
         $limitCheck = $this->checkLimits();
         $settings = $limitCheck['settings'];
 
-        if (!$settings['enabled']) {
+        if (! $settings['enabled']) {
             return ['allowed' => true, 'waited_seconds' => 0, 'reason' => 'Rate limiter disabled'];
         }
 
-        if (!($limitCheck['allowed'] ?? false)) {
+        if (! ($limitCheck['allowed'] ?? false)) {
             return array_merge($limitCheck, [
                 'rate_limited' => true,
                 'waited_seconds' => 0,
@@ -125,24 +129,23 @@ class WhatsAppRateLimiter
         $nextAllowedAt = (int) Cache::get(self::CACHE_NEXT_ALLOWED_AT, 0);
 
         if ($nextAllowedAt > $now) {
-            $wait = min($nextAllowedAt - $now, 120);
+            $wait = min(120, $nextAllowedAt - $now);
             sleep($wait);
             $waited += $wait;
+
+            $limitCheck = $this->checkLimits();
+            $settings = $limitCheck['settings'];
+            if (! ($limitCheck['allowed'] ?? false)) {
+                return array_merge($limitCheck, [
+                    'rate_limited' => true,
+                    'waited_seconds' => $waited,
+                ]);
+            }
         }
 
-        $sentInBatch = (int) ($context['sent_in_batch'] ?? 0);
-        if (
-            $settings['batch_pause_every'] > 0
-            && $sentInBatch > 0
-            && $sentInBatch % $settings['batch_pause_every'] === 0
-        ) {
-            $pauseMin = min($settings['batch_pause_min_seconds'], $settings['batch_pause_max_seconds']);
-            $pauseMax = max($settings['batch_pause_min_seconds'], $settings['batch_pause_max_seconds']);
-            $batchPause = $pauseMax > 0 ? random_int($pauseMin, $pauseMax) : 0;
-            if ($batchPause > 0) {
-                sleep($batchPause);
-                $waited += $batchPause;
-            }
+        $batchPause = $this->batchPauseResult($limitCheck, $settings);
+        if ($batchPause !== null) {
+            return $batchPause;
         }
 
         $delay = $this->randomDelaySeconds($settings);
@@ -154,6 +157,62 @@ class WhatsAppRateLimiter
             'next_delay_seconds' => $delay,
             'hourly_sent' => $limitCheck['hourly_sent'] ?? null,
             'daily_sent' => $limitCheck['daily_sent'] ?? null,
+        ];
+    }
+
+    private function batchPauseResult(array $limitCheck, array $settings): ?array
+    {
+        $now = time();
+        $pauseUntil = (int) Cache::get(self::CACHE_BATCH_PAUSE_UNTIL, 0);
+
+        if ($pauseUntil > $now) {
+            return [
+                'allowed' => false,
+                'rate_limited' => true,
+                'reason' => 'Safety pause after a WhatsApp message batch.',
+                'retry_after_seconds' => $pauseUntil - $now,
+                'settings' => $settings,
+                'waited_seconds' => 0,
+            ];
+        }
+
+        $sentToday = (int) ($limitCheck['daily_sent'] ?? 0);
+        $pauseEvery = (int) $settings['batch_pause_every'];
+        $pauseMarker = Carbon::today()->format('Y-m-d').':'.$sentToday;
+        $lastPauseMarker = (string) Cache::get(self::CACHE_LAST_BATCH_PAUSE_MARKER, '');
+
+        if (
+            $pauseEvery <= 0
+            || $sentToday <= 0
+            || $sentToday % $pauseEvery !== 0
+            || $lastPauseMarker === $pauseMarker
+        ) {
+            return null;
+        }
+
+        $pauseMin = min($settings['batch_pause_min_seconds'], $settings['batch_pause_max_seconds']);
+        $pauseMax = max($settings['batch_pause_min_seconds'], $settings['batch_pause_max_seconds']);
+        $pauseSeconds = $pauseMax > 0 ? random_int($pauseMin, $pauseMax) : 0;
+
+        Cache::put(self::CACHE_LAST_BATCH_PAUSE_MARKER, $pauseMarker, now()->addDays(2));
+
+        if ($pauseSeconds <= 0) {
+            return null;
+        }
+
+        Cache::put(
+            self::CACHE_BATCH_PAUSE_UNTIL,
+            $now + $pauseSeconds,
+            now()->addSeconds($pauseSeconds + 60)
+        );
+
+        return [
+            'allowed' => false,
+            'rate_limited' => true,
+            'reason' => "Safety pause after {$sentToday} WhatsApp messages.",
+            'retry_after_seconds' => $pauseSeconds,
+            'settings' => $settings,
+            'waited_seconds' => 0,
         ];
     }
 
@@ -182,11 +241,11 @@ class WhatsAppRateLimiter
 
     private function riskLevel(array $settings, int $hourlyPercent, int $dailyPercent, array $limitCheck): string
     {
-        if (!$settings['enabled']) {
+        if (! $settings['enabled']) {
             return 'disabled';
         }
 
-        if (!($limitCheck['allowed'] ?? false)) {
+        if (! ($limitCheck['allowed'] ?? false)) {
             return 'paused';
         }
 
@@ -200,6 +259,7 @@ class WhatsAppRateLimiter
     private function configValue(string $key, $default = null)
     {
         $value = DB::table('app_config')->where('key', $key)->value('value');
+
         return $value !== null ? $value : $default;
     }
 }

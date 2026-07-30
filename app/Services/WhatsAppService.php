@@ -4,13 +4,17 @@ namespace App\Services;
 
 use App\Models\AppConfig;
 use App\Services\WhatsApp\WhatsAppRateLimiter;
+use App\Services\WhatsApp\WhatsAppSendLock;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class WhatsAppService
 {
     protected $baseUrl;
+
     protected $apiKey;
+
     protected $sessionId;
 
     public function __construct()
@@ -40,17 +44,17 @@ class WhatsAppService
             $data = $response->json();
             $statusCode = $response->status();
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 return [
                     'reachable' => false,
                     'connected' => false,
                     'phone' => null,
                     'status' => 'unreachable',
-                    'message' => $data['message'] ?? ('OpenWA HTTP ' . $statusCode),
+                    'message' => $data['message'] ?? ('OpenWA HTTP '.$statusCode),
                 ];
             }
 
-            if (!$data || isset($data['error'])) {
+            if (! $data || isset($data['error'])) {
                 return [
                     'reachable' => true,
                     'connected' => false,
@@ -71,7 +75,8 @@ class WhatsAppService
                 'message' => $data['message'] ?? null,
             ];
         } catch (\Exception $e) {
-            Log::error('OpenWA status check failed: ' . $e->getMessage());
+            Log::error('OpenWA status check failed: '.$e->getMessage());
+
             return [
                 'reachable' => false,
                 'connected' => false,
@@ -92,8 +97,8 @@ class WhatsAppService
             $data = $response->json();
             $statusCode = $response->status();
 
-            if (!$response->successful()) {
-                $message = (string) ($data['message'] ?? ('OpenWA HTTP ' . $statusCode));
+            if (! $response->successful()) {
+                $message = (string) ($data['message'] ?? ('OpenWA HTTP '.$statusCode));
                 $normalized = strtolower($message);
 
                 if (str_contains($normalized, 'already authenticated') || str_contains($normalized, 'no qr code needed')) {
@@ -115,7 +120,7 @@ class WhatsAppService
                 ];
             }
 
-            if (!$data || isset($data['error'])) {
+            if (! $data || isset($data['error'])) {
                 return [
                     'reachable' => true,
                     'qr' => null,
@@ -137,7 +142,8 @@ class WhatsAppService
                 'message' => $data['message'] ?? null,
             ];
         } catch (\Exception $e) {
-            Log::error('OpenWA QR fetch failed: ' . $e->getMessage());
+            Log::error('OpenWA QR fetch failed: '.$e->getMessage());
+
             return [
                 'reachable' => false,
                 'qr' => null,
@@ -150,10 +156,24 @@ class WhatsAppService
 
     public function send($phone, $message, array $options = [])
     {
+        $sendResult = app(WhatsAppSendLock::class)->run(
+            fn () => $this->sendUnlocked($phone, $message, $options)
+        );
+
+        return $sendResult ?? [
+            'success' => false,
+            'rate_limited' => true,
+            'error' => 'Another WhatsApp message is currently being sent',
+            'retry_after_seconds' => 15,
+        ];
+    }
+
+    private function sendUnlocked($phone, $message, array $options): array
+    {
         try {
-            if (!($options['skip_rate_limit'] ?? false)) {
+            if (! ($options['skip_rate_limit'] ?? false)) {
                 $rateLimit = app(WhatsAppRateLimiter::class)->waitBeforeSend($options['rate_context'] ?? []);
-                if (!($rateLimit['allowed'] ?? false)) {
+                if (! ($rateLimit['allowed'] ?? false)) {
                     return [
                         'success' => false,
                         'rate_limited' => true,
@@ -191,7 +211,7 @@ class WhatsAppService
                 $sessionStatus = $this->status();
                 if (($sessionStatus['connected'] ?? false) === true) {
                     Log::warning('OpenWA returned generic 500 on healthy session; treating as delivered', [
-                        'phone' => substr($phone, 0, 6) . '***',
+                        'phone' => substr($phone, 0, 6).'***',
                         'status_code' => $statusCode,
                         'session_status' => $sessionStatus,
                         'response' => $data,
@@ -205,9 +225,9 @@ class WhatsAppService
                 }
             }
 
-            $errorMsg = $data['error']['message'] ?? $data['message'] ?? ('OpenWA HTTP ' . $statusCode);
+            $errorMsg = $data['error']['message'] ?? $data['message'] ?? ('OpenWA HTTP '.$statusCode);
             Log::warning('OpenWA send returned failure', [
-                'phone' => substr($phone, 0, 6) . '***',
+                'phone' => substr($phone, 0, 6).'***',
                 'status_code' => $statusCode,
                 'response' => $data,
             ]);
@@ -217,8 +237,17 @@ class WhatsAppService
                 'error' => $errorMsg,
                 'status_code' => $statusCode,
             ];
+        } catch (ConnectionException $e) {
+            Log::error('OpenWA send failed: '.$e->getMessage());
+
+            return [
+                'success' => false,
+                'ambiguous_delivery' => true,
+                'error' => $e->getMessage(),
+            ];
         } catch (\Exception $e) {
-            Log::error('OpenWA send failed: ' . $e->getMessage());
+            Log::error('OpenWA send failed: '.$e->getMessage());
+
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -260,10 +289,10 @@ class WhatsAppService
             $attempts[] = [
                 'action' => 'delete-session',
                 'status_code' => $deleteResponse->status(),
-                'message' => $deleteData['message'] ?? $deleteData['status'] ?? ('OpenWA HTTP ' . $deleteResponse->status()),
+                'message' => $deleteData['message'] ?? $deleteData['status'] ?? ('OpenWA HTTP '.$deleteResponse->status()),
             ];
 
-            if (!$deleteResponse->successful()) {
+            if (! $deleteResponse->successful()) {
                 return [
                     'success' => false,
                     'message' => $deleteData['message'] ?? 'OpenWA failed to delete the old session.',
@@ -281,7 +310,7 @@ class WhatsAppService
 
             return [
                 'success' => false,
-                'message' => 'OpenWA delete session failed: ' . $e->getMessage(),
+                'message' => 'OpenWA delete session failed: '.$e->getMessage(),
                 'qr_required' => false,
                 'attempts' => $attempts,
                 'status' => $this->status(),
@@ -304,7 +333,7 @@ class WhatsAppService
                 'message' => $newSessionId ?: ($createData['message'] ?? 'session creation response did not include id'),
             ];
 
-            if (!$createResponse->successful() || !$newSessionId) {
+            if (! $createResponse->successful() || ! $newSessionId) {
                 return [
                     'success' => false,
                     'message' => $createData['message'] ?? 'Old session was deleted, but OpenWA failed to create a replacement session. Create a new session in OpenWA dashboard and update Tahseel session ID.',
@@ -349,7 +378,7 @@ class WhatsAppService
 
             return [
                 'success' => false,
-                'message' => 'Old session may be deleted, but creating the replacement session failed: ' . $e->getMessage(),
+                'message' => 'Old session may be deleted, but creating the replacement session failed: '.$e->getMessage(),
                 'qr_required' => false,
                 'attempts' => $attempts,
                 'status' => [
@@ -396,7 +425,7 @@ class WhatsAppService
                 ->timeout(10)
                 ->post("{$this->baseUrl}/sessions/{$this->sessionId}/start");
         } catch (\Exception $e) {
-            Log::warning('OpenWA start after revoke failed: ' . $e->getMessage());
+            Log::warning('OpenWA start after revoke failed: '.$e->getMessage());
         }
     }
 

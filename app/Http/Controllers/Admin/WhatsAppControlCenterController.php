@@ -6,11 +6,12 @@ use App\Exports\CollectorMarkedCustomersExport;
 use App\Http\Controllers\Controller;
 use App\Models\WhatsAppMessageLog;
 use App\Services\WhatsApp\CollectorReminderService;
+use App\Services\WhatsApp\InvoiceEligibilityService;
+use App\Services\WhatsApp\WhatsAppMessageDispatcher;
 use App\Services\WhatsApp\WhatsAppRateLimiter;
 use App\Services\WhatsApp\WhatsAppTemplateService;
 use App\Services\WhatsAppMessageBuilder;
 use App\Services\WhatsAppService;
-use App\Services\WhatsApp\InvoiceEligibilityService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
@@ -165,7 +166,7 @@ class WhatsAppControlCenterController extends Controller
         $apiReachable = (bool) ($device['reachable'] ?? false);
         $sessionConnected = (bool) ($device['connected'] ?? false);
         $sessionStatus = (string) ($device['status'] ?? 'unknown');
-        $qrNeeded = !$connectionStatus && !empty($qrState['qr']);
+        $qrNeeded = ! $connectionStatus && ! empty($qrState['qr']);
         $oldestPendingAt = optional($oldestPending)->created_at;
         $lastSuccessAt = optional($lastSent)->created_at;
         $lastFailureAt = optional($lastFailed)->created_at;
@@ -237,6 +238,7 @@ class WhatsAppControlCenterController extends Controller
     public function templates()
     {
         $templates = WhatsAppTemplateService::getAll();
+
         return view('dashbord.whatsapp.templates', compact('templates'));
     }
 
@@ -291,7 +293,7 @@ class WhatsAppControlCenterController extends Controller
             'success' => isset($result['success']) && $result['success'] === true,
             'message' => isset($result['success']) && $result['success'] === true
                 ? 'تم الإرسال بنجاح'
-                : 'فشل الإرسال: ' . ($result['error'] ?? 'خطأ غير معروف'),
+                : 'فشل الإرسال: '.($result['error'] ?? 'خطأ غير معروف'),
         ]);
     }
 
@@ -301,6 +303,7 @@ class WhatsAppControlCenterController extends Controller
     public function send()
     {
         $templates = WhatsAppTemplateService::getAll();
+
         return view('dashbord.whatsapp.send', compact('templates'));
     }
 
@@ -330,8 +333,8 @@ class WhatsAppControlCenterController extends Controller
         }
 
         $filename = $ruleIndex === null
-            ? 'collector-all-marked-customers-' . now()->format('Y-m-d') . '.xlsx'
-            : 'collector-' . $this->safeFilename($groups[0]['name'] ?? 'collector') . '-marked-customers-' . now()->format('Y-m-d') . '.xlsx';
+            ? 'collector-all-marked-customers-'.now()->format('Y-m-d').'.xlsx'
+            : 'collector-'.$this->safeFilename($groups[0]['name'] ?? 'collector').'-marked-customers-'.now()->format('Y-m-d').'.xlsx';
 
         return Excel::download(new CollectorMarkedCustomersExport($groups), $filename);
     }
@@ -368,6 +371,7 @@ class WhatsAppControlCenterController extends Controller
     private function safeFilename(string $value): string
     {
         $value = trim(preg_replace('/[^\p{L}\p{N}_-]+/u', '-', $value), '-');
+
         return $value !== '' ? mb_substr($value, 0, 60) : 'collector';
     }
 
@@ -387,7 +391,7 @@ class WhatsAppControlCenterController extends Controller
 
         foreach ($userIds as $index => $adminId) {
             $admin = $adminUsers->get((int) $adminId);
-            if (!$admin) {
+            if (! $admin) {
                 continue;
             }
 
@@ -424,7 +428,7 @@ class WhatsAppControlCenterController extends Controller
         $force = $request->boolean('force');
 
         $lastSend = $this->getCollectorLastSend();
-        if ($lastSend && $lastSend['date'] === now()->toDateString() && !$force) {
+        if ($lastSend && $lastSend['date'] === now()->toDateString() && ! $force) {
             return response()->json([
                 'success' => false,
                 'already_sent_today' => true,
@@ -445,7 +449,8 @@ class WhatsAppControlCenterController extends Controller
             }
 
             if (empty($group['phone'])) {
-                $skipped[] = ($group['name'] ?: 'Collector') . ': missing WhatsApp phone';
+                $skipped[] = ($group['name'] ?: 'Collector').': missing WhatsApp phone';
+
                 continue;
             }
 
@@ -458,7 +463,7 @@ class WhatsAppControlCenterController extends Controller
                     'template_type' => 'collector_reminder',
                     'status' => 'pending',
                     'error' => null,
-                    'sent_by' => 'system:collector_reminder|batch:' . $batchId,
+                    'sent_by' => 'system:collector_reminder|batch:'.$batchId,
                 ]);
 
                 $queued++;
@@ -486,10 +491,11 @@ class WhatsAppControlCenterController extends Controller
     private function getCollectorLastSend(): ?array
     {
         $raw = DB::table('app_config')->where('key', 'whatsapp_collector_last_send')->value('value');
-        if (!$raw) {
+        if (! $raw) {
             return null;
         }
         $decoded = json_decode($raw, true);
+
         return is_array($decoded) ? $decoded : null;
     }
 
@@ -535,7 +541,7 @@ class WhatsAppControlCenterController extends Controller
     private function getCollectorSettings(): array
     {
         $raw = DB::table('app_config')->where('key', 'whatsapp_collector_settings')->value('value');
-        if (!$raw) {
+        if (! $raw) {
             return [
                 'enabled' => false,
                 'send_time' => '08:00',
@@ -544,6 +550,7 @@ class WhatsAppControlCenterController extends Controller
             ];
         }
         $decoded = json_decode($raw, true);
+
         return is_array($decoded) ? $decoded : [
             'enabled' => false,
             'send_time' => '08:00',
@@ -555,11 +562,12 @@ class WhatsAppControlCenterController extends Controller
     private function getCollectorRulesConfig(): array
     {
         $raw = DB::table('app_config')->where('key', 'whatsapp_collector_rules')->value('value');
-        if (!$raw) {
+        if (! $raw) {
             return [];
         }
 
         $decoded = json_decode($raw, true);
+
         return is_array($decoded) ? CollectorReminderService::normalizeRules($decoded) : [];
     }
 
@@ -619,8 +627,8 @@ class WhatsAppControlCenterController extends Controller
             ->whereNull('deleted_at')
             ->where(function ($q) use ($term) {
                 $q->where('name', 'like', "%{$term}%")
-                  ->orWhere('phone', 'like', "%{$term}%")
-                  ->orWhere('id', 'like', "%{$term}%");
+                    ->orWhere('phone', 'like', "%{$term}%")
+                    ->orWhere('id', 'like', "%{$term}%");
             })
             ->select('id', 'name', 'phone', 'is_active')
             ->limit(20)
@@ -644,8 +652,8 @@ class WhatsAppControlCenterController extends Controller
                 $q = $request->q;
                 $query->where(function ($qry) use ($q) {
                     $qry->where('name', 'like', "%{$q}%")
-                      ->orWhere('phone', 'like', "%{$q}%")
-                      ->orWhere('id', 'like', "%{$q}%");
+                        ->orWhere('phone', 'like', "%{$q}%")
+                        ->orWhere('id', 'like', "%{$q}%");
                 });
             }
 
@@ -680,7 +688,7 @@ class WhatsAppControlCenterController extends Controller
             }
 
             if ($request->filled('last_payment')) {
-                $query->whereRaw('(SELECT MAX(created_at) FROM tbl_revenues WHERE tbl_revenues.client_id = tbl_clients.id AND tbl_revenues.deleted_at IS NULL AND tbl_revenues.status = "paid") <= ?', [$request->last_payment . ' 23:59:59']);
+                $query->whereRaw('(SELECT MAX(created_at) FROM tbl_revenues WHERE tbl_revenues.client_id = tbl_clients.id AND tbl_revenues.deleted_at IS NULL AND tbl_revenues.status = "paid") <= ?', [$request->last_payment.' 23:59:59']);
             }
 
             if ($request->filled('min_amount')) {
@@ -705,7 +713,7 @@ class WhatsAppControlCenterController extends Controller
         $autoTemplate = $request->template_type === 'auto';
         $body = $autoTemplate ? null : WhatsAppTemplateService::getBody($request->template_type);
 
-        if (!$autoTemplate && empty($body)) {
+        if (! $autoTemplate && empty($body)) {
             return response()->json([
                 'sent' => 0,
                 'failed' => 0,
@@ -726,9 +734,10 @@ class WhatsAppControlCenterController extends Controller
 
             foreach ($request->client_ids as $clientId) {
                 $client = DB::table('tbl_clients')->find($clientId);
-                if (!$client || empty($client->phone)) {
+                if (! $client || empty($client->phone)) {
                     $results['failed']++;
-                    $results['errors'][] = 'Client #' . $clientId . ': missing client or phone';
+                    $results['errors'][] = 'Client #'.$clientId.': missing client or phone';
+
                     continue;
                 }
 
@@ -752,7 +761,8 @@ class WhatsAppControlCenterController extends Controller
                 $payload = $this->buildSmartSendMessage($client, $message, $templateType, $autoState, $invoiceData);
                 if ($payload['skip']) {
                     $results['failed']++;
-                    $results['errors'][] = $client->name . ': ' . ($payload['reason'] ?? 'Skipped by Smart Auto');
+                    $results['errors'][] = $client->name.': '.($payload['reason'] ?? 'Skipped by Smart Auto');
+
                     continue;
                 }
                 $message = $payload['message'];
@@ -766,7 +776,7 @@ class WhatsAppControlCenterController extends Controller
                     'template_type' => $autoTemplate ? $templateType : $request->template_type,
                     'status' => 'pending',
                     'error' => null,
-                    'sent_by' => 'admin:manual|batch:' . $batchId,
+                    'sent_by' => 'admin:manual|batch:'.$batchId,
                 ]);
 
                 $queued++;
@@ -790,8 +800,9 @@ class WhatsAppControlCenterController extends Controller
 
         foreach ($request->client_ids as $clientId) {
             $client = DB::table('tbl_clients')->find($clientId);
-            if (!$client || empty($client->phone)) {
+            if (! $client || empty($client->phone)) {
                 $results['failed']++;
+
                 continue;
             }
 
@@ -815,7 +826,8 @@ class WhatsAppControlCenterController extends Controller
             $payload = $this->buildSmartSendMessage($client, $message, $templateType, $autoState, $invoiceData);
             if ($payload['skip']) {
                 $results['failed']++;
-                $results['errors'][] = $client->name . ': ' . ($payload['reason'] ?? 'Skipped by Smart Auto');
+                $results['errors'][] = $client->name.': '.($payload['reason'] ?? 'Skipped by Smart Auto');
+
                 continue;
             }
             $message = $payload['message'];
@@ -837,14 +849,14 @@ class WhatsAppControlCenterController extends Controller
                 'template_type' => $autoTemplate ? $templateType : $request->template_type,
                 'status' => $status,
                 'error' => $status === 'failed' ? ($result['error'] ?? 'Unknown') : null,
-                'sent_by' => 'admin:' . auth('admin')->id(),
+                'sent_by' => 'admin:'.auth('admin')->id(),
             ]);
 
             if ($status === 'sent') {
                 $results['sent']++;
             } else {
                 $results['failed']++;
-                $results['errors'][] = $client->name . ': ' . ($result['error'] ?? 'Unknown');
+                $results['errors'][] = $client->name.': '.($result['error'] ?? 'Unknown');
             }
 
         }
@@ -852,7 +864,7 @@ class WhatsAppControlCenterController extends Controller
         return response()->json($results);
     }
 
-    private function buildSmartSendMessage($client, string $body, string $templateType, array $autoState = null, $invoiceData = null): array
+    private function buildSmartSendMessage($client, string $body, string $templateType, ?array $autoState = null, $invoiceData = null): array
     {
         $message = $body;
         $unpaidInvoices = InvoiceEligibilityService::getEligibleInvoices($client->id);
@@ -880,7 +892,7 @@ class WhatsAppControlCenterController extends Controller
                 if ($future) {
                     $totalAmount = (float) ($future->remaining_amount ?? $future->amount ?? 0);
                     $dueDate = Carbon::parse($future->due_date)->format('Y-m-d');
-                    $invoiceDetailsList = "فاتورة جديدة بقيمة $" . number_format($totalAmount, 2) . " تستحق بتاريخ {$dueDate}";
+                    $invoiceDetailsList = 'فاتورة جديدة بقيمة $'.number_format($totalAmount, 2)." تستحق بتاريخ {$dueDate}";
                 }
             } elseif (($autoState['state'] ?? '') === 'paid_receipt') {
                 $lastPayment = DB::table('tbl_revenues')
@@ -898,7 +910,7 @@ class WhatsAppControlCenterController extends Controller
             }
         }
 
-        if (!$autoState || ($autoState['state'] ?? '') === 'overdue_due') {
+        if (! $autoState || ($autoState['state'] ?? '') === 'overdue_due') {
             if ($unpaidInvoices->isNotEmpty()) {
                 $invoiceDetailsList = WhatsAppMessageBuilder::buildInvoiceDetailsList($unpaidInvoices);
                 $message = WhatsAppMessageBuilder::buildMessage($message, $client->name, $totalAmount, $invoiceDetailsList);
@@ -919,7 +931,7 @@ class WhatsAppControlCenterController extends Controller
         $message = str_replace('{year}', now()->format('Y'), $message);
         $message = str_replace('{collector}', auth('admin')->user()->name ?? 'الإدارة', $message);
         $message = str_replace('{datetime}', $datetime, $message);
-        $message = str_replace('{balance_status}', 'الرصيد الحالي: $' . number_format($balanceAmount, 2), $message);
+        $message = str_replace('{balance_status}', 'الرصيد الحالي: $'.number_format($balanceAmount, 2), $message);
 
         return [
             'skip' => false,
@@ -969,10 +981,10 @@ class WhatsAppControlCenterController extends Controller
             $recommendedTemplate = 'custom';
             $badge = 'secondary';
 
-            if (!$hasPhone) {
+            if (! $hasPhone) {
                 $reason = 'Missing phone';
                 $badge = 'danger';
-            } elseif (!$isActive) {
+            } elseif (! $isActive) {
                 $reason = 'Inactive customer';
                 $badge = 'danger';
             } elseif ($overdueInvoices->isNotEmpty()) {
@@ -1027,7 +1039,7 @@ class WhatsAppControlCenterController extends Controller
         $hasPhone = trim((string) ($client->phone ?? '')) !== '';
         $isActive = (string) ($client->is_active ?? '1') === '1';
 
-        if (!$hasPhone || !$isActive) {
+        if (! $hasPhone || ! $isActive) {
             return ['state' => 'blocked', 'template' => 'custom', 'reason' => $hasPhone ? 'Inactive customer' : 'Missing phone'];
         }
 
@@ -1048,6 +1060,7 @@ class WhatsAppControlCenterController extends Controller
             $oldest = Carbon::parse($overdueInvoices->min('due_date'));
             $days = max(0, $oldest->diffInDays(today()));
             $reason = $days > 0 ? "Overdue {$days} days" : 'Overdue';
+
             return ['state' => 'overdue_due', 'template' => 'reminder', 'reason' => $reason];
         }
 
@@ -1059,6 +1072,7 @@ class WhatsAppControlCenterController extends Controller
             $nextDate = Carbon::parse($futureInvoices->min('due_date'));
             $diff = max(0, $nextDate->diffInDays(today()));
             $reason = $diff > 0 ? "Future invoice due in {$diff} days" : 'Future invoice due soon';
+
             return ['state' => 'future_invoice', 'template' => 'invoice_notification', 'reason' => $reason];
         }
 
@@ -1072,6 +1086,7 @@ class WhatsAppControlCenterController extends Controller
         if ($lastPayment && (float) ($lastPayment->amount ?? 0) > 0) {
             $paidDate = Carbon::parse($lastPayment->created_at)->format('Y-m-d');
             $reason = "Last payment on {$paidDate}";
+
             return ['state' => 'paid_receipt', 'template' => 'receipt', 'reason' => $reason];
         }
 
@@ -1122,7 +1137,7 @@ class WhatsAppControlCenterController extends Controller
             'draw' => $request->draw,
             'recordsTotal' => $total,
             'recordsFiltered' => $total,
-            'data' => $logs->map(fn($log) => [
+            'data' => $logs->map(fn ($log) => [
                 'id' => $log->id,
                 'client_name' => $log->client_name,
                 'phone' => $log->phone,
@@ -1143,20 +1158,14 @@ class WhatsAppControlCenterController extends Controller
     /**
      * 🔄 Resend a failed message.
      */
-    public function resendMessage($id)
+    public function resendMessage($id, WhatsAppMessageDispatcher $dispatcher)
     {
         $log = WhatsAppMessageLog::findOrFail($id);
-        $service = app(WhatsAppService::class);
-        $result = $service->send($log->phone, $log->message);
-
-        $log->update([
-            'status' => (isset($result['success']) && $result['success'] === true) ? 'sent' : 'failed',
-            'error' => isset($result['success']) && $result['success'] === true ? null : ($result['error'] ?? 'Unknown'),
-        ]);
+        $this->queueMessageForResend($log, $dispatcher);
 
         return response()->json([
-            'success' => $log->status === 'sent',
-            'message' => $log->status === 'sent' ? 'تمت إعادة الإرسال بنجاح' : 'فشلت إعادة الإرسال',
+            'success' => true,
+            'message' => 'تمت جدولة الرسالة لإعادة الإرسال',
         ]);
     }
 
@@ -1186,7 +1195,7 @@ class WhatsAppControlCenterController extends Controller
             // Fetch QR code from OpenWA
             $qr = $service->getQR();
 
-            if (!empty($qr['qr'])) {
+            if (! empty($qr['qr'])) {
                 return response()->json([
                     'success' => true,
                     'connected' => false,
@@ -1203,7 +1212,7 @@ class WhatsAppControlCenterController extends Controller
             return response()->json([
                 'success' => false,
                 'connected' => false,
-                'message' => 'Failed to fetch QR code: ' . $e->getMessage(),
+                'message' => 'Failed to fetch QR code: '.$e->getMessage(),
             ]);
         }
     }
@@ -1241,12 +1250,12 @@ class WhatsAppControlCenterController extends Controller
         $subscriptions = \App\Models\Admin\Subscription::all();
 
         $calendarData = DB::table('tbl_invoices')
-            ->selectRaw("DATE(due_date) as due_day, COUNT(DISTINCT client_id) as client_count")
+            ->selectRaw('DATE(due_date) as due_day, COUNT(DISTINCT client_id) as client_count')
             ->whereMonth('due_date', now()->month)
             ->whereYear('due_date', now()->year)
             ->whereIn('status', ['unpaid', 'partial'])
             ->whereNull('deleted_at')
-            ->groupByRaw("DATE(due_date)")
+            ->groupByRaw('DATE(due_date)')
             ->orderBy('due_day')
             ->get();
 
@@ -1261,11 +1270,11 @@ class WhatsAppControlCenterController extends Controller
         $id = $this->normalizeAutomationRuleId($id);
         $rules = $this->getAutomationRulesConfig();
 
-        if (!isset($rules[$id])) {
+        if (! isset($rules[$id])) {
             return response()->json(['success' => false, 'error' => 'Rule not found'], 404);
         }
 
-        $rules[$id]['enabled'] = !($rules[$id]['enabled'] ?? false);
+        $rules[$id]['enabled'] = ! ($rules[$id]['enabled'] ?? false);
         $this->saveAutomationRulesConfig($rules);
 
         return response()->json([
@@ -1282,7 +1291,7 @@ class WhatsAppControlCenterController extends Controller
         $id = $this->normalizeAutomationRuleId($id);
         $rules = $this->getAutomationRulesConfig();
 
-        if (!isset($rules[$id])) {
+        if (! isset($rules[$id])) {
             return response()->json(['success' => false, 'error' => 'Rule not found'], 404);
         }
 
@@ -1311,16 +1320,16 @@ class WhatsAppControlCenterController extends Controller
 
         // Build day names summary
         $dayNames = ['سبت', 'أحد', 'اثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة'];
-        $selectedDays = array_intersect($request->days, [0,1,2,3,4,5,6]);
+        $selectedDays = array_intersect($request->days, [0, 1, 2, 3, 4, 5, 6]);
         if (count($selectedDays) === 7) {
             $daysSummary = 'كل الأيام';
         } else {
-            $daysSummary = implode('، ', array_map(fn($d) => $dayNames[$d] ?? '', $selectedDays));
+            $daysSummary = implode('، ', array_map(fn ($d) => $dayNames[$d] ?? '', $selectedDays));
         }
 
         // Build filter summary
         $filtersSummary = '';
-        if (in_array($id, ['whatsapp_remind_before', 'whatsapp_overdue'], true) && !empty($request->filter_client_type) && $request->filter_client_type !== 'all') {
+        if (in_array($id, ['whatsapp_remind_before', 'whatsapp_overdue'], true) && ! empty($request->filter_client_type) && $request->filter_client_type !== 'all') {
             $filtersSummary .= ($request->filter_client_type === 'internet' ? 'إنترنت' : 'ساتلايت');
         }
         if (in_array($id, ['whatsapp_remind_before', 'whatsapp_overdue'], true)) {
@@ -1331,10 +1340,10 @@ class WhatsAppControlCenterController extends Controller
             if ($request->filter_client_status && $request->filter_client_status !== 'all') {
                 $parts[] = $request->filter_client_status === 'active' ? 'نشط' : 'غير نشط';
             }
-            if (!empty($request->filter_min_unpaid) && (int)$request->filter_min_unpaid > 0) {
-                $parts[] = '≥ ' . (int)$request->filter_min_unpaid . ' unpaid';
+            if (! empty($request->filter_min_unpaid) && (int) $request->filter_min_unpaid > 0) {
+                $parts[] = '≥ '.(int) $request->filter_min_unpaid.' unpaid';
             }
-            $filtersSummary = !empty($parts) ? implode('، ', $parts) : 'الكل';
+            $filtersSummary = ! empty($parts) ? implode('، ', $parts) : 'الكل';
         }
 
         return response()->json([
@@ -1354,12 +1363,13 @@ class WhatsAppControlCenterController extends Controller
         $rules = $this->getAutomationRulesConfig();
         $command = $rules[$id]['command'] ?? null;
 
-        if (!$command) {
+        if (! $command) {
             return response()->json(['success' => false, 'error' => 'No command configured for this rule']);
         }
 
         try {
             Artisan::call($command, ['--rule' => $id]);
+
             return response()->json(['success' => true, 'output' => Artisan::output()]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'error' => $e->getMessage()]);
@@ -1384,7 +1394,7 @@ class WhatsAppControlCenterController extends Controller
     {
         $id = $this->normalizeAutomationRuleId($id);
         $rules = $this->getAutomationRulesConfig();
-        if (!isset($rules[$id])) {
+        if (! isset($rules[$id])) {
             return response()->json(['success' => false, 'error' => 'Rule not found'], 404);
         }
 
@@ -1423,7 +1433,7 @@ class WhatsAppControlCenterController extends Controller
         ]);
 
         $rules = $this->getAutomationRulesConfig();
-        if (!isset($rules[$id])) {
+        if (! isset($rules[$id])) {
             return response()->json(['success' => false, 'error' => 'Rule not found'], 404);
         }
 
@@ -1456,15 +1466,10 @@ class WhatsAppControlCenterController extends Controller
 
     private function startQueuedBatchProcessor(string $batchId, int $delay): void
     {
-        $phpBinary = is_executable('/usr/bin/php') ? '/usr/bin/php' : PHP_BINARY;
-        $php = escapeshellarg($phpBinary);
-        $artisan = escapeshellarg(base_path('artisan'));
-        $batchArg = escapeshellarg($batchId);
-        $delayArg = (int) max(0, $delay);
-        $logFile = '/tmp/whatsapp-batch-' . preg_replace('/[^A-Za-z0-9_-]/', '-', $batchId) . '.log';
-
-        $command = "{$php} {$artisan} whatsapp:process-pending {$batchArg} --delay={$delayArg} > " . escapeshellarg($logFile) . " 2>&1 &";
-        exec($command);
+        Artisan::call('whatsapp:process-pending', [
+            'batch' => $batchId,
+            '--delay' => max(0, $delay),
+        ]);
     }
 
     private function getAutomationRulesConfig(): array
@@ -1479,12 +1484,12 @@ class WhatsAppControlCenterController extends Controller
             $needsSave = false;
 
             foreach ($defaults as $key => $defaultRule) {
-                if (!isset($rules[$key])) {
+                if (! isset($rules[$key])) {
                     $rules[$key] = $defaultRule;
                     $needsSave = true;
                 } else {
                     foreach ($defaultRule as $field => $value) {
-                        if (!array_key_exists($field, $rules[$key])) {
+                        if (! array_key_exists($field, $rules[$key])) {
                             $rules[$key][$field] = $value;
                             $needsSave = true;
                         }
@@ -1541,7 +1546,7 @@ class WhatsAppControlCenterController extends Controller
                 'id' => $key,
                 'enabled' => $rule['enabled'] ?? false,
                 'time' => $rule['time'] ?? '09:00',
-                'days' => $rule['days'] ?? [0,1,2,3,4,5,6],
+                'days' => $rule['days'] ?? [0, 1, 2, 3, 4, 5, 6],
                 'template' => $rule['template'] ?? 'reminder',
                 'days_offset' => $rule['days_offset'] ?? 0,
             ];
@@ -1578,7 +1583,7 @@ class WhatsAppControlCenterController extends Controller
                 'color' => 'warning',
                 'enabled' => false,
                 'time' => '09:00',
-                'days' => [0,1,2,3,4,5,6],
+                'days' => [0, 1, 2, 3, 4, 5, 6],
                 'template' => 'reminder',
                 'days_offset' => -3,
                 'days_offset_label' => 'قبل القطع بـ',
@@ -1599,7 +1604,7 @@ class WhatsAppControlCenterController extends Controller
                 'color' => 'info',
                 'enabled' => false,
                 'time' => '10:00',
-                'days' => [0,1,2,3,4,5,6],
+                'days' => [0, 1, 2, 3, 4, 5, 6],
                 'template' => 'reminder',
                 'days_offset' => 0,
                 'days_offset_label' => 'كل',
@@ -1621,7 +1626,7 @@ class WhatsAppControlCenterController extends Controller
 
     private function normalizeStoredAutomationRules(array $rules): array
     {
-        if (isset($rules['whatsapp_custom']) && !isset($rules['whatsapp_overdue'])) {
+        if (isset($rules['whatsapp_custom']) && ! isset($rules['whatsapp_overdue'])) {
             $rules['whatsapp_overdue'] = $rules['whatsapp_custom'];
         }
 
@@ -1687,6 +1692,7 @@ class WhatsAppControlCenterController extends Controller
             }
 
             $source = $this->getMessageSourceMeta($log->sent_by)['key'];
+
             return $source === $sourceFilter;
         })->values();
 
@@ -1701,6 +1707,7 @@ class WhatsAppControlCenterController extends Controller
             ->groupBy('sent_by')
             ->map(function ($rows, $sentBy) {
                 $meta = $this->getMessageSourceMeta($sentBy);
+
                 return [
                     'sent_by' => $sentBy,
                     'source_key' => $meta['key'],
@@ -1755,29 +1762,34 @@ class WhatsAppControlCenterController extends Controller
     /**
      * 🔄 Resend all failed messages. (P2)
      */
-    public function resendAllFailed()
+    public function resendAllFailed(WhatsAppMessageDispatcher $dispatcher)
     {
         $failed = WhatsAppMessageLog::where('status', 'failed')->limit(50)->get();
-        $service = app(WhatsAppService::class);
-        $results = ['resent' => 0, 'still_failed' => 0];
+        $results = ['queued' => 0];
 
-        foreach ($failed as $index => $log) {
-            $result = $service->send($log->phone, $log->message, [
-                'rate_context' => [
-                    'sent_in_batch' => $index,
-                    'source' => 'resend-failed',
-                ],
-            ]);
-            if (isset($result['success']) && $result['success'] === true) {
-                $log->update(['status' => 'sent', 'error' => null]);
-                $results['resent']++;
-            } else {
-                $log->update(['error' => $result['error'] ?? 'Unknown']);
-                $results['still_failed']++;
-            }
+        foreach ($failed as $log) {
+            $this->queueMessageForResend($log, $dispatcher);
+            $results['queued']++;
         }
 
         return response()->json($results);
+    }
+
+    private function queueMessageForResend(
+        WhatsAppMessageLog $log,
+        WhatsAppMessageDispatcher $dispatcher
+    ): void {
+        $sentBy = (string) ($log->sent_by ?: 'admin:resend');
+        if (! str_contains($sentBy, '|batch:')) {
+            $sentBy .= '|batch:'.Str::uuid();
+        }
+
+        $log->update([
+            'status' => 'pending',
+            'error' => null,
+            'sent_by' => $sentBy,
+        ]);
+        $dispatcher->dispatch($log);
     }
 
     /**
@@ -1791,7 +1803,6 @@ class WhatsAppControlCenterController extends Controller
 
         return response()->json(['success' => true, 'paused' => $new == '0']);
     }
-
 
     // ═══════════════════════════════════════════════════════════════
     //  📅 CALENDAR — Monthly unpaid invoice calendar
@@ -1807,7 +1818,7 @@ class WhatsAppControlCenterController extends Controller
         $clientType = $request->input('client_type', 'all');
 
         $query = DB::table('tbl_invoices')
-            ->selectRaw("DATE(due_date) as due_day, COUNT(DISTINCT tbl_invoices.client_id) as client_count")
+            ->selectRaw('DATE(due_date) as due_day, COUNT(DISTINCT tbl_invoices.client_id) as client_count')
             ->whereMonth('due_date', $month)
             ->whereYear('due_date', $year)
             ->whereIn('status', ['unpaid', 'partial'])
@@ -1815,11 +1826,11 @@ class WhatsAppControlCenterController extends Controller
 
         if ($clientType !== 'all') {
             $query->join('tbl_clients', 'tbl_clients.id', '=', 'tbl_invoices.client_id')
-                  ->where('tbl_clients.client_type', $clientType)
-                  ->whereNull('tbl_clients.deleted_at');
+                ->where('tbl_clients.client_type', $clientType)
+                ->whereNull('tbl_clients.deleted_at');
         }
 
-        $data = $query->groupByRaw("DATE(due_date)")
+        $data = $query->groupByRaw('DATE(due_date)')
             ->orderBy('due_day')
             ->get();
 
@@ -1833,7 +1844,7 @@ class WhatsAppControlCenterController extends Controller
     {
         $date = $request->input('date');
 
-        if (!$date) {
+        if (! $date) {
             return response()->json(['error' => 'Date is required'], 400);
         }
 
@@ -1878,8 +1889,9 @@ class WhatsAppControlCenterController extends Controller
             ->get()
             ->groupBy('client_id');
 
-        $result = $clients->map(function($client) use ($allInvoices) {
+        $result = $clients->map(function ($client) use ($allInvoices) {
             $clientInvoices = $allInvoices->get($client->id, collect());
+
             return [
                 'id' => $client->id,
                 'name' => $client->name,
@@ -1887,7 +1899,7 @@ class WhatsAppControlCenterController extends Controller
                 'client_type' => $client->client_type,
                 'invoice_count' => $clientInvoices->count(),
                 'total_amount' => (float) $clientInvoices->sum('remaining_amount'),
-                'invoices' => $clientInvoices->map(fn($inv) => [
+                'invoices' => $clientInvoices->map(fn ($inv) => [
                     'id' => $inv->id,
                     'amount' => (float) $inv->amount,
                     'remaining_amount' => (float) $inv->remaining_amount,
@@ -1937,8 +1949,9 @@ class WhatsAppControlCenterController extends Controller
 
             foreach ($request->client_ids as $clientId) {
                 $client = DB::table('tbl_clients')->find($clientId);
-                if (!$client || empty($client->phone)) {
+                if (! $client || empty($client->phone)) {
                     $results['failed']++;
+
                     continue;
                 }
 
@@ -1968,7 +1981,7 @@ class WhatsAppControlCenterController extends Controller
                 $message = str_replace('{year}', now()->format('Y'), $message);
                 $message = str_replace('{collector}', auth('admin')->user()->name ?? 'الإدارة', $message);
                 $message = str_replace('{datetime}', now()->format('Y-m-d h:i A'), $message);
-                $message = str_replace('{balance_status}', 'الرصيد الحالي: $' . number_format($totalAmount, 2), $message);
+                $message = str_replace('{balance_status}', 'الرصيد الحالي: $'.number_format($totalAmount, 2), $message);
 
                 WhatsAppMessageLog::create([
                     'client_id' => $client->id,
@@ -1978,7 +1991,7 @@ class WhatsAppControlCenterController extends Controller
                     'template_type' => $templateType,
                     'status' => 'pending',
                     'error' => null,
-                    'sent_by' => 'calendar|batch:' . $batchId,
+                    'sent_by' => 'calendar|batch:'.$batchId,
                 ]);
 
                 $queued++;
@@ -2002,8 +2015,9 @@ class WhatsAppControlCenterController extends Controller
 
         foreach ($request->client_ids as $clientId) {
             $client = DB::table('tbl_clients')->find($clientId);
-            if (!$client || empty($client->phone)) {
+            if (! $client || empty($client->phone)) {
                 $results['failed']++;
+
                 continue;
             }
 
@@ -2036,7 +2050,7 @@ class WhatsAppControlCenterController extends Controller
             $message = str_replace('{year}', now()->format('Y'), $message);
             $message = str_replace('{collector}', auth('admin')->user()->name ?? 'الإدارة', $message);
             $message = str_replace('{datetime}', now()->format('Y-m-d h:i A'), $message);
-            $message = str_replace('{balance_status}', 'الرصيد الحالي: $' . number_format($totalAmount, 2), $message);
+            $message = str_replace('{balance_status}', 'الرصيد الحالي: $'.number_format($totalAmount, 2), $message);
 
             $result = $service->send($client->phone, $message, [
                 'rate_context' => [
@@ -2054,7 +2068,7 @@ class WhatsAppControlCenterController extends Controller
                 'template_type' => $templateType,
                 'status' => $status,
                 'error' => $status === 'failed' ? ($result['error'] ?? 'Unknown') : null,
-                'sent_by' => 'calendar:' . auth('admin')->id(),
+                'sent_by' => 'calendar:'.auth('admin')->id(),
             ]);
 
             if ($status === 'sent') {
@@ -2062,7 +2076,7 @@ class WhatsAppControlCenterController extends Controller
             } else {
                 $results['failed']++;
                 if ($failCount < 5) {
-                    $results['errors'][] = $client->name . ': ' . ($result['error'] ?? 'Unknown');
+                    $results['errors'][] = $client->name.': '.($result['error'] ?? 'Unknown');
                     $failCount++;
                 }
             }
@@ -2087,7 +2101,7 @@ class WhatsAppControlCenterController extends Controller
 
     private function isQueueLikelyStuck(int $pendingQueueCount, int $sendingQueueCount, $oldestPendingAt): bool
     {
-        if ($pendingQueueCount <= 0 || !$oldestPendingAt) {
+        if ($pendingQueueCount <= 0 || ! $oldestPendingAt) {
             return false;
         }
 
@@ -2100,7 +2114,7 @@ class WhatsAppControlCenterController extends Controller
 
     private function hasRecentFailureWarning(int $failuresToday, $lastFailureAt): bool
     {
-        if ($failuresToday <= 0 || !$lastFailureAt) {
+        if ($failuresToday <= 0 || ! $lastFailureAt) {
             return false;
         }
 
@@ -2115,13 +2129,12 @@ class WhatsAppControlCenterController extends Controller
         bool $qrNeeded,
         bool $queueLooksStuck,
         bool $failureWarning
-    ): array
-    {
+    ): array {
         if ($emergencyStop === '1') {
             return ['level' => 'danger', 'label' => 'Emergency Stop', 'text' => 'WhatsApp sending is paused by emergency stop.'];
         }
 
-        if (!$apiReachable) {
+        if (! $apiReachable) {
             return ['level' => 'danger', 'label' => 'API Down', 'text' => 'OpenWA API is unreachable. Admin should check the OpenWA server/container first.'];
         }
 
@@ -2129,7 +2142,7 @@ class WhatsAppControlCenterController extends Controller
             return ['level' => 'warning', 'label' => 'QR Required', 'text' => 'Session is not authenticated. Admin should open QR and scan it from the WhatsApp phone.'];
         }
 
-        if (!$sessionConnected || in_array(strtolower(trim($sessionStatus)), ['initializing', 'starting', 'disconnected', 'auth_failure'], true)) {
+        if (! $sessionConnected || in_array(strtolower(trim($sessionStatus)), ['initializing', 'starting', 'disconnected', 'auth_failure'], true)) {
             return ['level' => 'warning', 'label' => 'Session Issue', 'text' => 'OpenWA is reachable but the WhatsApp session is not fully ready yet.'];
         }
 
@@ -2152,8 +2165,7 @@ class WhatsAppControlCenterController extends Controller
         bool $qrNeeded,
         bool $queueLooksStuck,
         bool $failureWarning
-    ): array
-    {
+    ): array {
         $badges = [];
 
         if ($emergencyStop === '1') {
@@ -2166,7 +2178,7 @@ class WhatsAppControlCenterController extends Controller
         ];
 
         $badges[] = [
-            'label' => 'Session ' . $this->formatSessionStatusLabel($sessionStatus),
+            'label' => 'Session '.$this->formatSessionStatusLabel($sessionStatus),
             'class' => $sessionConnected ? 'badge-light-success' : 'badge-light-warning',
         ];
 
@@ -2199,15 +2211,15 @@ class WhatsAppControlCenterController extends Controller
             return 'WhatsApp is paused by Emergency Stop. If this was intentional, leave it as-is. Otherwise, restart the service from the dashboard.';
         }
 
-        if (!$apiReachable) {
+        if (! $apiReachable) {
             return 'OpenWA API is unreachable. Admin should check the OpenWA server/container first, then use Restart Service after the API is back.';
         }
 
-        if (!$sessionConnected && $qrNeeded) {
+        if (! $sessionConnected && $qrNeeded) {
             return 'OpenWA is reachable but the session needs authentication. Admin should scan the QR code shown on this page.';
         }
 
-        if (!$sessionConnected) {
+        if (! $sessionConnected) {
             return 'OpenWA is reachable but the session is not ready. Admin should try Restart Service and then re-check the QR/session state.';
         }
 
@@ -2215,7 +2227,7 @@ class WhatsAppControlCenterController extends Controller
             return 'Messages are waiting in Queue longer than expected. Admin should open Queue, confirm new activity, and if needed restart the batch processor/service.';
         }
 
-        if (!empty($lastFailureError)) {
+        if (! empty($lastFailureError)) {
             return 'Connection looks healthy, but there were recent send failures. Admin should review the latest failed log entry and compare it with Queue activity.';
         }
 
@@ -2254,6 +2266,7 @@ class WhatsAppControlCenterController extends Controller
             if (str_contains($sentBy, '|batch:')) {
                 return ['key' => 'calendar', 'label' => 'Calendar', 'badge' => 'badge-light-warning', 'detail' => $this->extractBatchShortId($sentBy)];
             }
+
             return ['key' => 'calendar', 'label' => 'Calendar Direct', 'badge' => 'badge-light-warning', 'detail' => $sentBy];
         }
 
@@ -2281,6 +2294,6 @@ class WhatsAppControlCenterController extends Controller
         $parts = explode('|batch:', $sentBy, 2);
         $batchId = $parts[1] ?? $sentBy;
 
-        return 'Batch ' . substr($batchId, 0, 8);
+        return 'Batch '.substr($batchId, 0, 8);
     }
 }

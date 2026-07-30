@@ -2,22 +2,16 @@
 
 namespace App\Services\WhatsApp;
 
+use App\Models\Admin;
 use App\Models\Admin\Invoice;
 use App\Models\Admin\Revenue;
-use App\Models\Admin;
-use App\Models\Clients;
-use App\Services\WhatsAppService;
-use Illuminate\Support\Facades\DB;
+use App\Models\WhatsAppMessageLog;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class PaymentReceiptNotifier
 {
-    protected WhatsAppService $whatsapp;
-
-    public function __construct(WhatsAppService $whatsapp)
-    {
-        $this->whatsapp = $whatsapp;
-    }
+    public function __construct(private readonly WhatsAppMessageDispatcher $dispatcher) {}
 
     /**
      * Send a WhatsApp receipt notification after invoice payment.
@@ -28,10 +22,11 @@ class PaymentReceiptNotifier
         try {
             // 1. Get client with phone number
             $client = $invoice->client;
-            if (!$client) {
+            if (! $client) {
                 Log::warning('[WhatsApp Receipt] Invoice has no client', [
                     'invoice_id' => $invoice->id,
                 ]);
+
                 return;
             }
 
@@ -41,6 +36,7 @@ class PaymentReceiptNotifier
                     'client_id' => $client->id,
                     'invoice_id' => $invoice->id,
                 ]);
+
                 return;
             }
 
@@ -51,7 +47,6 @@ class PaymentReceiptNotifier
             $paidYear = $invoice->due_date
                 ? date('Y', strtotime($invoice->due_date))
                 : date('Y');
-            $paidAmount = number_format((float)($invoice->paid_amount ?: $invoice->amount), 2);
             $paymentDate = $invoice->paid_date
                 ? date('d/m/Y', strtotime($invoice->paid_date))
                 : date('d/m/Y');
@@ -60,7 +55,9 @@ class PaymentReceiptNotifier
                 : $paymentDate;
 
             // 3a. Get collector name and payment time from Revenue record
-            $revenue = Revenue::where('invoice_id', $invoice->id)->first();
+            $revenue = Revenue::where('invoice_id', $invoice->id)->latest('id')->first();
+            $paidAmountNumeric = (float) ($revenue?->amount ?: $invoice->paid_amount ?: $invoice->amount);
+            $paidAmount = number_format($paidAmountNumeric, 2);
             $collectorName = 'النظام';
             $paymentTime = $paymentDate;
             if ($revenue) {
@@ -97,10 +94,9 @@ class PaymentReceiptNotifier
             // Total due BEFORE this payment (the paid invoice plus other due invoices)
             // We exclude the just-paid invoice from remaining, but count its amount
             // in the "before" total so the customer sees the full picture.
-            $paidAmountNumeric = (float)($invoice->paid_amount ?: $invoice->amount);
             $totalDue = 0;
             foreach ($unpaidInvoices as $unpaid) {
-                $totalDue += (float)$unpaid->remaining_amount;
+                $totalDue += (float) $unpaid->remaining_amount;
             }
             $totalBeforePayment = $totalDue + $paidAmountNumeric;
 
@@ -123,26 +119,21 @@ class PaymentReceiptNotifier
 
             // 7. Enqueue as pending so it appears in Queue
             try {
-                $batchId = (string) \Illuminate\Support\Str::uuid();
-                DB::table('whatsapp_message_logs')->insert([
+                $batchId = (string) Str::uuid();
+                $messageLog = WhatsAppMessageLog::query()->create([
                     'client_id' => $client->id,
                     'client_name' => $client->name ?? $customerName,
+                    'invoice_id' => $invoice->id,
                     'phone' => $phone,
                     'message' => $message,
                     'template_type' => 'receipt',
                     'status' => 'pending',
                     'error' => null,
-                    'sent_by' => 'system:autoreceipt|batch:' . $batchId,
+                    'sent_by' => 'system:autoreceipt|batch:'.$batchId,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
-
-                // Start background batch processor
-                $phpBinary = is_executable('/usr/bin/php') ? '/usr/bin/php' : PHP_BINARY;
-                $php = escapeshellarg($phpBinary);
-                $artisan = escapeshellarg(base_path('artisan'));
-                $cmd = "{$php} {$artisan} whatsapp:process-pending {$batchId} --delay=0 > /dev/null 2>&1 &";
-                exec($cmd);
+                $this->dispatcher->dispatch($messageLog);
 
                 Log::info('[WhatsApp Receipt] Queued for delivery', [
                     'client_id' => $client->id,
@@ -188,7 +179,7 @@ class PaymentReceiptNotifier
         $message .= "📅 الاشتراك المسدد: {$paidMonth} / {$paidYear}\n";
         $message .= "🗓 تاريخ الاستحقاق: {$paidDueDate}\n";
         $message .= "💵 المبلغ المدفوع: \${$paidAmount}\n";
-        $message .= "📊 إجمالي المستحق قبل الدفع: \$" . number_format($totalBeforePayment, 2) . "\n";
+        $message .= '📊 إجمالي المستحق قبل الدفع: $'.number_format($totalBeforePayment, 2)."\n";
         $message .= "🧑 قبضت بواسطة: {$collectorName}\n";
         $message .= "⏱ وقت الدفع: {$paymentTime}\n";
 
@@ -204,7 +195,7 @@ class PaymentReceiptNotifier
                 $uMonth = $unpaid->due_date ? date('m', strtotime($unpaid->due_date)) : '??';
                 $uYear = $unpaid->due_date ? date('Y', strtotime($unpaid->due_date)) : '??';
                 $uDate = $unpaid->due_date ? date('d/m/Y', strtotime($unpaid->due_date)) : '??/??/????';
-                $uAmount = number_format((float)$unpaid->remaining_amount, 2);
+                $uAmount = number_format((float) $unpaid->remaining_amount, 2);
 
                 $message .= "❌ {$uMonth} / {$uYear} — {$uDate}      \${$uAmount}\n";
             }
@@ -212,7 +203,7 @@ class PaymentReceiptNotifier
             $message .= "\n🟢 لا توجد أي فواتير غير مدفوعة.\n";
         }
 
-        $message .= "\n💰 إجمالي المستحق: \$" . number_format($totalDue, 2) . "\n";
+        $message .= "\n💰 إجمالي المستحق: \$".number_format($totalDue, 2)."\n";
 
         $message .= "\n━━━━━━━━━━━━━━━━━━\n";
 

@@ -42,6 +42,14 @@ return [
             'after_commit' => false,
         ],
 
+        'whatsapp_database' => [
+            'driver' => 'database',
+            'table' => 'jobs',
+            'queue' => 'whatsapp',
+            'retry_after' => 900,
+            'after_commit' => false,
+        ],
+
         'beanstalkd' => [
             'driver' => 'beanstalkd',
             'host' => 'localhost',

@@ -315,8 +315,8 @@ $(document).ready(function() {
             _token: '{{ csrf_token() }}'
         }).done(function(res) {
             Swal.fire({
-                icon: (res.resent > 0) ? 'success' : 'info',
-                text: '{{ trans("clients.whatsapp_resend_results") ?? "تمت إعادة إرسال" }} ' + res.resent + '، ' + (res.still_failed || 0) + ' {{ trans("clients.whatsapp_still_failed") ?? "لسا فاشلة" }}'
+                icon: (res.queued > 0) ? 'success' : 'info',
+                text: 'تمت جدولة ' + res.queued + ' رسالة لإعادة الإرسال بأمان'
             });
             location.reload();
         }).fail(function() {
