@@ -260,7 +260,7 @@
                                     <span class="text-muted fs-8">{{ $sourceDetail }}</span>
                                 </div>
                             </td>
-                            <td class="text-muted fs-7">{{ $log->created_at->format('Y-m-d h:i A') }}</td>
+                            <td class="text-muted fs-7">{{ $log->created_at->format('Y-m-d h:i:s A') }}</td>
                         </tr>
                         @empty
                         <tr>
