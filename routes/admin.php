@@ -221,7 +221,7 @@ Route::group(
             Route::get('setting/app_config', [ConfigAppController::class, 'index'])->name('app_config');
             Route::post('setting/app_config/save', [ConfigAppController::class, 'store'])->name('save_app_config');
 
-            Route::get('settings/whatsapp', [WhatsAppSettingsController::class, 'index'])->name('settings.whatsapp');
+            Route::get('settings/whatsapp', [WhatsAppControlCenterController::class, 'redirectLegacySettings'])->name('settings.whatsapp');
             Route::post('settings/whatsapp', [WhatsAppSettingsController::class, 'update'])->name('settings.whatsapp.update');
             Route::post('settings/whatsapp/preview', [WhatsAppSettingsController::class, 'preview'])->name('settings.whatsapp.preview');
             Route::post('settings/whatsapp/test', [WhatsAppSettingsController::class, 'testSend'])->name('settings.whatsapp.test');
@@ -245,6 +245,11 @@ Route::group(
             Route::prefix('whatsapp')->name('whatsapp.')->group(function () {
                 Route::get('/dashboard', [WhatsAppControlCenterController::class, 'dashboard'])->name('dashboard');
                 Route::get('/monitor', [WhatsAppControlCenterController::class, 'monitor'])->name('monitor');
+                Route::get('/monitor/status', [WhatsAppSettingsController::class, 'apiStatus'])->name('monitor.status');
+                Route::get('/monitor/qr-code', [WhatsAppSettingsController::class, 'apiQR'])->name('monitor.qr');
+                Route::post('/monitor/restart', [WhatsAppSettingsController::class, 'restartService'])->name('monitor.restart');
+                Route::post('/monitor/emergency-stop', [WhatsAppSettingsController::class, 'emergencyStop'])->name('monitor.emergency_stop');
+                Route::post('/monitor/emergency-restart', [WhatsAppSettingsController::class, 'emergencyRestart'])->name('monitor.emergency_restart');
                 Route::get('/safety', [WhatsAppControlCenterController::class, 'safety'])->name('safety');
                 Route::post('/safety', [WhatsAppControlCenterController::class, 'updateSafety'])
                     ->middleware('can:update_whatsapp_safety_settings')

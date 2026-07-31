@@ -31,7 +31,7 @@
             <span class="text-white opacity-75">{{ trans('clients.whatsapp_emergency_active_desc') ?? 'خدمة الواتساب موقوفة بواسطة زر الطوارئ' }}</span>
         </div>
         <div class="ms-auto">
-            <form action="{{ route('admin.settings.whatsapp.emergency_restart') }}" method="POST" style="display:inline">
+            <form action="{{ route('admin.whatsapp.monitor.emergency_restart') }}" method="POST" style="display:inline">
                 @csrf
                 <button type="submit" class="btn btn-light-success">
                     <i class="bi bi-play-fill"></i> {{ trans('clients.whatsapp_restart_service') ?? 'إعادة تشغيل الخدمة' }}
@@ -266,14 +266,14 @@
                         <a href="{{ route('admin.whatsapp.log') }}" class="btn btn-light-info">
                             <i class="bi bi-clock-history me-2"></i> {{ trans('clients.whatsapp_log') ?? 'سجل الرسائل' }}
                         </a>
-                        <form action="{{ route('admin.settings.whatsapp.emergency_stop') }}" method="POST" style="display:inline"
+                        <form action="{{ route('admin.whatsapp.monitor.emergency_stop') }}" method="POST" style="display:inline"
                               onsubmit="return confirm('{{ trans('clients.whatsapp_emergency_confirm') ?? 'هل أنت متأكد من إيقاف خدمة الواتساب؟' }}')">
                             @csrf
                             <button type="submit" class="btn btn-danger" {{ $emergencyStop == '1' ? 'disabled' : '' }}>
                                 <i class="bi bi-stop-circle me-2"></i> 🛑 {{ trans('clients.whatsapp_emergency_stop') ?? 'إيقاف الطوارئ' }}
                             </button>
                         </form>
-                        <form action="{{ route('admin.settings.whatsapp.emergency_restart') }}" method="POST" style="display:inline">
+                        <form action="{{ route('admin.whatsapp.monitor.emergency_restart') }}" method="POST" style="display:inline">
                             @csrf
                             <button type="submit" class="btn btn-light-success">
                                 <i class="bi bi-arrow-clockwise me-2"></i> {{ trans('clients.whatsapp_restart_service') ?? 'إعادة تشغيل الخدمة' }}
@@ -369,9 +369,9 @@
     var connectionPollInterval = null;
     var qrBaseUrl = '{{ route("admin.whatsapp.qr_code") }}';
     var checkConnectionUrl = '{{ route("admin.whatsapp.check_connection") }}';
-    var settingsStatusUrl = '{{ route("admin.settings.whatsapp.api_status") }}';
-    var settingsQrUrl = '{{ route("admin.settings.whatsapp.api_qr") }}';
-    var restartSessionUrl = '{{ route("admin.settings.whatsapp.restart") }}';
+    var settingsStatusUrl = '{{ route("admin.whatsapp.monitor.status") }}';
+    var settingsQrUrl = '{{ route("admin.whatsapp.monitor.qr") }}';
+    var restartSessionUrl = '{{ route("admin.whatsapp.monitor.restart") }}';
 
     function refreshConnectionMonitor() {
         $('#monitor-refresh-btn').prop('disabled', true);

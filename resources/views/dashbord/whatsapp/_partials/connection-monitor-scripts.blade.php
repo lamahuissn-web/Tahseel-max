@@ -4,9 +4,9 @@
     var monitorAutoRefreshInterval = null;
     var qrBaseUrl = '{{ route("admin.whatsapp.qr_code") }}';
     var checkConnectionUrl = '{{ route("admin.whatsapp.check_connection") }}';
-    var settingsStatusUrl = '{{ route("admin.settings.whatsapp.api_status") }}';
-    var settingsQrUrl = '{{ route("admin.settings.whatsapp.api_qr") }}';
-    var restartSessionUrl = '{{ route("admin.settings.whatsapp.restart") }}';
+    var settingsStatusUrl = '{{ route("admin.whatsapp.monitor.status") }}';
+    var settingsQrUrl = '{{ route("admin.whatsapp.monitor.qr") }}';
+    var restartSessionUrl = '{{ route("admin.whatsapp.monitor.restart") }}';
     var revokeSessionUrl = '{{ route("admin.whatsapp.monitor.revoke_session") }}';
 
     function refreshConnectionMonitor(silent) {

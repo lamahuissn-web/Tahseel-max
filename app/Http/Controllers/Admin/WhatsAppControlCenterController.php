@@ -16,6 +16,7 @@ use App\Services\WhatsApp\WhatsAppTemplateService;
 use App\Services\WhatsAppMessageBuilder;
 use App\Services\WhatsAppService;
 use Carbon\Carbon;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -25,6 +26,11 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class WhatsAppControlCenterController extends Controller
 {
+    public function redirectLegacySettings(): RedirectResponse
+    {
+        return redirect()->route('admin.whatsapp.dashboard');
+    }
+
     /**
      * 📊 Dashboard — Pulse metrics at a glance.
      */
