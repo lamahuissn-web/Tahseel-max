@@ -2,7 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Admin\Auth\AuthenticatedSessionController;
+use App\Http\Requests\Auth\LoginRequest;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
+use Mockery;
 use Tests\TestCase;
 
 class WhatsAppControlCenterConsolidationTest extends TestCase
@@ -10,6 +14,23 @@ class WhatsAppControlCenterConsolidationTest extends TestCase
     public function test_admin_login_route_uses_the_default_localized_prefix(): void
     {
         $this->assertStringEndsWith('/ar/admin/login', route('admin.login'));
+    }
+
+    public function test_super_admin_login_redirects_to_the_localized_dashboard(): void
+    {
+        $request = Mockery::mock(LoginRequest::class);
+        $request->shouldReceive('authenticate')->once();
+        $request->shouldReceive('session->regenerate')->once();
+
+        $user = Mockery::mock();
+        $user->shouldReceive('hasRole')->with('Super-Admin')->once()->andReturnTrue();
+        $guard = Mockery::mock();
+        $guard->shouldReceive('user')->once()->andReturn($user);
+        Auth::shouldReceive('guard')->with('admin')->once()->andReturn($guard);
+
+        $response = app(AuthenticatedSessionController::class)->store($request);
+
+        $this->assertSame(route('admin.dashboard'), $response->getTargetUrl());
     }
 
     public function test_legacy_settings_page_redirects_to_control_center_dashboard(): void
