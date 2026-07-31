@@ -273,7 +273,7 @@ class WhatsAppSafetySettingsTest extends TestCase
     public function test_unauthenticated_admin_cannot_update_safety_settings(): void
     {
         $this->post(route('admin.whatsapp.safety.update'), ['preset' => 'balanced'])
-            ->assertRedirect('/admin/login');
+            ->assertRedirect(route('admin.login'));
 
         $this->assertSame(0, DB::table('logs')->count());
     }

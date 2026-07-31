@@ -302,7 +302,7 @@ Route::group(
 
 Route::group(
     [
-        'prefix' => LaravelLocalization::setLocale(),
+        'prefix' => LaravelLocalization::setLocale() ?? 'ar',
         'middleware' => ['localeSessionRedirect', 'localizationRedirect', 'localeViewPath']
     ],
     function () {

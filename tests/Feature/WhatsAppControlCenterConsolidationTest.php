@@ -7,6 +7,11 @@ use Tests\TestCase;
 
 class WhatsAppControlCenterConsolidationTest extends TestCase
 {
+    public function test_admin_login_route_uses_the_default_localized_prefix(): void
+    {
+        $this->assertStringEndsWith('/ar/admin/login', route('admin.login'));
+    }
+
     public function test_legacy_settings_page_redirects_to_control_center_dashboard(): void
     {
         $this->withoutMiddleware()
