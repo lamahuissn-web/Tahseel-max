@@ -10,6 +10,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -276,6 +277,23 @@ class WhatsAppSafetySettingsTest extends TestCase
             ->assertRedirect(route('admin.login'));
 
         $this->assertSame(0, DB::table('logs')->count());
+    }
+
+    public function test_super_admin_login_redirects_to_the_localized_dashboard(): void
+    {
+        $password = 'test-password';
+        $role = Role::create(['name' => 'Super-Admin', 'guard_name' => 'admin']);
+        $admin = Admin::create([
+            'name' => 'Localized Login Admin',
+            'email' => 'localized-login@example.test',
+            'password' => Hash::make($password),
+        ]);
+        $admin->assignRole($role);
+
+        $this->post(route('admin.login'), [
+            'email' => $admin->email,
+            'password' => $password,
+        ])->assertRedirect(route('admin.dashboard'));
     }
 
     public function test_admin_without_permission_receives_forbidden(): void
