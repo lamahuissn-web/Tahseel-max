@@ -16,12 +16,13 @@ Make the existing Laravel collector interface installable as a safe PWA, then pa
 
 ## Files to Modify
 
-- `public/manifest.json`
+- `resources/views/dashbord/layouts/head.blade.php` (manifest URL override only)
 - `resources/views/dashbord/layouts/mobile_master.blade.php`
 
 ## Files to Add
 
 - `public/service-worker.js`
+- `public/collector-manifest.json`
 - `public/offline.html`
 - `public/assets/media/logos/tahseel-collector-192.png`
 - `public/assets/media/logos/tahseel-collector-512.png`

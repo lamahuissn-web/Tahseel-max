@@ -3,7 +3,7 @@
 <link rel="canonical" href="https://preview.keenthemes.com/keen" />
 {{--<link rel="shortcut icon" href="{{asset('assets/media/logos/favicon.ico')}}"/>--}}
 <link rel="shortcut icon" href="{{asset('assets/media/logos/favicon.ico')}}" />
-<link rel="manifest" href="{{ asset('manifest.json') }}">
+<link rel="manifest" href="{{ $manifestUrl ?? asset('manifest.json') }}">
 <!--begin::Fonts(mandatory for all pages)-->
 {{--<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,400,500,600,700"/>--}}
 

@@ -24,7 +24,6 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Tahseel" />
     <meta name="tahseel-service-worker" content="{{ asset('service-worker.js') }}" />
-    <link rel="manifest" href="{{ asset('manifest.json') }}" />
     <link rel="apple-touch-icon" href="{{ asset('assets/media/logos/tahseel-collector-192.png') }}" />
     <meta property="og:locale" content="en_US" />
     <meta property="og:type" content="article" />
@@ -32,7 +31,7 @@
     <meta property="og:url" content="https://keenthemes.com/keen" />
     <meta property="og:site_name" content="Keenthemes | Keen" />
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    @include('dashbord.layouts.head')
+    @include('dashbord.layouts.head', ['manifestUrl' => asset('collector-manifest.json')])
 
 </head>
 <!--end::Head-->

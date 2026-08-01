@@ -2,15 +2,15 @@ plugins {
     id 'com.android.application'
 }
 
-final String keyStorePath = System.getenv('TAHSEEL_KEYSTORE_FILE') ?: ''
-final String keyStorePassword = System.getenv('TAHSEEL_KEYSTORE_PASSWORD') ?: ''
-final String keyAlias = System.getenv('TAHSEEL_KEY_ALIAS') ?: ''
-final String keyPassword = System.getenv('TAHSEEL_KEY_PASSWORD') ?: ''
+final String releaseStorePath = System.getenv('TAHSEEL_KEYSTORE_FILE') ?: ''
+final String releaseStorePassword = System.getenv('TAHSEEL_KEYSTORE_PASSWORD') ?: ''
+final String releaseKeyAlias = System.getenv('TAHSEEL_KEY_ALIAS') ?: ''
+final String releaseKeyPassword = System.getenv('TAHSEEL_KEY_PASSWORD') ?: ''
 final boolean releaseRequested = gradle.startParameter.taskNames.any {
     it.toLowerCase().contains('release')
 }
 
-if (releaseRequested && [keyStorePath, keyStorePassword, keyAlias, keyPassword].any { it.isEmpty() }) {
+if (releaseRequested && [releaseStorePath, releaseStorePassword, releaseKeyAlias, releaseKeyPassword].any { it.isEmpty() }) {
     throw new GradleException('Release signing variables are required for a release build.')
 }
 
@@ -28,12 +28,12 @@ android {
 
     signingConfigs {
         release {
-            if (!keyStorePath.isEmpty()) {
-                storeFile file(keyStorePath)
-                storePassword keyStorePassword
+            if (!releaseStorePath.isEmpty()) {
+                storeFile file(releaseStorePath)
+                storePassword releaseStorePassword
                 storeType 'PKCS12'
-                keyAlias keyAlias
-                keyPassword keyPassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
             }
         }
     }

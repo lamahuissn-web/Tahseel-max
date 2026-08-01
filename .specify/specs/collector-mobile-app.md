@@ -83,7 +83,7 @@ As a collector, the app has recognizable Tahseel branding.
 
 ## Success Criteria
 
-- SC-001: PWA installability audit finds a valid manifest, valid icons, HTTPS start URL behavior, and registered service worker.
+- SC-001: PWA installability audit finds a valid collector-specific manifest, valid icons, HTTPS start URL behavior, and registered service worker without changing the desktop app manifest.
 - SC-002: Direct mobile route returns the expected authenticated redirect behavior without changing existing auth rules.
 - SC-003: Offline mode displays the offline page and cannot fabricate or queue a payment.
 - SC-004: GitHub Actions produces an installable release APK artifact.
