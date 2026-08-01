@@ -30,3 +30,11 @@ yarn-error.log
 /whatsapp-service/.cache/
 /whatsapp-service/.config/
 /whatsapp-service/.local/
+
+# Android build and release signing
+/mobile/collector-app/.gradle/
+/mobile/collector-app/**/build/
+*.jks
+*.keystore
+*.p12
+key.properties

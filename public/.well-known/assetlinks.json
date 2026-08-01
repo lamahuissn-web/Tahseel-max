@@ -1,0 +1,14 @@
+[
+    {
+        "relation": [
+            "delegate_permission/common.handle_all_urls"
+        ],
+        "target": {
+            "namespace": "android_app",
+            "package_name": "live.meganet.tahseel.collector",
+            "sha256_cert_fingerprints": [
+                "01:9B:D6:B4:CA:26:AD:BF:CF:F9:B2:8A:47:F4:A8:5A:7F:B9:6E:EF:6C:D8:C9:81:43:CB:D6:98:8A:23:A3:3A"
+            ]
+        }
+    }
+]

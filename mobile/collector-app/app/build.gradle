@@ -1,0 +1,57 @@
+plugins {
+    id 'com.android.application'
+}
+
+final String keyStorePath = System.getenv('TAHSEEL_KEYSTORE_FILE') ?: ''
+final String keyStorePassword = System.getenv('TAHSEEL_KEYSTORE_PASSWORD') ?: ''
+final String keyAlias = System.getenv('TAHSEEL_KEY_ALIAS') ?: ''
+final String keyPassword = System.getenv('TAHSEEL_KEY_PASSWORD') ?: ''
+final boolean releaseRequested = gradle.startParameter.taskNames.any {
+    it.toLowerCase().contains('release')
+}
+
+if (releaseRequested && [keyStorePath, keyStorePassword, keyAlias, keyPassword].any { it.isEmpty() }) {
+    throw new GradleException('Release signing variables are required for a release build.')
+}
+
+android {
+    namespace "live.meganet.tahseel.collector"
+    compileSdk 36
+
+    defaultConfig {
+        applicationId "live.meganet.tahseel.collector"
+        minSdk 23
+        targetSdk 35
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    signingConfigs {
+        release {
+            if (!keyStorePath.isEmpty()) {
+                storeFile file(keyStorePath)
+                storePassword keyStorePassword
+                storeType 'PKCS12'
+                keyAlias keyAlias
+                keyPassword keyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.2'
+}

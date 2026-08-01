@@ -14,13 +14,18 @@
 <head>
     <base href="../../" />
     {{-- <title>{{(!empty($mainData->name)) ? $mainData->name : 'Rashaketik'}}</title> --}}
-    <title>Tahsel Dish</title>
+    <title>Tahseel Collector</title>
     <meta charset="utf-8" />
-    <meta name="description"
-        content="The most advanced Bootstrap Admin Theme on Bootstrap Market trusted by over 4,000 beginners and professionals. Multi-demo, Dark Mode, RTL support. Grab your copy now and get life-time updates for free." />
-    <meta name="keywords"
-        content="keen, bootstrap, bootstrap 5, bootstrap 4, admin themes, web design, figma, web development, free templates, free admin themes, bootstrap theme, bootstrap template, bootstrap dashboard, bootstrap dak mode, bootstrap button, bootstrap datepicker, bootstrap timepicker, fullcalendar, datatables, flaticon" />
+    <meta name="description" content="Fast, secure access to the Tahseel collector interface." />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0ea5e9" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Tahseel" />
+    <meta name="tahseel-service-worker" content="{{ asset('service-worker.js') }}" />
+    <link rel="manifest" href="{{ asset('manifest.json') }}" />
+    <link rel="apple-touch-icon" href="{{ asset('assets/media/logos/tahseel-collector-192.png') }}" />
     <meta property="og:locale" content="en_US" />
     <meta property="og:type" content="article" />
     <meta property="og:title" content="Keen - Multi-demo Bootstrap 5 HTML Admin Dashboard Theme" />
@@ -212,6 +217,17 @@
             line-height: 1.1;
         }
     </style>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                var workerUrl = document.querySelector('meta[name="tahseel-service-worker"]').content;
+                navigator.serviceWorker.register(workerUrl, { scope: '/ar/admin/' })
+                    .catch(function (error) {
+                        console.warn('Tahseel service worker registration failed:', error);
+                    });
+            });
+        }
+    </script>
 </body>
 <!--end::Body-->
 

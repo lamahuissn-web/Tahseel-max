@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0ea5e9">
+    <title>تحصيل — لا يوجد اتصال</title>
+    <style>
+        :root {
+            color-scheme: light;
+            font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        }
+        body {
+            min-height: 100vh;
+            margin: 0;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(180deg, #e0f2fe 0%, #f8fafc 60%);
+            color: #0f172a;
+        }
+        main {
+            box-sizing: border-box;
+            width: min(86vw, 360px);
+            padding: 2rem;
+            text-align: center;
+            background: #ffffff;
+            border-radius: 1.5rem;
+            box-shadow: 0 20px 45px rgba(14, 165, 233, 0.16);
+        }
+        img {
+            width: 96px;
+            height: 96px;
+            border-radius: 1.25rem;
+        }
+        h1 {
+            margin: 1.25rem 0 0.75rem;
+            font-size: 1.4rem;
+        }
+        p {
+            margin: 0.5rem 0;
+            color: #475569;
+            line-height: 1.8;
+        }
+        button {
+            margin-top: 1.25rem;
+            border: 0;
+            border-radius: 999px;
+            padding: 0.8rem 1.5rem;
+            background: #0ea5e9;
+            color: #ffffff;
+            font: inherit;
+            font-weight: 700;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <img src="/assets/media/logos/tahseel-collector-192.png" alt="شعار تحصيل">
+        <h1>لا يوجد اتصال بالإنترنت</h1>
+        <p>تحقق من اتصال الهاتف ثم حاول مرة أخرى.</p>
+        <p><strong>لا يمكن تسجيل الدفعات بدون اتصال.</strong></p>
+        <button type="button" onclick="window.location.reload()">إعادة المحاولة</button>
+    </main>
+</body>
+</html>
