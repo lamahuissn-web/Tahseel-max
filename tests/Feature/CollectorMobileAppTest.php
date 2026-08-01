@@ -83,16 +83,28 @@ class CollectorMobileAppTest extends TestCase
         );
     }
 
-    public function test_apk_workflow_uses_protected_signing_secrets(): void
+    public function test_apk_workflow_gates_release_signing_and_verifies_release_identity(): void
     {
         $workflow = $this->readProjectFile('.github/workflows/build-collector-apk.yml');
         $gitignore = $this->readProjectFile('.gitignore');
 
+        $this->assertStringContainsString("if: github.event_name == 'push'", $workflow);
+        $this->assertStringContainsString('assembleDebug', $workflow);
+        $this->assertStringContainsString("if: github.event_name == 'workflow_dispatch'", $workflow);
+        $this->assertStringContainsString('environment: android-release', $workflow);
         $this->assertStringContainsString('TAHSEEL_ANDROID_KEYSTORE_BASE64', $workflow);
         $this->assertStringContainsString('assembleRelease', $workflow);
-        $this->assertStringContainsString('apksigner" verify', $workflow);
+        $this->assertStringContainsString("test \"\$ACTUAL_PACKAGE\" = 'live.meganet.tahseel.collector'", $workflow);
+        $this->assertStringContainsString('EXPECTED_DIGEST=', $workflow);
+        $this->assertStringContainsString('test "$ACTUAL_DIGEST" = "$EXPECTED_DIGEST"', $workflow);
         $this->assertStringContainsString('*.jks', $gitignore);
         $this->assertStringContainsString('*.p12', $gitignore);
+
+        preg_match_all('/^\s*uses:\s+\S+@([a-f0-9]{40})(?:\s+#.*)?$/m', $workflow, $pinnedActions);
+        preg_match_all('/^\s*uses:/m', $workflow, $allActions);
+
+        $this->assertNotEmpty($allActions[0]);
+        $this->assertCount(count($allActions[0]), $pinnedActions[0], 'Every GitHub Action must be pinned to a full commit SHA.');
     }
 
     private function assertManifestHasIcon(array $manifest, string $size): void
