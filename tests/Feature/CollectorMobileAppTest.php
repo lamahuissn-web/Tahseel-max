@@ -65,6 +65,8 @@ class CollectorMobileAppTest extends TestCase
         $this->assertStringContainsString('applicationId "live.meganet.tahseel.collector"', $buildFile);
         $this->assertStringContainsString('compileSdk 36', $buildFile);
         $this->assertStringContainsString('com.google.androidbrowserhelper.trusted.LauncherActivity', $androidManifest);
+        // ABH 2.7.2 toggles this component on startup; omitting it crashes Android 7.1+.
+        $this->assertStringContainsString('com.google.androidbrowserhelper.trusted.ManageDataLauncherActivity', $androidManifest);
         $this->assertStringContainsString('android.support.customtabs.trusted.DEFAULT_URL', $androidManifest);
         $this->assertStringContainsString('https://tahseel.meganet.live/ar/admin/mobile-view', $androidManifest);
     }
