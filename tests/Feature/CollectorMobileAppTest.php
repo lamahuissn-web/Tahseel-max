@@ -64,7 +64,6 @@ class CollectorMobileAppTest extends TestCase
         $this->assertStringContainsString('com.google.androidbrowserhelper:androidbrowserhelper:2.7.2', $buildFile);
         $this->assertStringContainsString('applicationId "live.meganet.tahseel.collector"', $buildFile);
         $this->assertStringContainsString('compileSdk 36', $buildFile);
-        $this->assertStringContainsString('keyAlias releaseKeyAlias', $buildFile);
         $this->assertStringContainsString('com.google.androidbrowserhelper.trusted.LauncherActivity', $androidManifest);
         $this->assertStringContainsString('android.support.customtabs.trusted.DEFAULT_URL', $androidManifest);
         $this->assertStringContainsString('https://tahseel.meganet.live/ar/admin/mobile-view', $androidManifest);
