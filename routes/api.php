@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AccountsController;
 use App\Http\Controllers\Api\AppDataController;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\ClientsController;
+use App\Http\Controllers\Api\CollectionsController;
 use App\Http\Controllers\Api\InvoicesController;
 use App\Http\Controllers\Api\Member\OprationController;
 use App\Http\Controllers\Api\Member\UsersApiController;
@@ -30,6 +31,7 @@ Route::group(['middleware' => 'api', 'prefix' => 'v1'], function ($router) {
 
         Route::get('/clients', [ClientsController::class, 'index']);
         Route::get('/clients/{id}/invoices', [ClientsController::class, 'clientInvoices']);
+        Route::get('/collections', [CollectionsController::class, 'index']);
 
         // Route::post('invoices', [InvoicesController::class, 'index']);
         Route::post('invoices', [InvoicesController::class, 'unpaidInvoices']);

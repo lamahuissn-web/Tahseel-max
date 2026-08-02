@@ -11,6 +11,7 @@ use App\Models\Clients;
 use App\Traits\ResponseApi;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 
 class ClientsController extends Controller
 {
@@ -28,15 +29,36 @@ class ClientsController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = Clients::query();
-            $query->where('is_active', 1);
-            if ($request->has('search') && !empty(trim($request->input('search')))) {
-                $search = trim($request->input('search'));
+            $validator = Validator::make($request->all(), [
+                'search' => 'nullable|string|max:255',
+                'page' => 'nullable|integer|min:1',
+                'per_page' => 'nullable|integer|min:1|max:100',
+            ]);
+            if ($validator->fails()) {
+                return $this->responseApiError($validator->errors()->first());
+            }
+
+            $perPage = max(1, min((int) $request->input('per_page', 50), 100));
+            $invoiceBalances = Invoice::query()
+                ->selectRaw('client_id, SUM(COALESCE(remaining_amount, 0)) as invoices_sum_remaining_amount')
+                ->whereNull('deleted_at')
+                ->groupBy('client_id');
+
+            $query = Clients::query()
+                ->select('tbl_clients.*')
+                ->selectRaw('COALESCE(invoice_balances.invoices_sum_remaining_amount, 0) as invoices_sum_remaining_amount')
+                ->leftJoinSub($invoiceBalances, 'invoice_balances', function ($join) {
+                    $join->on('invoice_balances.client_id', '=', 'tbl_clients.id');
+                })
+                ->with('subscription:id,name')
+                ->where('tbl_clients.is_active', 1);
+            $search = trim((string) $request->input('search', ''));
+            if ($search !== '') {
                 $searchTerm = "%{$search}%";
 
 
                 $query->where(function ($q) use ($searchTerm) {
-                    $q->where('name', 'like', $searchTerm);
+                    $q->where('tbl_clients.name', 'like', $searchTerm);
                     // ->orWhere('email', 'like', $searchTerm)
                     // ->orWhere('phone', 'like', $searchTerm)
                     // ->orWhere('user', 'like', $searchTerm)
@@ -49,12 +71,19 @@ class ClientsController extends Controller
                 });
             }
 
-            $clients = $query->whereNull('deleted_at')
-                ->withSum('invoices', 'remaining_amount')
-                ->orderBy('created_at', 'desc')
-                ->get();
+            $clients = $query->whereNull('tbl_clients.deleted_at')
+                ->orderBy('tbl_clients.created_at', 'desc')
+                ->orderBy('tbl_clients.id', 'desc')
+                ->paginate($perPage);
             $data = [
-                'clients' => ClientResource::collection($clients)
+                'clients' => ClientResource::collection($clients->items()),
+                'pagination' => [
+                    'current_page' => $clients->currentPage(),
+                    'last_page' => $clients->lastPage(),
+                    'per_page' => $clients->perPage(),
+                    'total' => $clients->total(),
+                    'has_more' => $clients->hasMorePages(),
+                ],
             ];
             return $this->responseApi($data, 'تم استرجاع الزبائن بنجاح');
         } catch (\Exception $e) {
