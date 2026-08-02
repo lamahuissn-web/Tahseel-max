@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\SecurePaymentException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\SecureMobilePaymentRequest;
+use App\Http\Requests\Api\SecureMobilePaymentStatusRequest;
 use App\Http\Resources\InvoiceResource;
 use App\Models\Admin;
 use App\Models\Admin\FinancialTransaction;
@@ -10,12 +13,16 @@ use App\Models\Admin\Invoice;
 use App\Models\Admin\Revenue;
 use App\Models\Log;
 use App\Notifications\InvoicePaidNotification;
+use App\Services\SecureMobilePaymentService;
 use App\Traits\ResponseApi;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log as LaravelLog;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Validator;
+use Throwable;
 
 class InvoicesController extends Controller
 {
@@ -282,6 +289,95 @@ class InvoicesController extends Controller
             return $this->responseApiError('حدث خطأ ما');
         }
     }
+    public function securePayInvoice(
+        int $id,
+        SecureMobilePaymentRequest $request,
+        SecureMobilePaymentService $service,
+    ) {
+        try {
+            $validated = $request->validated();
+            $data = $service->collectFullRemaining(
+                $id,
+                auth('api')->user(),
+                $validated['expected_remaining'],
+                $validated['idempotency_key'],
+                $request->ip(),
+                $request->userAgent(),
+            );
+
+            return response()->json([
+                'result' => true,
+                'message' => 'تم تسجيل دفع الفاتورة بنجاح',
+                'data' => $data,
+            ], $data['replayed'] ? 200 : 201);
+        } catch (SecurePaymentException $exception) {
+            return response()->json([
+                'result' => false,
+                'message' => $exception->getMessage(),
+                'data' => (object) [],
+                'error' => ['code' => $exception->errorCode],
+            ], $exception->httpStatus);
+        } catch (Throwable $exception) {
+            $correlationId = (string) Str::uuid();
+            LaravelLog::error('Secure mobile payment failed', [
+                'correlation_id' => $correlationId,
+                'invoice_id' => $id,
+                'collector_id' => auth('api')->id(),
+                'exception' => get_class($exception),
+            ]);
+
+            return response()->json([
+                'result' => false,
+                'message' => 'تعذر تسجيل الدفع حالياً',
+                'data' => (object) [],
+                'error' => [
+                    'code' => 'payment_internal_error',
+                    'correlation_id' => $correlationId,
+                ],
+            ], 500);
+        }
+    }
+
+    public function securePaymentStatus(
+        string $idempotencyKey,
+        SecureMobilePaymentStatusRequest $request,
+        SecureMobilePaymentService $service,
+    ) {
+        try {
+            $data = $service->status(auth('api')->user(), $idempotencyKey);
+
+            return response()->json([
+                'result' => true,
+                'message' => 'تم العثور على عملية الدفع',
+                'data' => $data,
+            ]);
+        } catch (SecurePaymentException $exception) {
+            return response()->json([
+                'result' => false,
+                'message' => $exception->getMessage(),
+                'data' => (object) [],
+                'error' => ['code' => $exception->errorCode],
+            ], $exception->httpStatus);
+        } catch (Throwable $exception) {
+            $correlationId = (string) Str::uuid();
+            LaravelLog::error('Secure mobile payment status lookup failed', [
+                'correlation_id' => $correlationId,
+                'collector_id' => auth('api')->id(),
+                'exception' => get_class($exception),
+            ]);
+
+            return response()->json([
+                'result' => false,
+                'message' => 'تعذر الاستعلام عن الدفع حالياً',
+                'data' => (object) [],
+                'error' => [
+                    'code' => 'payment_internal_error',
+                    'correlation_id' => $correlationId,
+                ],
+            ], 500);
+        }
+    }
+
     public function payInvoice($id, Request $request)
     {
         DB::beginTransaction();

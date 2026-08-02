@@ -15,28 +15,38 @@ class JwtMiddleware
     /**
      * Handle an incoming request.
      *
-     * @param \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
      */
     public function handle(Request $request, Closure $next): Response
     {
         try {
             $token = JWTAuth::parseToken();
 
-            if (!$token->check()) {
-                return $this->responseApiError('Invalid token', 401);
+            if (! $token->check()) {
+                return $this->authenticationError('Invalid token', 'authentication_invalid');
             }
         } catch (\Exception $e) {
             if ($e instanceof \Tymon\JWTAuth\Exceptions\TokenExpiredException) {
-                return $this->responseApiError('Token is Expired', 401);
+                return $this->authenticationError('Token is Expired', 'authentication_expired');
             } elseif ($e instanceof \Tymon\JWTAuth\Exceptions\TokenInvalidException) {
-                return $this->responseApiError('Invalid token', 401);
+                return $this->authenticationError('Invalid token', 'authentication_invalid');
             } elseif ($e instanceof \Tymon\JWTAuth\Exceptions\JWTException) {
-                return $this->responseApiError('Token not found', 400);
+                return $this->authenticationError('Token not found', 'authentication_required');
             }
 
-            return $this->responseApiError('Unauthorized', 401);
+            return $this->authenticationError('Unauthorized', 'authentication_invalid');
         }
 
         return $next($request);
+    }
+
+    private function authenticationError(string $message, string $code): Response
+    {
+        return response()->json([
+            'result' => false,
+            'message' => $message,
+            'data' => (object) [],
+            'error' => ['code' => $code],
+        ], 401);
     }
 }

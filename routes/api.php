@@ -37,7 +37,10 @@ Route::group(['middleware' => 'api', 'prefix' => 'v1'], function ($router) {
         Route::post('invoices', [InvoicesController::class, 'unpaidInvoices']);
         Route::post('interval/invoices', [InvoicesController::class, 'paidInvoices']);
         Route::get('invoice/{id}', [InvoicesController::class, 'show']);
-        Route::post('/invoice/{id}/pay', [InvoicesController::class, 'payInvoice']);
+        Route::post('/invoices/{id}/payments', [InvoicesController::class, 'securePayInvoice'])
+            ->whereNumber('id');
+        Route::get('/payments/{idempotencyKey}', [InvoicesController::class, 'securePaymentStatus'])
+            ->whereUuid('idempotencyKey');
         Route::get('/invoice/{id}/print', [InvoicesController::class, 'print_invoice']);
 
 

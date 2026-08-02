@@ -13,12 +13,23 @@ class PaymentReceiptNotifier
 {
     public function __construct(private readonly WhatsAppMessageDispatcher $dispatcher) {}
 
+    public function notifyPayment(
+        Invoice $invoice,
+        Revenue $revenue,
+        string $paymentReference,
+    ): string {
+        return $this->notify($invoice, $revenue, $paymentReference);
+    }
+
     /**
      * Send a WhatsApp receipt notification after invoice payment.
      * Non-blocking — payment always succeeds regardless of WhatsApp delivery.
      */
-    public function notify(Invoice $invoice): void
-    {
+    public function notify(
+        Invoice $invoice,
+        ?Revenue $paymentRevenue = null,
+        ?string $paymentReference = null,
+    ): string {
         try {
             // 1. Get client with phone number
             $client = $invoice->client;
@@ -27,7 +38,7 @@ class PaymentReceiptNotifier
                     'invoice_id' => $invoice->id,
                 ]);
 
-                return;
+                return 'not_applicable';
             }
 
             $phone = $client->phone ?? null;
@@ -37,7 +48,7 @@ class PaymentReceiptNotifier
                     'invoice_id' => $invoice->id,
                 ]);
 
-                return;
+                return 'not_applicable';
             }
 
             // 2. Get paid invoice details
@@ -55,7 +66,8 @@ class PaymentReceiptNotifier
                 : $paymentDate;
 
             // 3a. Get collector name and payment time from Revenue record
-            $revenue = Revenue::where('invoice_id', $invoice->id)->latest('id')->first();
+            $revenue = $paymentRevenue
+                ?? Revenue::where('invoice_id', $invoice->id)->latest('id')->first();
             $paidAmountNumeric = (float) ($revenue?->amount ?: $invoice->paid_amount ?: $invoice->amount);
             $paidAmount = number_format($paidAmountNumeric, 2);
             $collectorName = 'النظام';
@@ -116,23 +128,37 @@ class PaymentReceiptNotifier
                 $totalDue,
                 $totalBeforePayment
             );
+            if ($paymentReference !== null) {
+                $message .= "\n🔖 مرجع القبض: {$paymentReference}\n";
+            }
 
             // 7. Enqueue as pending so it appears in Queue
+            $messageLog = null;
             try {
                 $batchId = (string) Str::uuid();
-                $messageLog = WhatsAppMessageLog::query()->create([
+                $messageData = [
                     'client_id' => $client->id,
                     'client_name' => $client->name ?? $customerName,
                     'invoice_id' => $invoice->id,
+                    'payment_reference' => $paymentReference,
                     'phone' => $phone,
                     'message' => $message,
                     'template_type' => 'receipt',
                     'status' => 'pending',
                     'error' => null,
-                    'sent_by' => 'system:autoreceipt|batch:'.$batchId,
+                    'sent_by' => 'system:autoreceipt|payment:'.($paymentReference ?? 'legacy').'|batch:'.$batchId,
                     'created_at' => now(),
                     'updated_at' => now(),
-                ]);
+                ];
+                $messageLog = $paymentReference === null
+                    ? WhatsAppMessageLog::query()->create($messageData)
+                    : WhatsAppMessageLog::query()->firstOrCreate(
+                        ['payment_reference' => $paymentReference],
+                        $messageData,
+                    );
+                if (! $messageLog->wasRecentlyCreated) {
+                    return 'queued';
+                }
                 $this->dispatcher->dispatch($messageLog);
 
                 Log::info('[WhatsApp Receipt] Queued for delivery', [
@@ -141,15 +167,23 @@ class PaymentReceiptNotifier
                     'batch_id' => $batchId,
                     'unpaid_count' => $unpaidInvoices->count(),
                 ]);
+
+                return 'queued';
             } catch (\Exception $logErr) {
-                Log::warning('[WhatsApp Receipt] Failed to enqueue message', ['error' => $logErr->getMessage()]);
+                Log::warning('[WhatsApp Receipt] Failed to enqueue message', [
+                    'invoice_id' => $invoice->id,
+                    'exception' => get_class($logErr),
+                ]);
+
+                return $messageLog?->exists ? 'queued' : 'retry';
             }
         } catch (\Exception $e) {
             Log::error('[WhatsApp Receipt] Failed to send notification', [
                 'invoice_id' => $invoice->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
+                'exception' => get_class($e),
             ]);
+
+            return 'retry';
         }
     }
 

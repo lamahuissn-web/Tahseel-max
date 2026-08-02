@@ -2,9 +2,9 @@
 
 namespace App\Console;
 
+use App\Console\Commands\CollectorReminderSendCommand;
 use App\Console\Commands\SendOverdueReminders;
 use App\Console\Commands\WhatsAppRemindersCommand;
-use App\Console\Commands\CollectorReminderSendCommand;
 use App\Models\AppConfig;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
@@ -32,6 +32,13 @@ class Kernel extends ConsoleKernel
 
         $schedule->command('telegram:send-backup')->everyMinute();
         $schedule->command(SendOverdueReminders::class)->dailyAt('08:00');
+        $schedule->command('payments:reconcile-receipts --limit=100')
+            ->everyMinute()
+            ->withoutOverlapping();
+
+        $schedule->command('whatsapp:recover-pending --limit=100')
+            ->everyMinute()
+            ->withoutOverlapping();
 
         // ── WhatsApp Automation Rules (new per-rule JSON config) ──
         try {
@@ -45,12 +52,13 @@ class Kernel extends ConsoleKernel
                     $oldTime = AppConfig::where('key', 'whatsapp_auto_time')->value('value') ?? '09:00';
                     $schedule->command('whatsapp:reminders --send')->dailyAt($oldTime);
                 }
+
                 return;
             }
 
             // Schedule each enabled rule
             foreach ($rules as $ruleId => $rule) {
-                if (!($rule['enabled'] ?? false)) {
+                if (! ($rule['enabled'] ?? false)) {
                     continue;
                 }
 
@@ -76,10 +84,10 @@ class Kernel extends ConsoleKernel
                     // Our 5(Thu) → cron 4
                     // Our 6(Fri) → cron 5
                     // Mapping: cronDay = (ourDay + 6) % 7
-                    $cronDays = array_map(fn($d) => ($d + 6) % 7, $days);
+                    $cronDays = array_map(fn ($d) => ($d + 6) % 7, $days);
                     sort($cronDays);
                     $schedule->command("whatsapp:reminders --send --rule={$ruleId}")
-                        ->cron("{$minute} {$hour} * * " . implode(',', array_unique($cronDays)));
+                        ->cron("{$minute} {$hour} * * ".implode(',', array_unique($cronDays)));
                 }
             }
         } catch (\Exception $e) {
@@ -91,7 +99,7 @@ class Kernel extends ConsoleKernel
             $crSettingsRaw = DB::table('app_config')->where('key', 'whatsapp_collector_settings')->value('value');
             if ($crSettingsRaw) {
                 $crSettings = json_decode($crSettingsRaw, true);
-                if (($crSettings['enabled'] ?? false) && !empty($crSettings['send_time'])) {
+                if (($crSettings['enabled'] ?? false) && ! empty($crSettings['send_time'])) {
                     $schedule->command(CollectorReminderSendCommand::class)
                         ->dailyAt($crSettings['send_time']);
                 }
@@ -106,7 +114,7 @@ class Kernel extends ConsoleKernel
      */
     protected function commands(): void
     {
-        $this->load(__DIR__ . '/Commands');
+        $this->load(__DIR__.'/Commands');
 
         require base_path('routes/console.php');
     }

@@ -1,29 +1,30 @@
 <?php
 
-
 namespace App\Services;
 
-
 use App\Interfaces\BasicRepositoryInterface;
+use App\Models\Admin\Account;
 use App\Models\Admin\FinancialTransaction;
 use App\Models\Admin\Invoice;
 use App\Models\Admin\MonthlyInvoiceGeneration;
 use App\Models\Admin\Revenue;
-use App\Models\Admin\Subscription;
 use App\Models\Clients;
 use App\Traits\ImageProcessing;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class InvoiceService
 {
-
     use ImageProcessing;
+
     protected $InvoiceRepository;
+
     public function __construct(BasicRepositoryInterface $basicRepository)
     {
-        $this->InvoiceRepository   = createRepository($basicRepository, new Invoice());
+        $this->InvoiceRepository = createRepository($basicRepository, new Invoice);
     }
+
     /************************************************/
     public function store($request)
     {
@@ -33,11 +34,13 @@ class InvoiceService
 
         return $this->InvoiceRepository->create($validated_data);
     }
+
     /************************************************/
     public function get_client($id)
     {
         return $this->InvoiceRepository->getById($id);
     }
+
     /************************************************/
     public function update($request, $id)
     {
@@ -112,97 +115,98 @@ class InvoiceService
     //     }
     //     $invoice->save();
 
-
     //     return $invoice;
     // }
 
     public function payInvoice($id, $request)
     {
-        $invoice = $this->InvoiceRepository->getById($id);
-        if (!$invoice) {
-            return redirect()->back()->with('error', trans('invoices.invoice_not_found'));
-        }
-
-        if ($request->paid_amount && !is_numeric($request->paid_amount)) {
-            return redirect()->back()->with('error', trans('invoices.invalid_paid_amount'));
-        }
-
-        if ($request->invoice_amount && !is_numeric($request->invoice_amount)) {
-            return redirect()->back()->with('error', trans('invoices.invalid_invoice_amount'));
-        }
-
-        if (!$request->paid_amount && isset($request->invoice_amount) && $request->invoice_amount != $invoice->amount) {
-            $invoice->amount = $request->invoice_amount;
-            $invoice->remaining_amount = max($invoice->amount - $invoice->paid_amount, 0);
-        }
-        if ($request->paid_date) {
-            $invoice->paid_date = $request->paid_date;
-        }
-        if ($request->notes) {
-            $invoice->notes = $request->notes;
-        }
-
-        if ($request->paid_amount) {
-            $totalPaid = $invoice->paid_amount + $request->paid_amount;
-            $remainingAmount = $invoice->amount - $totalPaid;
-
-            if ($totalPaid > $invoice->amount) {
-                return redirect()->back()->with('error', trans('invoices.payment_exceeds_invoice_amount'));
-            }
-
-            $invoice->paid_amount = $totalPaid;
-            $invoice->remaining_amount = max($remainingAmount, 0);
-
-            if ($remainingAmount == 0) {
-                $invoice->status = 'paid';
-            } elseif ($totalPaid > 0) {
-                $invoice->status = 'partial';
-            } else {
-                $invoice->status = 'unpaid';
-            }
-
-            $invoice->paid_date = now();
-            $invoice->notes = $request->notes ?? null;
-
-            try {
-                Revenue::create([
-                    'invoice_id' => $invoice->id,
-                    'client_id' => $invoice->client_id,
-                    'amount' => $request->paid_amount,
-                    'remaining_amount' => $remainingAmount,
-                    'status' => $remainingAmount > 0 ? 'partial' : 'paid',
-                    'collected_by' => auth()->id(),
-                    'received_at' => now(),
-                ]);
-            } catch (\Exception $e) {
-                return redirect()->back()->with('error', trans('invoices.revenue_creation_failed'));
+        return DB::transaction(function () use ($id, $request) {
+            $invoice = Invoice::query()->whereKey($id)->lockForUpdate()->first();
+            if (! $invoice) {
+                return redirect()->back()->with('error', trans('invoices.invoice_not_found'));
             }
 
             $accountId = auth()->user()->account_id ?? null;
-            if (!$accountId) {
+            if (! $accountId || ! Account::query()->whereKey($accountId)->exists()) {
                 return redirect()->back()->with('error', trans('invoices.no_account_found'));
             }
 
-            try {
-                FinancialTransaction::create([
-                    'account_id'    => $accountId,
-                    'amount'        => $request->paid_amount,
-                    'date'          => now()->toDateString(),
-                    'time'          => now()->toTimeString(),
-                    'month'         => now()->month,
-                    'year'          => now()->year,
-                    'notes'         => 'سداد مستحقات الفاتورة رقم #' . $invoice->id,
-                    'type'          => 'qapd',
-                    'created_by'    => auth()->id(),
-                ]);
-            } catch (\Exception $e) {
-                return redirect()->back()->with('error', trans('invoices.financial_transaction_creation_failed'));
+            if ($request->paid_amount && (! is_numeric($request->paid_amount) || (float) $request->paid_amount <= 0)) {
+                return redirect()->back()->with('error', trans('invoices.invalid_paid_amount'));
             }
-        }
 
-        $invoice->save();
+            if ($request->invoice_amount && ! is_numeric($request->invoice_amount)) {
+                return redirect()->back()->with('error', trans('invoices.invalid_invoice_amount'));
+            }
 
-        return redirect()->back()->with('success', trans('forms.success'));
+            if (! $request->paid_amount && isset($request->invoice_amount) && $request->invoice_amount != $invoice->amount) {
+                $invoice->amount = $request->invoice_amount;
+                $invoice->remaining_amount = max($invoice->amount - $invoice->paid_amount, 0);
+            }
+            if ($request->paid_date) {
+                $invoice->paid_date = $request->paid_date;
+            }
+            if ($request->notes) {
+                $invoice->notes = $request->notes;
+            }
+
+            if ($request->paid_amount) {
+                $totalPaid = $invoice->paid_amount + $request->paid_amount;
+                $remainingAmount = $invoice->amount - $totalPaid;
+
+                if ($totalPaid > $invoice->amount) {
+                    return redirect()->back()->with('error', trans('invoices.payment_exceeds_invoice_amount'));
+                }
+
+                $invoice->paid_amount = $totalPaid;
+                $invoice->remaining_amount = max($remainingAmount, 0);
+
+                if ($remainingAmount == 0) {
+                    $invoice->status = 'paid';
+                } elseif ($totalPaid > 0) {
+                    $invoice->status = 'partial';
+                } else {
+                    $invoice->status = 'unpaid';
+                }
+
+                $invoice->paid_date = now();
+                $invoice->notes = $request->notes ?? null;
+
+                try {
+                    Revenue::create([
+                        'invoice_id' => $invoice->id,
+                        'client_id' => $invoice->client_id,
+                        'amount' => $request->paid_amount,
+                        'remaining_amount' => $remainingAmount,
+                        'status' => $remainingAmount > 0 ? 'partial' : 'paid',
+                        'collected_by' => auth()->id(),
+                        'received_at' => now(),
+                    ]);
+                } catch (\Exception $e) {
+                    return redirect()->back()->with('error', trans('invoices.revenue_creation_failed'));
+                }
+
+                try {
+                    FinancialTransaction::create([
+                        'account_id' => $accountId,
+                        'amount' => $request->paid_amount,
+                        'date' => now()->toDateString(),
+                        'time' => now()->toTimeString(),
+                        'month' => now()->month,
+                        'year' => now()->year,
+                        'notes' => 'سداد مستحقات الفاتورة رقم #'.$invoice->id,
+                        'type' => 'qapd',
+                        'created_by' => auth()->id(),
+                    ]);
+                } catch (\Exception $e) {
+                    return redirect()->back()->with('error', trans('invoices.financial_transaction_creation_failed'));
+                }
+            }
+
+            $invoice->save();
+
+            return redirect()->back()->with('success', trans('forms.success'));
+        }, 3);
     }
 
     public function canGenerateInvoices(): bool
@@ -212,7 +216,7 @@ class InvoiceService
         //     return false;
         // }
 
-        return !MonthlyInvoiceGeneration::where('year_month', now()->format('Y-m'))->exists();
+        return ! MonthlyInvoiceGeneration::where('year_month', now()->format('Y-m'))->exists();
     }
 
     public function generateMonthlyInvoices()
@@ -222,14 +226,14 @@ class InvoiceService
         $currentMonth = Carbon::now()->month;
         $currentYear = Carbon::now()->year;
 
-        if (!$this->canGenerateInvoices()) {
+        if (! $this->canGenerateInvoices()) {
             return redirect()->back()->with('error', trans('clients.invoices_already_created'));
         }
 
         try {
             $clients = Clients::whereNull('deleted_at')
-                                ->where('is_active', 1)
-                                ->get();
+                ->where('is_active', 1)
+                ->get();
             $invoicesCreated = 0;
 
             foreach ($clients as $client) {
@@ -240,10 +244,10 @@ class InvoiceService
                 }
 
                 $existingInvoice = Invoice::where('client_id', $client->id)
-                                        ->whereMonth('due_date', $currentMonth)
-                                        ->whereYear('due_date', $currentYear)
-                                        ->where('auto_generated', true)
-                                        ->exists();
+                    ->whereMonth('due_date', $currentMonth)
+                    ->whereYear('due_date', $currentYear)
+                    ->where('auto_generated', true)
+                    ->exists();
 
                 if ($existingInvoice) {
                     continue;
@@ -252,10 +256,9 @@ class InvoiceService
                 $startDay = Carbon::parse($client->start_date)->day;
                 $dueDate = Carbon::create($currentYear, $currentMonth, $startDay);
 
-                if (!$dueDate->isValid()) {
+                if (! $dueDate->isValid()) {
                     $dueDate = Carbon::create($currentYear, $currentMonth, 1)->endOfMonth();
                 }
-
 
                 $invoiceNumber = $this->getNextInvoiceNumber();
 
@@ -281,9 +284,9 @@ class InvoiceService
                 'generated_by' => Auth::id(),
             ]);
 
-            return redirect()->back()->with('success', 'تم إنشاء ' . $invoicesCreated . ' فاتورة بنجاح');
+            return redirect()->back()->with('success', 'تم إنشاء '.$invoicesCreated.' فاتورة بنجاح');
         } catch (\Exception $e) {
-            return redirect()->back()->with('error', 'حدث خطأ أثناء إنشاء الفواتير: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'حدث خطأ أثناء إنشاء الفواتير: '.$e->getMessage());
         }
     }
 
@@ -293,10 +296,10 @@ class InvoiceService
 
         if ($lastInvoice) {
             if (is_numeric($lastInvoice->invoice_number)) {
-                return (int)$lastInvoice->invoice_number + 1;
+                return (int) $lastInvoice->invoice_number + 1;
             }
         }
 
-        return (int)1;
+        return (int) 1;
     }
 }

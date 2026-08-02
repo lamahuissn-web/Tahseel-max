@@ -41,7 +41,7 @@ class WhatsAppMessageDispatcher
             $uniqueLock->release($job);
             Log::error('Failed to enqueue WhatsApp message; recovery will retry it', [
                 'message_log_id' => $messageLogId,
-                'error' => $exception->getMessage(),
+                'exception' => get_class($exception),
             ]);
         }
     }
