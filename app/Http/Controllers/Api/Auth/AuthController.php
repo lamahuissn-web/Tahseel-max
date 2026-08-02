@@ -46,8 +46,7 @@ class AuthController extends Controller
 
             return $this->createNewToken($token);
         } catch (\Exception $e) {
-            dd($e->getMessage());
-            return $this->responseApiError('يوجد خطأ ما');
+            return $this->responseApiError('حدث خطأ أثناء تسجيل الدخول. حاول مرة أخرى.');
         }
     }
 
@@ -109,7 +108,10 @@ class AuthController extends Controller
 
     public function refresh()
     {
-        return $this->createNewToken(auth()->refresh());
+        $token = auth('api')->refresh();
+        auth('api')->setToken($token);
+
+        return $this->createNewToken($token);
     }
 
     public function logout()
