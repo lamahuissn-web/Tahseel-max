@@ -97,6 +97,26 @@ class SecureMobilePaymentTest extends TestCase
         $this->assertSame($reference, json_decode($audit->new_data, true)['payment_reference']);
     }
 
+    public function test_invoice_detail_returns_the_actual_paid_status(): void
+    {
+        [$collector, $invoice] = $this->paymentFixture();
+        $invoice->forceFill([
+            'status' => 'paid',
+            'paid_amount' => '75.00',
+            'remaining_amount' => '0.00',
+            'paid_date' => now(),
+        ])->save();
+
+        $response = $this->withToken(auth('api')->login($collector))->getJson(
+            "/api/v1/invoice/{$invoice->id}",
+        );
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.invoice.status', 'paid')
+            ->assertJsonPath('data.invoice.remaining_amount', '0.00');
+    }
+
     public function test_collector_without_payment_permission_is_forbidden(): void
     {
         [$collector, $invoice] = $this->paymentFixture(false);

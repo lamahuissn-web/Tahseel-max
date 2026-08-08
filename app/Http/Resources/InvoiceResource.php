@@ -30,8 +30,7 @@ class InvoiceResource extends JsonResource
             'due_date' => $this->due_date ?? 'N/A',
             'paid_date' => $this->paid_date ? Carbon::parse($this->paid_date)->format('Y-m-d h:i A') : 'N/A',
             'collected_by' => $this->revenues->isNotEmpty() ? $this->revenues->first()->user->name : null,
-            // 'status' => $this->status,
-            'status' => 'unpaid',
+            'status' => $this->status,
             'invoice_type' => trans('invoices.'.$this->invoice_type),
             'notes' => $this->notes,
             'currency' => get_app_config_data('currency')
