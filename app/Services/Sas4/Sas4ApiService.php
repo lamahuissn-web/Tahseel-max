@@ -39,11 +39,13 @@ class Sas4ApiService
     }
 
     /**
-     * Get JWT token (cached)
+     * Get JWT token (cached). Optional timeout bounds the uncached login
+     * HTTP request itself; null keeps the existing 15s default. The token
+     * cache is shared, so only a token refresh performs a login request.
      */
-    public function getToken()
+    public function getToken($timeout = null)
     {
-        return Cache::remember('sas4_token', config('sas4.token_cache_minutes') * 60, function () {
+        return Cache::remember('sas4_token', config('sas4.token_cache_minutes') * 60, function () use ($timeout) {
             $payload = $this->aesEncrypt(json_encode([
                 'username' => $this->username,
                 'password' => $this->password,
@@ -52,13 +54,14 @@ class Sas4ApiService
 
             $response = $this->request('POST', '/admin/api/index.php/api/login', [
                 'payload' => $payload,
-            ], false);
+            ], false, $timeout);
 
             if ($response && isset($response['token'])) {
                 return $response['token'];
             }
 
-            Log::error('SAS4: Failed to get token', ['response' => $response]);
+            // Never log the raw response: it may carry credential material.
+            Log::error('SAS4: Failed to get token');
             return null;
         });
     }
@@ -66,7 +69,7 @@ class Sas4ApiService
     /**
      * Make HTTP request to SAS 4 API
      */
-    protected function request($method, $path, $data = null, $useToken = true)
+    protected function request($method, $path, $data = null, $useToken = true, $timeout = null)
     {
         $url = $this->baseUrl . $path;
         $ch = curl_init($url);
@@ -76,11 +79,14 @@ class Sas4ApiService
         ];
 
         if ($useToken) {
-            $token = $this->getToken();
+            // Pass the caller's timeout through to the token request so an
+            // uncached/refreshed login HTTP request is bounded identically
+            // (max 4s for the batch status sequence).
+            $token = $this->getToken($timeout);
             if (!$token) {
                 return null;
             }
-            $headers[] = 'Authorization: Bearer ' . $token;
+            $headers[] = 'Authorization: *** ' . $token;
         }
 
         if ($method === 'POST') {
@@ -110,7 +116,7 @@ class Sas4ApiService
         }
 
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+        curl_setopt($ch, CURLOPT_TIMEOUT, $timeout ?? 15);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 
         $response = curl_exec($ch);
@@ -120,7 +126,9 @@ class Sas4ApiService
         $decoded = json_decode($response, true);
 
         if ($httpCode >= 400) {
-            Log::error('SAS4 API error', ['url' => $url, 'code' => $httpCode, 'response' => $response]);
+            // Never log the raw response body: it may carry credentials,
+            // tokens or operational payload.
+            Log::error('SAS4 API error', ['url' => $url, 'code' => $httpCode]);
             return null;
         }
 
@@ -130,7 +138,7 @@ class Sas4ApiService
     /**
      * Search users by query (for autocomplete)
      */
-    public function searchUsers($query, $page = 1, $count = 20)
+    public function searchUsers($query, $page = 1, $count = 20, $timeout = null)
     {
         $payload = $this->aesEncrypt(json_encode([
             'search' => $query,
@@ -140,7 +148,7 @@ class Sas4ApiService
 
         return $this->request('POST', '/admin/api/index.php/api/index/user', [
             'payload' => $payload,
-        ]);
+        ], true, $timeout);
     }
 
     /**

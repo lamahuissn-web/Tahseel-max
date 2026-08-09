@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\InvoiceController;
 use App\Http\Controllers\Api\AccountsController;
 use App\Http\Controllers\Api\AppDataController;
 use App\Http\Controllers\Api\Auth\AuthController;
+use App\Http\Controllers\Api\ClientSasStatusController;
 use App\Http\Controllers\Api\ClientsController;
 use App\Http\Controllers\Api\CollectionsController;
 use App\Http\Controllers\Api\CollectorBalancesController;
@@ -32,6 +33,9 @@ Route::group(['middleware' => 'api', 'prefix' => 'v1'], function ($router) {
 
 
         Route::get('/clients', [ClientsController::class, 'index']);
+        // Feature 009: batch SAS status — registered BEFORE parameterized
+        // client routes so the literal segment is never captured by {id}.
+        Route::post('/clients/sas-status', [ClientSasStatusController::class, 'check']);
         Route::get('/clients/{id}/invoices', [ClientsController::class, 'clientInvoices']);
         Route::get('/collections', [CollectionsController::class, 'index']);
 

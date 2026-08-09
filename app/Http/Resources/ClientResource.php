@@ -19,7 +19,11 @@ class ClientResource extends JsonResource
         $latestDueDate = isset($attributes['latest_invoice_due_date']) 
             ? $attributes['latest_invoice_due_date'] 
             : ($this->latest_invoice_due_date ?? $this->subscription_date);
-        
+
+        // Feature 009: nullable camelCase SAS username; blank/whitespace
+        // normalized to null. Read as a plain loaded column — no query.
+        $sasUsername = trim((string) ($this->sas_username ?? ''));
+
         return [
             'id' => $this->id,
             'name' => $this->name,
@@ -28,6 +32,7 @@ class ClientResource extends JsonResource
             'clientType' => $this->client_type,
             'user' => $this->user,
             'boxSwitch' => $this->box_switch,
+            'sasUsername' => $sasUsername !== '' ? $sasUsername : null,
             // 'subscriptionDate' => $this->subscription_date,
             'subscriptionDate' => $latestDueDate,
             'startDate' => $this->start_date,

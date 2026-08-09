@@ -69,6 +69,10 @@ class ClientsController extends Controller
 
                 $query->where(function ($q) use ($searchTerm) {
                     $q->where('tbl_clients.name', 'like', $searchTerm);
+                    // Feature 009: search may also match the SAS username,
+                    // composed inside the grouped scope (active/deleted,
+                    // client_type, ordering, pagination) — never outside it.
+                    $q->orWhere('tbl_clients.sas_username', 'like', $searchTerm);
                     // ->orWhere('email', 'like', $searchTerm)
                     // ->orWhere('phone', 'like', $searchTerm)
                     // ->orWhere('user', 'like', $searchTerm)

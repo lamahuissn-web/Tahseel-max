@@ -19,6 +19,12 @@
     </source>
     <php>
         <env name="APP_ENV" value="testing"/>
+        <env name="APP_URL" value="http://localhost"/>
+        <!-- Test-only secrets so the Feature 009 suites run with NO .env,
+             NO external credentials and NO temporary runner. These values
+             are never used in production. -->
+        <env name="APP_KEY" value="base64:dGVzdC1vbmx5LWtleS1mZWF0dXJlMDA5LWJhY2tlbmQxMjM0NTY3ODkw"/>
+        <env name="JWT_SECRET" value="feature009-test-only-jwt-secret-not-for-production"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="CACHE_DRIVER" value="array"/>
         <env name="DB_CONNECTION" value="sqlite"/>
