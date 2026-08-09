@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\NotificationsController;
 use App\Http\Controllers\Api\Settings;
 use App\Http\Controllers\Api\Trainers\ScheduleController;
 use App\Http\Controllers\Api\Trainers\TrainersController;
+use App\Http\Controllers\Api\UnpaidInvoicesController;
 use App\Http\Controllers\Api\ApiComplaints;
 use App\Http\Controllers\Api\MasrofatController;
 use Illuminate\Support\Facades\Route;
@@ -43,6 +44,8 @@ Route::group(['middleware' => 'api', 'prefix' => 'v1'], function ($router) {
         Route::get('/payments/{idempotencyKey}', [InvoicesController::class, 'securePaymentStatus'])
             ->whereUuid('idempotencyKey');
         Route::get('/invoice/{id}/print', [InvoicesController::class, 'print_invoice']);
+
+        Route::get('/unpaid-invoices', [UnpaidInvoicesController::class, 'index']);
 
         Route::get('/admin/collector-balances', [CollectorBalancesController::class, 'index']);
 
