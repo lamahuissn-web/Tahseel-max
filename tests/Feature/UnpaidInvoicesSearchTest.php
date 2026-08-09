@@ -108,7 +108,7 @@ class UnpaidInvoicesSearchTest extends TestCase
         foreach ([$collector, $accounting, $superAdmin] as $admin) {
             $this->authedRequest($admin)
                 ->assertOk()
-                ->assertJsonPath('status', true)
+                ->assertJsonPath('result', true)
                 ->assertJsonCount(1, 'data.invoices');
         }
     }
@@ -551,7 +551,9 @@ class UnpaidInvoicesSearchTest extends TestCase
         $response = $this->authedRequest($admin);
 
         $response->assertOk();
-        $this->assertSame(['status', 'data'], array_keys($response->json()));
+        // Shared mobile ApiEnvelope contract: success is `result: true` (the
+        // boolean `status` key is NOT part of the envelope and must be absent).
+        $this->assertSame(['result', 'data'], array_keys($response->json()));
         $this->assertSame(['invoices', 'currency', 'pagination'], array_keys($response->json('data')));
         $this->assertSame(
             ['id', 'invoice_number', 'client_id', 'client_name', 'invoice_type', 'status', 'amount', 'remaining_amount', 'due_date'],

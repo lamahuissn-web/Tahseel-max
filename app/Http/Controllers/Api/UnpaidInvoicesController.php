@@ -15,7 +15,10 @@ use Throwable;
  *
  * Dedicated minimal contract (never reuses the unbounded legacy
  * InvoicesController::unpaidInvoices response):
- *   { "status": true, "data": { "invoices": [...], "currency": "...", "pagination": {...} } }
+ *   { "result": true, "data": { "invoices": [...], "currency": "...", "pagination": {...} } }
+ * The success envelope uses the shared mobile ApiEnvelope key `result`
+ * (boolean true), never `status` — the Flutter ApiEnvelope accepts only
+ * `result == true`.
  * JWT-only; active (status '1') authenticated admins of any role may read.
  * Inactive accounts are denied with a stable 403 account_inactive BEFORE any
  * service query, so no list data is ever built or leaked for them. Payment
@@ -66,7 +69,7 @@ class UnpaidInvoicesController extends Controller
             $data = $this->service->search($search, $page, $perPage);
 
             return response()->json([
-                'status' => true,
+                'result' => true,
                 'data' => $data,
             ]);
         } catch (Throwable $exception) {
