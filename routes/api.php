@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\AppDataController;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\ClientsController;
 use App\Http\Controllers\Api\CollectionsController;
+use App\Http\Controllers\Api\CollectorBalancesController;
 use App\Http\Controllers\Api\InvoicesController;
 use App\Http\Controllers\Api\Member\OprationController;
 use App\Http\Controllers\Api\Member\UsersApiController;
@@ -42,6 +43,8 @@ Route::group(['middleware' => 'api', 'prefix' => 'v1'], function ($router) {
         Route::get('/payments/{idempotencyKey}', [InvoicesController::class, 'securePaymentStatus'])
             ->whereUuid('idempotencyKey');
         Route::get('/invoice/{id}/print', [InvoicesController::class, 'print_invoice']);
+
+        Route::get('/admin/collector-balances', [CollectorBalancesController::class, 'index']);
 
 
         Route::post('/masrofat', [MasrofatController::class, 'index']);

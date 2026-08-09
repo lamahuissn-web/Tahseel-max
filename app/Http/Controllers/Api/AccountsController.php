@@ -9,11 +9,13 @@ use App\Models\Admin\Account;
 use App\Models\Admin\AccountSettings;
 use App\Services\AccountService;
 use App\Traits\ResponseApi;
+use App\Traits\SuperAdminGuard;
 use Illuminate\Http\Request;
 
 class AccountsController extends Controller
 {
     use ResponseApi;
+    use SuperAdminGuard;
     protected $accountsRepository;
 
     public function __construct(BasicRepositoryInterface $basicRepository)
@@ -22,6 +24,14 @@ class AccountsController extends Controller
     }
     public function index()
     {
+        // Same server-side Super-Admin restriction as the balances endpoint:
+        // the account tree (with amount sums) is admin-only financial data and
+        // must not be reachable by collector/accounting callers. Enforced
+        // before any query.
+        if (! $this->isSuperAdmin()) {
+            return $this->superAdminForbidden('accounts_forbidden');
+        }
+
         try {
             $accounts = $this->accountsRepository->getAll();
 
@@ -71,6 +81,12 @@ class AccountsController extends Controller
 
     public function collectors(Request $request)
     {
+        // Same server-side Super-Admin restriction as the new balances endpoint:
+        // enforced before any query so the legacy route cannot bypass the feature.
+        if (! $this->isSuperAdmin()) {
+            return $this->superAdminForbidden('collectors_forbidden');
+        }
+
         try {
             $settings = AccountSettings::first();
 
