@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Admin\Invoice;
 use App\Models\Admin\Revenue;
 use App\Traits\ResponseApi;
 use Carbon\Carbon;
@@ -55,7 +56,11 @@ class CollectionsController extends Controller
                 ->orderByDesc('id')
                 ->paginate($perPage);
 
-            $items = collect($collections->items())->map(function (Revenue $revenue) {
+            // One currency lookup per request, shared by every item and the
+            // summary — never per row.
+            $currency = get_app_config_data('currency');
+
+            $items = collect($collections->items())->map(function (Revenue $revenue) use ($currency) {
                 $invoice = $revenue->invoice;
                 $client = $revenue->client ?? $invoice?->client;
                 $prefix = $client?->client_type === 'satellite' ? 'SA-' : 'IN-';
@@ -74,7 +79,12 @@ class CollectionsController extends Controller
                         : null,
                     'collected_by' => $revenue->user?->name,
                     'notes' => $revenue->notes,
-                    'currency' => get_app_config_data('currency'),
+                    'currency' => $currency,
+                    // Feature 006: date-only due date sourced ONLY from the
+                    // already eager-loaded invoice relation (no extra query).
+                    // Missing invoice or missing/unparseable due date maps to
+                    // null — never an invented date.
+                    'due_date' => $this->dueDateOnly($invoice),
                 ];
             })->values();
 
@@ -83,7 +93,7 @@ class CollectionsController extends Controller
                 'summary' => [
                     'count' => $summaryCount,
                     'total_amount' => $summaryTotal,
-                    'currency' => get_app_config_data('currency'),
+                    'currency' => $currency,
                     'start_date' => $startDate->toDateString(),
                     'end_date' => $endDate->toDateString(),
                 ],
@@ -97,6 +107,27 @@ class CollectionsController extends Controller
             ], 'تم استرجاع عمليات القبض بنجاح');
         } catch (\Throwable $e) {
             return $this->responseApiError('حدث خطأ أثناء استرجاع عمليات القبض.');
+        }
+    }
+
+    /**
+     * Feature 006: strict date-only (YYYY-MM-DD) representation of the
+     * invoice's due date. Works exclusively on the already eager-loaded
+     * invoice — no query is issued here. Missing invoice, missing due date,
+     * or an unparseable/zero value fails safely to null.
+     */
+    private function dueDateOnly(?Invoice $invoice): ?string
+    {
+        $dueDate = $invoice?->due_date;
+
+        if (! $dueDate) {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($dueDate)->format('Y-m-d');
+        } catch (\Throwable $e) {
+            return null;
         }
     }
 }
