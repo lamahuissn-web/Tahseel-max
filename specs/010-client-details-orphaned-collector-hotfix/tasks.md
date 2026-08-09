@@ -5,5 +5,5 @@
 - [x] Capture RED endpoint regression.
 - [x] Apply minimal null-safe fix.
 - [x] Capture GREEN and regression gates.
-- [ ] Commit/push/deploy Backend hotfix.
-- [ ] Verify real linked subscriber details endpoint.
+- [x] Commit/push/deploy Backend hotfix.
+- [x] Verify real linked subscriber details endpoint.
