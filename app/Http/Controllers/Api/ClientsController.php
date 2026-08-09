@@ -223,7 +223,7 @@ class ClientsController extends Controller
                             'remaining_amount' => $revenue->remaining_amount,
                             'due_date' => $invoice->due_date ?? 'N/A',
                             'paid_date' => $revenue->received_at,
-                            'collected_by' => $revenue->user->name,
+                            'collected_by' => $revenue->user?->name,
                             // 'status' => $revenue->status,
                             'status' => 'paid',
                             'invoice_type' => $invoice->invoice_type,

@@ -558,6 +558,41 @@ class ClientTypeFiltersTest extends TestCase
 
     // -------------------------------------------------------- query count
 
+    public function test_client_invoice_details_survive_orphaned_revenue_collector(): void
+    {
+        $this->currency('$');
+        $admin = $this->admin('محصل تفاصيل', 'details-orphan@example.test');
+        $clientId = $this->client('عميل تفاصيل', '0555001699', 'عنوان تفاصيل', 'internet');
+        $invoiceId = $this->invoice([
+            'client_id' => $clientId,
+            'invoice_number' => 'INV-DETAILS-ORPHAN-1',
+            'status' => 'paid',
+            'paid_amount' => '100.00',
+            'remaining_amount' => '0.00',
+            'paid_date' => now(),
+        ]);
+        DB::table('tbl_revenues')->insert([
+            'invoice_id' => $invoiceId,
+            'client_id' => $clientId,
+            'collected_by' => 999999999,
+            'amount' => '100.00',
+            'remaining_amount' => '0.00',
+            'received_at' => now(),
+            'status' => 'paid',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this->withToken(auth('api')->login($admin))
+            ->getJson("/api/v1/clients/{$clientId}/invoices");
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('result', true)
+            ->assertJsonPath('data.paid_invoices.count', 1)
+            ->assertJsonPath('data.paid_invoices.invoices.0.collected_by', null);
+    }
+
     public function test_unpaid_query_count_is_bounded_with_filter_and_notes(): void
     {
         $this->currency('$');
