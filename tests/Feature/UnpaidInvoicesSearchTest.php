@@ -556,9 +556,12 @@ class UnpaidInvoicesSearchTest extends TestCase
         $this->assertSame(['result', 'data'], array_keys($response->json()));
         $this->assertSame(['invoices', 'currency', 'pagination'], array_keys($response->json('data')));
         $this->assertSame(
-            ['id', 'invoice_number', 'client_id', 'client_name', 'invoice_type', 'status', 'amount', 'remaining_amount', 'due_date'],
+            ['id', 'invoice_number', 'client_id', 'client_name', 'invoice_type', 'status', 'amount', 'remaining_amount', 'due_date', 'notes'],
             array_keys($response->json('data.invoices.0')),
         );
+        // Feature 008: the nullable notes key is always present, never a
+        // missing key, and is null when the stored invoice note is blank.
+        $this->assertNull($response->json('data.invoices.0.notes'));
         $this->assertSame(
             ['current_page', 'last_page', 'per_page', 'total', 'has_more'],
             array_keys($response->json('data.pagination')),
@@ -626,7 +629,7 @@ class UnpaidInvoicesSearchTest extends TestCase
         }
     }
 
-    public function test_response_contains_no_pii_beyond_client_name(): void
+    public function test_response_contains_no_pii_beyond_client_name_and_invoice_notes(): void
     {
         $this->currency('$');
         $admin = $this->admin('محصل بيانات حساسة', 'pii-collector@example.test');
@@ -634,18 +637,22 @@ class UnpaidInvoicesSearchTest extends TestCase
         $this->invoice([
             'client_id' => $clientId,
             'invoice_number' => 'INV-PII-1',
-            'notes' => 'ملاحظة سرية للعميل لا تظهر في التطبيق',
+            'notes' => 'ملاحظة العداد تظهر بحكم العقد الجديد',
         ]);
 
         $response = $this->authedRequest($admin);
 
         $response->assertOk();
         $content = $response->getContent();
-        $forbidden = ['0777000025', 'شارع خاص بالعميل 25', 'ملاحظة سرية للعميل لا تظهر في التطبيق', 'pii-collector@example.test'];
+        // Feature 008 contract: the invoice's own note is now part of the row
+        // (plain stored text) — it must appear exactly as stored. All other
+        // PII (phone, address, email, collector/account data) stays forbidden.
+        $this->assertSame('ملاحظة العداد تظهر بحكم العقد الجديد', $response->json('data.invoices.0.notes'));
+        $forbidden = ['0777000025', 'شارع خاص بالعميل 25', 'pii-collector@example.test'];
         foreach ($forbidden as $needle) {
             $this->assertStringNotContainsString($needle, $content);
         }
-        foreach (['phone', 'address1', 'address2', 'email', 'notes', 'collected_by', 'collector', 'account', 'paid_amount'] as $key) {
+        foreach (['phone', 'address1', 'address2', 'email', 'collected_by', 'collector', 'account', 'paid_amount'] as $key) {
             $this->assertStringNotContainsString('"'.$key.'"', $content);
         }
     }

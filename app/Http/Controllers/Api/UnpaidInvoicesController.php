@@ -23,6 +23,9 @@ use Throwable;
  * Inactive accounts are denied with a stable 403 account_inactive BEFORE any
  * service query, so no list data is ever built or leaked for them. Payment
  * authorization is untouched (secure payment endpoints keep their own flow).
+ * Rows carry a nullable plain-text notes PREVIEW (blank→null, trimmed,
+ * Unicode-safe max 1000 chars) so an over-long stored note can never break
+ * the strict mobile page parser; the full note lives on the details endpoint.
  */
 class UnpaidInvoicesController extends Controller
 {
@@ -36,6 +39,10 @@ class UnpaidInvoicesController extends Controller
             'search' => ['nullable', 'string', 'max:100'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:50'],
+            // Feature 008: optional exact client category; absent/blank means
+            // all. Arrays fail the string rule, unknown values fail the in
+            // rule, overlong values fail the max rule — all 422.
+            'client_type' => ['nullable', 'string', 'max:16', 'in:internet,satellite'],
         ]);
 
         if ($validator->fails()) {
@@ -62,11 +69,13 @@ class UnpaidInvoicesController extends Controller
 
         // Empty/whitespace search behaves as no search.
         $search = trim((string) $request->input('search', ''));
+        // Empty/whitespace client_type behaves as no filter.
+        $clientType = trim((string) $request->input('client_type', ''));
         $page = (int) $request->input('page', 1);
         $perPage = (int) $request->input('per_page', 25);
 
         try {
-            $data = $this->service->search($search, $page, $perPage);
+            $data = $this->service->search($search, $page, $perPage, $clientType);
 
             return response()->json([
                 'result' => true,

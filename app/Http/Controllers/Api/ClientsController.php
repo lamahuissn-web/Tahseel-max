@@ -33,9 +33,19 @@ class ClientsController extends Controller
                 'search' => 'nullable|string|max:255',
                 'page' => 'nullable|integer|min:1',
                 'per_page' => 'nullable|integer|min:1|max:100',
+                // Feature 008: optional exact client category; absent/blank
+                // means all. Arrays fail the string rule, unknown values fail
+                // the in rule, overlong values fail the max rule — all 422.
+                'client_type' => ['nullable', 'string', 'max:16', 'in:internet,satellite'],
             ]);
             if ($validator->fails()) {
-                return $this->responseApiError($validator->errors()->first());
+                // Existing safe envelope (result/message/data), now with the
+                // HTTP 422 status the Feature 008 contract requires.
+                return response()->json([
+                    'result' => false,
+                    'message' => $validator->errors()->first(),
+                    'data' => (object) [],
+                ], 422);
             }
 
             $perPage = max(1, min((int) $request->input('per_page', 50), 100));
@@ -69,6 +79,14 @@ class ClientsController extends Controller
                     //     $subQuery->where('name', 'like', $searchTerm);
                     // });
                 });
+            }
+
+            // Feature 008: optional exact client category filter, applied
+            // server-side BEFORE pagination/count/order and composed with the
+            // grouped search plus the active/deleted scope above.
+            $clientType = trim((string) $request->input('client_type', ''));
+            if ($clientType !== '') {
+                $query->where('tbl_clients.client_type', $clientType);
             }
 
             $clients = $query->whereNull('tbl_clients.deleted_at')
