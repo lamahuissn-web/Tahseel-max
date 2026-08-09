@@ -86,7 +86,7 @@ class Sas4ApiService
             if (!$token) {
                 return null;
             }
-            $headers[] = 'Authorization: *** ' . $token;
+            $headers[] = 'Authorization: Bearer ' . $token;
         }
 
         if ($method === 'POST') {

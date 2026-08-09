@@ -106,4 +106,13 @@ class Sas4ApiServiceTimeoutTest extends TestCase
         $this->assertCount(1, $sas->searchCalls());
         $this->assertSame(4, $sas->searchCalls()[0]['timeout']);
     }
+
+    public function test_authenticated_requests_use_the_bearer_scheme_not_a_redaction_placeholder(): void
+    {
+        $source = file_get_contents(app_path('Services/Sas4/Sas4ApiService.php'));
+
+        $this->assertIsString($source);
+        $this->assertStringContainsString("'Authorization: Bearer ' . \$token", $source);
+        $this->assertStringNotContainsString("'Authorization: *** ' . \$token", $source);
+    }
 }
