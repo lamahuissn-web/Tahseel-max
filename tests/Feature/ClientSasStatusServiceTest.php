@@ -38,8 +38,82 @@ class ClientSasStatusServiceTest extends TestCase
     {
         $this->assertSame(20, ClientSasStatusService::CACHE_TTL_SECONDS);
         $this->assertSame(4, ClientSasStatusService::EXTERNAL_TIMEOUT_SECONDS);
+        $this->assertSame(1, ClientSasStatusService::MIN_EXTERNAL_TIMEOUT_SECONDS);
+        $this->assertSame(20, ClientSasStatusService::MAX_EXTERNAL_TIMEOUT_SECONDS);
+        $this->assertSame(4, config('sas4.status_timeout_seconds'));
         $this->assertSame(5000, ClientSasStatusService::ALL_USERS_SEARCH_COUNT);
         $this->assertSame('sas4_users_online_status_map', ClientSasStatusService::CACHE_KEY);
+    }
+
+    public function test_deployment_config_selects_the_status_timeout_when_no_explicit_override_is_injected(): void
+    {
+        config()->set('sas4.status_timeout_seconds', 20);
+        $sas = Mockery::mock(Sas4ApiService::class);
+        $sas->shouldReceive('searchUsers')->once()->with('', 1, 5000, 20)->andReturn([
+            'data' => [['username' => 'user-a', 'online_status' => 1]],
+        ]);
+
+        $result = (new ClientSasStatusService($sas))->resolve([$this->client(1, 'user-a')]);
+
+        $this->assertSame('online', $result[1]['status']);
+    }
+
+    public function test_invalid_deployment_timeout_values_fall_back_to_the_bounded_default(): void
+    {
+        foreach (['', 0, -1, 1.5, '1.5', 21, '21', 60, '60', 'abc', null] as $invalid) {
+            Cache::forget(ClientSasStatusService::CACHE_KEY);
+            config()->set('sas4.status_timeout_seconds', $invalid);
+            $sas = Mockery::mock(Sas4ApiService::class);
+            $sas->shouldReceive('searchUsers')->once()->with('', 1, 5000, 4)->andReturn([
+                'data' => [['username' => 'user-a', 'online_status' => 1]],
+            ]);
+
+            $result = (new ClientSasStatusService($sas))->resolve([$this->client(1, 'user-a')]);
+
+            $this->assertSame('online', $result[1]['status']);
+        }
+    }
+
+    public function test_minimum_and_maximum_deployment_timeout_boundaries_are_accepted(): void
+    {
+        foreach ([1, '1', 20, '20'] as $valid) {
+            Cache::forget(ClientSasStatusService::CACHE_KEY);
+            config()->set('sas4.status_timeout_seconds', $valid);
+            $sas = Mockery::mock(Sas4ApiService::class);
+            $sas->shouldReceive('searchUsers')->once()->with('', 1, 5000, (int) $valid)->andReturn([
+                'data' => [['username' => 'user-a', 'online_status' => 1]],
+            ]);
+
+            $result = (new ClientSasStatusService($sas))->resolve([$this->client(1, 'user-a')]);
+
+            $this->assertSame('online', $result[1]['status']);
+        }
+    }
+
+    public function test_explicit_constructor_timeout_still_overrides_deployment_config(): void
+    {
+        config()->set('sas4.status_timeout_seconds', 20);
+        $sas = Mockery::mock(Sas4ApiService::class);
+        $sas->shouldReceive('searchUsers')->once()->with('', 1, 5000, 7)->andReturn([
+            'data' => [['username' => 'user-a', 'online_status' => 1]],
+        ]);
+
+        $result = (new ClientSasStatusService($sas, 20, 7))->resolve([$this->client(1, 'user-a')]);
+
+        $this->assertSame('online', $result[1]['status']);
+    }
+
+    public function test_out_of_range_constructor_timeout_falls_back_to_the_bounded_default(): void
+    {
+        config()->set('sas4.status_timeout_seconds', 4);
+        $sas = Mockery::mock(Sas4ApiService::class);
+        $sas->shouldReceive('searchUsers')->once()->with('', 1, 5000, 4)->andReturn([
+            'data' => [['username' => 'user-a', 'online_status' => 1]],
+        ]);
+
+        $result = (new ClientSasStatusService($sas, 20, 999))->resolve([$this->client(1, 'user-a')]);
+
+        $this->assertSame('online', $result[1]['status']);
     }
 
     // ------------------------------------------------------------ B3: status
