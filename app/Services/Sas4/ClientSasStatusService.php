@@ -21,30 +21,70 @@ use Illuminate\Support\Facades\Cache;
  *  - no nonblank sas_username => unlinked, no SAS call at all
  *  - success-only 20-second cache of a minimal username => int(0|1) map;
  *    failed/malformed calls are never cached; empty data array is success
- *  - 4-second external timeout target for EVERY HTTP request of the sequence
- *    (login token included); one bounded token-refresh retry only when the
- *    first attempt fails — never on ordinary calls
+ *  - bounded external timeout (default 4 seconds, deployment-configurable in
+ *    1..20) for EVERY HTTP request of the sequence (login token included);
+ *    one bounded token-refresh retry only when the first attempt fails —
+ *    never on ordinary calls
  *  - returns only client_id / sas_username / status — never enabled, IP,
  *    expiration, profile, traffic, token or raw payload fields
  */
 class ClientSasStatusService
 {
     public const CACHE_KEY = 'sas4_users_online_status_map';
+
     public const CACHE_TTL_SECONDS = 20;
+
     public const EXTERNAL_TIMEOUT_SECONDS = 4;
+
+    public const MIN_EXTERNAL_TIMEOUT_SECONDS = 1;
+
+    public const MAX_EXTERNAL_TIMEOUT_SECONDS = 20;
+
     public const ALL_USERS_SEARCH_COUNT = 5000;
 
     public const STATUS_UNLINKED = 'unlinked';
+
     public const STATUS_ONLINE = 'online';
+
     public const STATUS_OFFLINE = 'offline';
+
     public const STATUS_NOT_FOUND = 'not_found';
+
     public const STATUS_UNAVAILABLE = 'unavailable';
 
+    private Sas4ApiService $sas;
+
+    private int $cacheTtlSeconds;
+
+    private int $externalTimeoutSeconds;
+
     public function __construct(
-        private Sas4ApiService $sas,
-        private int $cacheTtlSeconds = self::CACHE_TTL_SECONDS,
-        private int $externalTimeoutSeconds = self::EXTERNAL_TIMEOUT_SECONDS,
+        Sas4ApiService $sas,
+        ?int $cacheTtlSeconds = null,
+        ?int $externalTimeoutSeconds = null,
     ) {
+        $this->sas = $sas;
+        $this->cacheTtlSeconds = $cacheTtlSeconds ?? self::CACHE_TTL_SECONDS;
+        $this->externalTimeoutSeconds = self::boundedExternalTimeoutSeconds(
+            $externalTimeoutSeconds ?? config('sas4.status_timeout_seconds', self::EXTERNAL_TIMEOUT_SECONDS),
+        );
+    }
+
+    private static function boundedExternalTimeoutSeconds(mixed $configured): int
+    {
+        if (is_int($configured)) {
+            $timeout = $configured;
+        } elseif (is_string($configured) && preg_match('/^[1-9][0-9]*$/D', $configured) === 1) {
+            $timeout = (int) $configured;
+        } else {
+            return self::EXTERNAL_TIMEOUT_SECONDS;
+        }
+
+        if ($timeout < self::MIN_EXTERNAL_TIMEOUT_SECONDS || $timeout > self::MAX_EXTERNAL_TIMEOUT_SECONDS) {
+            return self::EXTERNAL_TIMEOUT_SECONDS;
+        }
+
+        return $timeout;
     }
 
     /**
@@ -53,7 +93,7 @@ class ClientSasStatusService
      *
      * @param  iterable<int, object>  $clients  objects exposing ->id and ->sas_username
      * @return array<int, array{client_id: int, sas_username: string|null, status: string}>
-     *         keyed by client id
+     *                                                                                      keyed by client id
      */
     public function resolve(iterable $clients): array
     {
@@ -94,6 +134,7 @@ class ClientSasStatusService
 
             if (! array_key_exists($needle, $map)) {
                 $result[$id]['status'] = self::STATUS_NOT_FOUND;
+
                 continue;
             }
 
