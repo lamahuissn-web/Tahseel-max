@@ -371,48 +371,22 @@ if (!function_exists('sendOneSignalNotification1')) {
 // ─────────────────────────────────────────────
 // Telegram Notification Functions
 // ─────────────────────────────────────────────
+// Thin wrappers around App\Services\TelegramApiClient / TelegramConfig.
+// Kept as global functions so existing callers (ClientService,
+// SendOverdueReminders, TelegramBackupCommand) keep working unchanged.
 
 if (!function_exists('sendTelegramNotification')) {
     function sendTelegramNotification($message, $eventType = null)
     {
         try {
-            $enabled = \App\Models\AppConfig::where('key', 'telegram_enabled')->value('value');
-            if ($enabled != '1') return false;
+            if (!\App\Services\TelegramConfig::enabled()) return false;
+            if (!\App\Services\TelegramConfig::eventEnabled($eventType)) return false;
 
-            if ($eventType) {
-                $eventSetting = \App\Models\AppConfig::where('key', 'telegram_notify_' . $eventType)->value('value');
-                if ($eventSetting === '0') return false;
-            }
+            $chatId = \App\Services\TelegramConfig::chatId();
+            if (!$chatId) return false;
 
-            $token = \App\Models\AppConfig::where('key', 'telegram_bot_token')->value('value');
-            $chatId = \App\Models\AppConfig::where('key', 'telegram_chat_id')->value('value');
-
-            if (!$token || !$chatId) return false;
-
-            $url = "https://api.telegram.org/bot{$token}/sendMessage";
-            $data = [
-                'chat_id' => $chatId,
-                'text' => $message,
-                'parse_mode' => 'HTML',
-            ];
-
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $url);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-            $response = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-
-            if ($httpCode !== 200) {
-                \Log::error('Telegram notification failed: ' . ($response ?: 'HTTP ' . $httpCode));
-                return false;
-            }
-
-            return json_decode($response, true);
+            $client = app(\App\Services\TelegramApiClient::class);
+            return $client->sendMessage($chatId, (string) $message);
         } catch (\Exception $e) {
             \Log::error('Telegram notification exception: ' . $e->getMessage());
             return false;
@@ -424,36 +398,8 @@ if (!function_exists('sendTelegramDocument')) {
     function sendTelegramDocument($filePath, $caption = '')
     {
         try {
-            $token = \App\Models\AppConfig::where('key', 'telegram_bot_token')->value('value');
-            $chatId = \App\Models\AppConfig::where('key', 'telegram_chat_id')->value('value');
-
-            if (!$token || !$chatId) return false;
-            if (!file_exists($filePath)) return false;
-
-            $url = "https://api.telegram.org/bot{$token}/sendDocument";
-            $postData = [
-                'chat_id' => $chatId,
-                'document' => new \CURLFile($filePath),
-                'caption' => $caption,
-            ];
-
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $url);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 120);
-            $response = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-
-            if ($httpCode !== 200) {
-                \Log::error('Telegram document send failed: ' . ($response ?: 'HTTP ' . $httpCode));
-                return false;
-            }
-
-            return json_decode($response, true);
+            $client = app(\App\Services\TelegramApiClient::class);
+            return $client->sendDocument($filePath, $caption);
         } catch (\Exception $e) {
             \Log::error('Telegram document exception: ' . $e->getMessage());
             return false;
@@ -465,24 +411,8 @@ if (!function_exists('getTelegramUpdates')) {
     function getTelegramUpdates($offset = 0)
     {
         try {
-            $token = \App\Models\AppConfig::where('key', 'telegram_bot_token')->value('value');
-            if (!$token) return [];
-
-            $url = "https://api.telegram.org/bot{$token}/getUpdates?offset={$offset}&timeout=5";
-
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $url);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-            $response = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-
-            if ($httpCode !== 200) return [];
-
-            $result = json_decode($response, true);
-            return $result['result'] ?? [];
+            $client = app(\App\Services\TelegramApiClient::class);
+            return $client->getUpdates((int) $offset);
         } catch (\Exception $e) {
             \Log::error('Telegram getUpdates exception: ' . $e->getMessage());
             return [];
@@ -494,28 +424,8 @@ if (!function_exists('sendTelegramAnswerInlineQuery')) {
     function sendTelegramAnswerInlineQuery($inlineQueryId, $results)
     {
         try {
-            $token = \App\Models\AppConfig::where('key', 'telegram_bot_token')->value('value');
-            if (!$token) return false;
-
-            $url = "https://api.telegram.org/bot{$token}/answerInlineQuery";
-            $data = [
-                'inline_query_id' => $inlineQueryId,
-                'results' => json_encode($results),
-                'cache_time' => 5,
-            ];
-
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $url);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-            $response = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-
-            return $httpCode === 200;
+            $client = app(\App\Services\TelegramApiClient::class);
+            return $client->answerInlineQuery($inlineQueryId, $results);
         } catch (\Exception $e) {
             \Log::error('Telegram answerInlineQuery exception: ' . $e->getMessage());
             return false;

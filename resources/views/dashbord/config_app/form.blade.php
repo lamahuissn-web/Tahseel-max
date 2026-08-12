@@ -113,6 +113,14 @@
 
                                 <div class="row mt-3">
                                     <div class="col-md-12">
+                                        <label for="telegram_allowed_chat_ids" class="form-label">معرفات تيليجرام المسموح لها بالبحث</label>
+                                        <textarea class="form-control" name="telegram_allowed_chat_ids" id="telegram_allowed_chat_ids" rows="2" placeholder="123456789 أو -1001234567890، معرف واحد أو أكثر">{{ old('telegram_allowed_chat_ids', $all_data['telegram_allowed_chat_ids'] ?? '') }}</textarea>
+                                        <small class="form-text text-muted">البحث عن العملاء والبحث المضمن يعملان فقط لهذه المعرفات. افصل عدة معرفات بمسافة أو فاصلة. اتركه فارغاً لمنع البحث بالكامل.</small>
+                                    </div>
+                                </div>
+
+                                <div class="row mt-3">
+                                    <div class="col-md-12">
                                         <div class="form-check form-switch">
                                             <input type="hidden" name="telegram_enabled" value="0">
                                             <input class="form-check-input" type="checkbox" name="telegram_enabled" id="telegram_enabled" value="1" {{ old('telegram_enabled', $all_data['telegram_enabled'] ?? '0') == '1' ? 'checked' : '' }}>
