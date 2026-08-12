@@ -2,7 +2,8 @@
 
 namespace App\Console\Commands;
 
-use App\Models\AppConfig;
+use App\Services\TelegramApiClient;
+use App\Services\TelegramConfig;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -16,35 +17,45 @@ class TelegramBackupCommand extends Command
     {
         $force = $this->option('force');
 
-        $enabled = AppConfig::where('key', 'telegram_backup_enabled')->value('value');
-        if ($enabled != '1' && !$force) {
+        if (!TelegramConfig::backupEnabled() && !$force) {
             $this->info('Telegram backup is disabled. Use --force to override.');
             return 0;
         }
 
-        $lastSent = (int) (AppConfig::where('key', 'telegram_backup_last_sent')->value('value') ?? 0);
+        $lastSent = (int) TelegramConfig::get('telegram_backup_last_sent', 0);
 
         if (!$force && !$this->isTimeToSend($lastSent)) {
             return 0;
         }
 
-        $dbName = env('DB_DATABASE', 'tahseel');
-        $dbUser = env('DB_USERNAME', 'root');
-        $dbPass = env('DB_PASSWORD', '');
-        $dbHost = env('DB_HOST', '127.0.0.1');
+        $dbConfig = config('database.connections.mysql');
         $backupFile = storage_path('app/telegram_backup.sql');
         $gzFile = $backupFile . '.gz';
+        $credentialsFile = tempnam(storage_path('app'), '.telegram-mysqldump-');
+
+        if ($credentialsFile === false) {
+            Log::error('Telegram backup: could not create temporary credentials file');
+            $this->error('Could not prepare database backup');
+            return 1;
+        }
+
+        chmod($credentialsFile, 0600);
+        file_put_contents($credentialsFile, sprintf(
+            "[client]\nhost=%s\nuser=%s\npassword=%s\n",
+            $dbConfig['host'] ?? '127.0.0.1',
+            $dbConfig['username'] ?? 'root',
+            $dbConfig['password'] ?? ''
+        ));
 
         $dumpCmd = sprintf(
-            'mysqldump --host=%s --user=%s --password=%s %s > %s 2>/dev/null',
-            escapeshellarg($dbHost),
-            escapeshellarg($dbUser),
-            escapeshellarg($dbPass),
-            escapeshellarg($dbName),
+            'mysqldump --defaults-extra-file=%s %s > %s 2>/dev/null',
+            escapeshellarg($credentialsFile),
+            escapeshellarg($dbConfig['database'] ?? 'tahseel'),
             escapeshellarg($backupFile)
         );
 
         exec($dumpCmd, $output, $exitCode);
+        @unlink($credentialsFile);
         if ($exitCode !== 0) {
             Log::error('Telegram backup: mysqldump failed');
             $this->error('mysqldump failed');
@@ -57,14 +68,20 @@ class TelegramBackupCommand extends Command
             return 1;
         }
 
-        $gzData = gzencode(file_get_contents($backupFile), 9);
-        file_put_contents($gzFile, $gzData);
-        unlink($backupFile);
+        $gzData = gzencode((string) file_get_contents($backupFile), 9);
+        if ($gzData === false || file_put_contents($gzFile, $gzData) === false) {
+            @unlink($backupFile);
+            @unlink($gzFile);
+            Log::error('Telegram backup: compression failed');
+            $this->error('Backup compression failed');
+            return 1;
+        }
+        @unlink($backupFile);
 
         $fileSize = filesize($gzFile);
         if ($fileSize > 50 * 1024 * 1024) {
             Log::warning("Telegram backup: file too large ({$fileSize} bytes), skipping send");
-            unlink($gzFile);
+            @unlink($gzFile);
             $this->warn('Backup file exceeds 50MB Telegram limit');
             return 1;
         }
@@ -75,15 +92,17 @@ class TelegramBackupCommand extends Command
             $this->formatBytes($fileSize)
         );
 
-        $sent = sendTelegramDocument($gzFile, $caption);
+        $api = app(TelegramApiClient::class);
+        $sent = $api->sendDocument($gzFile, $caption);
 
-        unlink($gzFile);
+        @unlink($gzFile);
 
         if ($sent) {
-            AppConfig::updateOrCreate(
+            \App\Models\AppConfig::updateOrCreate(
                 ['key' => 'telegram_backup_last_sent'],
                 ['value' => (string) time()]
             );
+            TelegramConfig::clearCache();
             $this->info('Backup sent to Telegram successfully');
             Log::info('Telegram backup sent successfully');
         } else {
@@ -99,9 +118,9 @@ class TelegramBackupCommand extends Command
     {
         if (!$lastSent) return true;
 
-        $frequency = AppConfig::where('key', 'telegram_backup_frequency')->value('value') ?? 'daily';
-        $backupTime = AppConfig::where('key', 'telegram_backup_time')->value('value') ?? '02:00';
-        $customCron = AppConfig::where('key', 'telegram_backup_custom_cron')->value('value');
+        $frequency = TelegramConfig::get('telegram_backup_frequency', 'daily');
+        $backupTime = TelegramConfig::get('telegram_backup_time', '02:00');
+        $customCron = TelegramConfig::get('telegram_backup_custom_cron');
 
         return match ($frequency) {
             'hourly' => time() - $lastSent >= 3600,

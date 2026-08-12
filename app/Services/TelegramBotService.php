@@ -2,12 +2,18 @@
 
 namespace App\Services;
 
-use App\Models\AppConfig;
 use App\Models\Clients;
 use Illuminate\Support\Facades\Log;
 
 class TelegramBotService
 {
+    protected TelegramApiClient $api;
+
+    public function __construct(?TelegramApiClient $api = null)
+    {
+        $this->api = $api ?? app(TelegramApiClient::class);
+    }
+
     public function handleMessage(array $message)
     {
         $chatId = $message['chat']['id'] ?? null;
@@ -15,9 +21,18 @@ class TelegramBotService
 
         if (!$chatId || !$text) return;
 
-        if (str_starts_with($text, '/client') || str_starts_with($text, '/عميل')) {
-            $name = trim(substr($text, strpos($text, ' ') ?: strlen($text)));
-            $this->sendClientSearchResult($chatId, $name);
+        $name = $this->extractMentionedClientName($text);
+        $isMentionSearch = $name !== null;
+        $isCommandSearch = preg_match('/^\/(?:client|عميل)(?:@[^\s]+)?(?:\s+(.+))?$/u', $text, $matches) === 1;
+
+        if ($isMentionSearch || $isCommandSearch) {
+            if (!TelegramConfig::isAllowedChatId($chatId)) {
+                $this->sendUnauthorized($chatId);
+                return;
+            }
+
+            $searchName = $isMentionSearch ? trim($name) : trim($matches[1] ?? '');
+            $this->sendClientSearchResult($chatId, $searchName);
         } elseif (in_array($text, ['/start', '/help'])) {
             $this->sendHelpMessage($chatId);
         }
@@ -27,8 +42,14 @@ class TelegramBotService
     {
         $queryId = $inlineQuery['id'] ?? null;
         $query = trim($inlineQuery['query'] ?? '');
+        $fromId = $inlineQuery['from']['id'] ?? null;
 
         if (!$queryId || strlen($query) < 1) return;
+
+        if (!TelegramConfig::isAllowedChatId($fromId)) {
+            $this->api->answerInlineQuery($queryId, []);
+            return;
+        }
 
         $clients = Clients::where('name', 'like', '%' . $query . '%')
             ->whereNull('deleted_at')
@@ -57,13 +78,13 @@ class TelegramBotService
             ];
         }
 
-        sendTelegramAnswerInlineQuery($queryId, $results);
+        $this->api->answerInlineQuery($queryId, $results);
     }
 
     private function sendClientSearchResult($chatId, $name)
     {
         if (empty($name)) {
-            $this->sendMessage($chatId, '❌ الرجاء إدخال اسم العميل. مثال: /client محمد');
+            $this->api->sendMessage($chatId, '❌ الرجاء إدخال اسم العميل. مثال: /client محمد');
             return;
         }
 
@@ -72,98 +93,123 @@ class TelegramBotService
             ->get();
 
         if ($clients->isEmpty()) {
-            $this->sendMessage($chatId, "❌ لم يتم العثور على عميل بالاسم: {$name}");
+            $this->api->sendMessage($chatId, "❌ لم يتم العثور على عميل بالاسم: {$this->escape($name)}");
             return;
         }
 
         if ($clients->count() > 5) {
-            $this->sendMessage($chatId, "✅ تم العثور على {$clients->count()} عميل. استخدم البحث المضمن لمشاهدة المزيد.");
+            $this->api->sendMessage($chatId, "✅ تم العثور على {$clients->count()} عميل. استخدم البحث المضمن لمشاهدة المزيد.");
             return;
         }
 
         foreach ($clients as $client) {
-            $this->sendMessage($chatId, $this->formatClientDetail($client));
+            $this->api->sendMessage($chatId, $this->formatClientDetail($client));
         }
     }
 
     private function formatClientDetail($client)
     {
-        $overdueInvoices = $client->invoices()
-            ->where('status', 'unpaid')
-            ->where('due_date', '<', now())
+        $invoices = $client->invoices()
+            ->orderByRaw("CASE status WHEN 'unpaid' THEN 1 WHEN 'partial' THEN 2 WHEN 'paid' THEN 3 ELSE 4 END")
             ->orderBy('due_date', 'desc')
             ->get();
 
-        $upcomingInvoices = $client->invoices()
-            ->where('status', 'unpaid')
-            ->where('due_date', '>=', now())
-            ->orderBy('due_date', 'asc')
-            ->get();
-
         $currency = $this->getCurrency();
+        $counts = [
+            'paid' => 0,
+            'partial' => 0,
+            'unpaid' => 0,
+            'overdue' => 0,
+            'upcoming' => 0,
+        ];
 
-        $text = "👤 العميل: {$client->name}\n";
-        $text .= "🆔 الرقم: {$client->id}\n";
-        $text .= "📱 الهاتف: {$client->phone}\n";
-        $text .= "💳 الاشتراك: {$client->subscription->name}\n";
-        $text .= "💰 السعر: " . number_format($client->price, 2) . " {$currency}\n";
-        $text .= "📍 العنوان: {$client->address1}\n";
+        $text = "👤 العميل: {$this->escape($client->name)}\n";
+        $text .= "🆔 الرقم: {$this->escape($client->id)}\n";
+        $text .= "📱 الهاتف: {$this->escape($client->phone)}\n";
+        $text .= "💳 الاشتراك: {$this->escape($client->subscription->name ?? 'بدون اشتراك')}\n";
+        $text .= "💰 السعر: " . number_format((float) $client->price, 2) . " {$this->escape($currency)}\n";
+        $text .= "📍 العنوان: {$this->escape($client->address1)}\n";
 
-        if ($overdueInvoices->isNotEmpty()) {
-            $text .= "\n📄 الفواتير المتأخرة ({$overdueInvoices->count()}):\n";
-            foreach ($overdueInvoices as $inv) {
-                $text .= "▪ INV-{$inv->invoice_number} — " . number_format($inv->amount, 2) . " {$currency} — 📅 {$inv->due_date}\n";
+        foreach ($invoices as $invoice) {
+            $status = $invoice->status;
+            $isOverdue = $status === 'unpaid' && $invoice->due_date && $invoice->due_date < now();
+            if ($status === 'paid') $counts['paid']++;
+            elseif ($status === 'partial') $counts['partial']++;
+            elseif ($status === 'unpaid') {
+                $counts['unpaid']++;
+                $isOverdue ? $counts['overdue']++ : $counts['upcoming']++;
             }
         }
 
-        if ($upcomingInvoices->isNotEmpty()) {
-            $text .= "\n📅 الفواتير القادمة ({$upcomingInvoices->count()}):\n";
-            foreach ($upcomingInvoices as $inv) {
-                $text .= "▪ INV-{$inv->invoice_number} — " . number_format($inv->amount, 2) . " {$currency} — 📅 {$inv->due_date}\n";
+        $text .= "\n📊 حالة الفواتير:\n";
+        $text .= "✅ مدفوعة: {$counts['paid']} | 🟠 جزئية: {$counts['partial']}\n";
+        $text .= "🔴 متأخرة: {$counts['overdue']} | 🟡 غير مدفوعة/قادمة: {$counts['upcoming']}\n";
+
+        if ($invoices->isNotEmpty()) {
+            $text .= "\n📄 تفاصيل الفواتير:\n";
+            foreach ($invoices as $invoice) {
+                $text .= $this->formatInvoiceStatus($invoice, $currency);
             }
         }
 
         return $text;
     }
 
+    private function extractMentionedClientName(string $text): ?string
+    {
+        $username = preg_quote('@' . TelegramConfig::botUsername(), '/');
+        if (!preg_match('/' . $username . '(?:\s+(.+))?$/u', $text, $matches)) {
+            return null;
+        }
+
+        return trim($matches[1] ?? '');
+    }
+
+    private function formatInvoiceStatus($invoice, string $currency): string
+    {
+        $status = $invoice->status;
+        $isOverdue = $status === 'unpaid' && $invoice->due_date && $invoice->due_date < now();
+        $label = match (true) {
+            $status === 'paid' => '✅ مدفوعة',
+            $status === 'partial' => '🟠 مدفوعة جزئياً',
+            $isOverdue => '🔴 متأخرة',
+            default => '🟡 غير مدفوعة',
+        };
+        $remaining = $invoice->remaining_amount;
+        $amount = number_format((float) $invoice->amount, 2);
+        $remainingText = $remaining !== null ? ' | المتبقي: ' . number_format((float) $remaining, 2) : '';
+        $dueDate = $invoice->due_date ? $this->escape($invoice->due_date) : 'بدون تاريخ';
+
+        return "▪ INV-{$this->escape($invoice->invoice_number)} — {$label} — {$amount} {$this->escape($currency)}{$remainingText} — 📅 {$dueDate}\n";
+    }
+
     private function sendHelpMessage($chatId)
     {
+        $botUsername = TelegramConfig::botUsername();
+
         $text = "🤖 مرحباً بك في بوت Tahseel!\n\n";
         $text .= "الأوامر المتاحة:\n";
         $text .= "/client <اسم> — البحث عن عميل\n";
         $text .= "/عميل <اسم> — البحث عن عميل (بالعربية)\n";
         $text .= "/start — عرض هذه الرسالة\n\n";
         $text .= "💡 يمكنك أيضاً استخدام البحث المضمن:\n";
-        $text .= "اكتب @mikr313bot <اسم> في أي محادثة";
+        $text .= "اكتب @{$botUsername} <اسم> في أي محادثة";
 
-        $this->sendMessage($chatId, $text);
+        $this->api->sendMessage($chatId, $text);
     }
 
-    private function sendMessage($chatId, $text)
+    private function sendUnauthorized($chatId): void
     {
-        $token = AppConfig::where('key', 'telegram_bot_token')->value('value');
-        if (!$token) return;
+        $this->api->sendMessage($chatId, '⛔ غير مصرح لك باستخدام بحث العملاء.');
+    }
 
-        $url = "https://api.telegram.org/bot{$token}/sendMessage";
-        $data = [
-            'chat_id' => $chatId,
-            'text' => $text,
-            'parse_mode' => 'HTML',
-        ];
-
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-        curl_exec($ch);
-        curl_close($ch);
+    private function escape($value): string
+    {
+        return htmlspecialchars((string) ($value ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 
     private function getCurrency()
     {
-        return AppConfig::where('key', 'currency')->value('value') ?? 'ج.م';
+        return \App\Models\AppConfig::where('key', 'currency')->value('value') ?? 'ج.م';
     }
 }
