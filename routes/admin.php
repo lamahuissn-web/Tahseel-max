@@ -220,6 +220,7 @@ Route::group(
             /*************************************************************************************************/
             Route::get('setting/app_config', [ConfigAppController::class, 'index'])->name('app_config');
             Route::post('setting/app_config/save', [ConfigAppController::class, 'store'])->name('save_app_config');
+            Route::post('setting/app_config/download-backup', [ConfigAppController::class, 'downloadDatabaseBackup'])->name('download_app_backup');
 
             Route::get('settings/whatsapp', [WhatsAppControlCenterController::class, 'redirectLegacySettings'])->name('settings.whatsapp');
             Route::post('settings/whatsapp', [WhatsAppSettingsController::class, 'update'])->name('settings.whatsapp.update');
