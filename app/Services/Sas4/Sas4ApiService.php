@@ -20,6 +20,14 @@ class Sas4ApiService
         $this->aesKey = config('sas4.aes_key');
     }
 
+    public function isConfigured(): bool
+    {
+        return $this->baseUrl !== ''
+            && trim((string) $this->username) !== ''
+            && trim((string) $this->password) !== ''
+            && trim((string) $this->aesKey) !== '';
+    }
+
     /**
      * CryptoJS-compatible AES-256-CBC encryption
      */
@@ -45,6 +53,10 @@ class Sas4ApiService
      */
     public function getToken($timeout = null)
     {
+        if (! $this->isConfigured()) {
+            return null;
+        }
+
         return Cache::remember('sas4_token', config('sas4.token_cache_minutes') * 60, function () use ($timeout) {
             $payload = $this->aesEncrypt(json_encode([
                 'username' => $this->username,
@@ -71,6 +83,10 @@ class Sas4ApiService
      */
     protected function request($method, $path, $data = null, $useToken = true, $timeout = null)
     {
+        if (! $this->isConfigured()) {
+            return null;
+        }
+
         $url = $this->baseUrl . $path;
         $ch = curl_init($url);
 

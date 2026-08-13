@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Clients;
-use App\Services\Sas4\Sas4ApiService;
+use App\Services\Sas4\Sas4Gateway;
 use Illuminate\Console\Command;
 
 class Sas4AutoMatch extends Command
@@ -22,11 +22,12 @@ class Sas4AutoMatch extends Command
             return 0;
         }
 
-        $sas4Service = app(Sas4ApiService::class);
+        $gateway = app(Sas4Gateway::class);
 
         $this->info('Fetching SAS 4 users...');
-        $sas4Result = $sas4Service->searchUsers('', 1, 5000);
-        if (!$sas4Result || !isset($sas4Result['data'])) {
+        $result = $gateway->searchUsers('', 1, 5000);
+        $sas4Result = $result['data'] ?? null;
+        if (! $result['ok'] || ! is_array($sas4Result) || ! isset($sas4Result['data'])) {
             $this->error('Failed to fetch SAS 4 users.');
             return 1;
         }

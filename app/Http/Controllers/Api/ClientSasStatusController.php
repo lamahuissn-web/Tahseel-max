@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Clients;
-use App\Services\Sas4\ClientSasStatusService;
+use App\Services\Sas4\Sas4Gateway;
 use App\Traits\ResponseApi;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -13,7 +13,7 @@ class ClientSasStatusController extends Controller
 {
     use ResponseApi;
 
-    public function __construct(private ClientSasStatusService $statusService)
+    public function __construct(private Sas4Gateway $gateway)
     {
     }
 
@@ -67,7 +67,14 @@ class ClientSasStatusController extends Controller
             ->whereNull('tbl_clients.deleted_at')
             ->get(['tbl_clients.id', 'tbl_clients.sas_username']);
 
-        $byId = $this->statusService->resolve($clients);
+        $resolved = $this->gateway->statuses($clients);
+        $byId = $resolved['ok'] ? $resolved['data'] : collect($clients)->mapWithKeys(fn ($client) => [
+            (int) $client->id => [
+                'client_id' => (int) $client->id,
+                'sas_username' => trim((string) $client->sas_username) ?: null,
+                'status' => trim((string) $client->sas_username) === '' ? 'unlinked' : 'unavailable',
+            ],
+        ])->all();
 
         // Omit unknown/out-of-scope IDs entirely (no disclosure) and keep the
         // requested order for deterministic responses.
