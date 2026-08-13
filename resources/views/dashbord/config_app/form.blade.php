@@ -165,6 +165,21 @@
                                 <hr class="my-4">
                                 <h5 class="mb-3">إعدادات النسخ الاحتياطي عبر تيليجرام</h5>
 
+                                <div class="border rounded p-3 mb-3 bg-light" dir="rtl">
+                                    <div class="row align-items-center g-3">
+                                        <div class="col-lg-8">
+                                            <div class="fw-semibold mb-1">تنزيل نسخة احتياطية يدوية</div>
+                                            <div class="text-muted small">يمكنك إنشاء وتنزيل نسخة كاملة من قاعدة البيانات مباشرةً في أي وقت.</div>
+                                        </div>
+                                        <div class="col-lg-4 text-lg-start text-center">
+                                            <button type="button" class="btn btn-primary px-4" id="download_database_backup">
+                                                <i class="fas fa-download ms-1"></i>
+                                                تنزيل نسخة قاعدة البيانات
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div class="row">
                                     <div class="col-md-12">
                                         <div class="form-check form-switch">
@@ -226,6 +241,20 @@
     <script type="text/javascript" src="{{ asset('vendor/jsvalidation/js/jsvalidation.js') }}"></script>
 
     <script>
+        document.getElementById('download_database_backup').addEventListener('click', function () {
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = "{{ route('admin.download_app_backup') }}";
+            var token = document.createElement('input');
+            token.type = 'hidden';
+            token.name = '_token';
+            token.value = "{{ csrf_token() }}";
+            form.appendChild(token);
+            document.body.appendChild(form);
+            form.submit();
+            form.remove();
+        });
+
         (function () {
             var frequency = document.getElementById('telegram_backup_frequency');
             var timeGroup = document.getElementById('backup_time_group');

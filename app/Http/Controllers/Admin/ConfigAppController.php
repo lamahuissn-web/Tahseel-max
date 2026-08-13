@@ -12,6 +12,8 @@ use App\Models\AppConfig;
 use App\Traits\ImageProcessing;
 use App\Traits\ValidationMessage;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class ConfigAppController extends Controller
 {
@@ -64,6 +66,75 @@ class ConfigAppController extends Controller
         } catch (\Exception $e) {
             dd($e->getMessage());
             return redirect()->back()->withErrors(['error' => $e->getMessage()]);
+        }
+    }
+
+    public function downloadDatabaseBackup(): BinaryFileResponse
+    {
+        $dbConfig = config('database.connections.mysql');
+        $directory = storage_path('app');
+        $baseName = 'tahseel-backup-' . now()->format('Y-m-d_H-i-s');
+        $sqlFile = $directory . DIRECTORY_SEPARATOR . $baseName . '.sql';
+        $downloadFile = $sqlFile . '.gz';
+        $credentialsFile = tempnam($directory, '.telegram-mysqldump-');
+
+        if ($credentialsFile === false) {
+            abort(500, 'Could not prepare database backup.');
+        }
+
+        try {
+            chmod($credentialsFile, 0600);
+            file_put_contents($credentialsFile, sprintf(
+                "[client]\nhost=%s\nport=%s\nuser=%s\npassword=%s\n",
+                $dbConfig['host'] ?? '127.0.0.1',
+                $dbConfig['port'] ?? 3306,
+                $dbConfig['username'] ?? 'root',
+                $dbConfig['password'] ?? ''
+            ));
+
+            $dumpCommand = sprintf(
+                'mysqldump --defaults-extra-file=%s --single-transaction --routines --triggers --events --hex-blob --default-character-set=utf8mb4 %s > %s 2>/dev/null',
+                escapeshellarg($credentialsFile),
+                escapeshellarg($dbConfig['database'] ?? 'tahseel'),
+                escapeshellarg($sqlFile)
+            );
+
+            exec($dumpCommand, $output, $exitCode);
+            if ($exitCode !== 0 || !is_file($sqlFile) || filesize($sqlFile) === 0) {
+                throw new \RuntimeException('Database dump failed.');
+            }
+
+            $compressed = gzopen($downloadFile, 'wb9');
+            $source = fopen($sqlFile, 'rb');
+            if ($compressed === false || $source === false) {
+                if (is_resource($compressed)) gzclose($compressed);
+                if (is_resource($source)) fclose($source);
+                throw new \RuntimeException('Backup compression failed.');
+            }
+
+            while (!feof($source)) {
+                gzwrite($compressed, fread($source, 1024 * 1024));
+            }
+            fclose($source);
+            gzclose($compressed);
+            @unlink($sqlFile);
+
+            if (!is_file($downloadFile) || filesize($downloadFile) === 0) {
+                throw new \RuntimeException('Compressed backup is empty.');
+            }
+
+            return response()->download(
+                $downloadFile,
+                basename($downloadFile),
+                ['Content-Type' => 'application/gzip']
+            )->deleteFileAfterSend(true);
+        } catch (\Throwable $e) {
+            @unlink($sqlFile);
+            @unlink($downloadFile);
+            Log::error('Manual database backup download failed: ' . $e->getMessage());
+            abort(500, 'Could not create database backup.');
+        } finally {
+            @unlink($credentialsFile);
         }
     }
 }
