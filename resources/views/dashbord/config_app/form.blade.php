@@ -180,11 +180,16 @@
                                         <label for="telegram_backup_frequency" class="form-label">تردد النسخ الاحتياطي</label>
                                         <select class="form-select" name="telegram_backup_frequency" id="telegram_backup_frequency">
                                             <option value="hourly" {{ old('telegram_backup_frequency', $all_data['telegram_backup_frequency'] ?? 'daily') == 'hourly' ? 'selected' : '' }}>كل ساعة</option>
+                                            <option value="every_2_hours" {{ old('telegram_backup_frequency', $all_data['telegram_backup_frequency'] ?? 'daily') == 'every_2_hours' ? 'selected' : '' }}>كل ساعتين</option>
+                                            <option value="every_4_hours" {{ old('telegram_backup_frequency', $all_data['telegram_backup_frequency'] ?? 'daily') == 'every_4_hours' ? 'selected' : '' }}>كل 4 ساعات</option>
+                                            <option value="every_6_hours" {{ old('telegram_backup_frequency', $all_data['telegram_backup_frequency'] ?? 'daily') == 'every_6_hours' ? 'selected' : '' }}>كل 6 ساعات</option>
+                                            <option value="every_12_hours" {{ old('telegram_backup_frequency', $all_data['telegram_backup_frequency'] ?? 'daily') == 'every_12_hours' ? 'selected' : '' }}>كل 12 ساعة</option>
                                             <option value="daily" {{ old('telegram_backup_frequency', $all_data['telegram_backup_frequency'] ?? 'daily') == 'daily' ? 'selected' : '' }}>يومي</option>
                                             <option value="weekly" {{ old('telegram_backup_frequency', $all_data['telegram_backup_frequency'] ?? 'daily') == 'weekly' ? 'selected' : '' }}>أسبوعي</option>
                                             <option value="monthly" {{ old('telegram_backup_frequency', $all_data['telegram_backup_frequency'] ?? 'daily') == 'monthly' ? 'selected' : '' }}>شهري</option>
                                             <option value="custom" {{ old('telegram_backup_frequency', $all_data['telegram_backup_frequency'] ?? 'daily') == 'custom' ? 'selected' : '' }}>مخصص (Cron)</option>
                                         </select>
+                                        <small class="form-text text-muted">يمكنك اختيار كل ساعة، كل 2/4/6/12 ساعة، أو جدولة يومية/أسبوعية/شهرية.</small>
                                     </div>
 
                                     <div class="col-md-6" id="backup_time_group">
@@ -221,11 +226,22 @@
     <script type="text/javascript" src="{{ asset('vendor/jsvalidation/js/jsvalidation.js') }}"></script>
 
     <script>
-        document.getElementById('telegram_backup_frequency').addEventListener('change', function() {
-            var val = this.value;
-            document.getElementById('backup_time_group').classList.toggle('d-none', val === 'custom');
-            document.getElementById('custom_cron_group').classList.toggle('d-none', val !== 'custom');
-        });
+        (function () {
+            var frequency = document.getElementById('telegram_backup_frequency');
+            var timeGroup = document.getElementById('backup_time_group');
+            var cronGroup = document.getElementById('custom_cron_group');
+            var intervalValues = ['hourly', 'every_2_hours', 'every_4_hours', 'every_6_hours', 'every_12_hours'];
+
+            function refreshBackupScheduleFields() {
+                var value = frequency.value;
+                var isInterval = intervalValues.indexOf(value) !== -1;
+                timeGroup.classList.toggle('d-none', isInterval || value === 'custom');
+                cronGroup.classList.toggle('d-none', value !== 'custom');
+            }
+
+            frequency.addEventListener('change', refreshBackupScheduleFields);
+            refreshBackupScheduleFields();
+        })();
     </script>
 
 @endsection
