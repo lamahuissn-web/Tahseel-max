@@ -1736,38 +1736,45 @@ class WhatsAppControlCenterController extends Controller
     {
         $statusFilter = trim((string) $request->input('status', ''));
         $sourceFilter = trim((string) $request->input('source', ''));
+        $section = in_array($request->input('section'), ['attention', 'completed', 'cancelled'], true)
+            ? $request->input('section')
+            : 'attention';
         $batchFilter = $request->input('batch');
         $batchFilter = is_numeric($batchFilter) ? (int) $batchFilter : null;
         $dateFrom = $request->date('date_from');
         $dateTo = $request->date('date_to');
 
-        $messageQuery = WhatsAppMessageLog::query()->with('batch');
-        if ($batchFilter !== null) {
-            $messageQuery->where('batch_id', $batchFilter);
-        }
-        if ($statusFilter !== '') {
-            $messageQuery->where('status', $statusFilter);
-        }
-        if ($dateFrom) {
-            $messageQuery->whereDate('created_at', '>=', $dateFrom);
-        }
-        if ($dateTo) {
-            $messageQuery->whereDate('created_at', '<=', $dateTo);
-        }
-        if ($sourceFilter !== '') {
-            $messageQuery->where(function ($query) use ($sourceFilter): void {
-                $query->whereHas('batch', fn ($batch) => $batch->where('source', $sourceFilter))
-                    ->orWhere('sent_by', 'like', '%'.$sourceFilter.'%');
-            });
-        }
-
-        $recent = $messageQuery->latest()->paginate(50)->withQueryString();
         $statusCounts = WhatsAppMessageLog::query()
             ->selectRaw('status, COUNT(*) aggregate')
             ->groupBy('status')
             ->pluck('aggregate', 'status');
 
-        $batches = WhatsAppBatch::query()
+        $baseBatches = fn () => WhatsAppBatch::query()
+            ->whereNull('archived_at')
+            ->when($sourceFilter !== '', fn ($query) => $query->where('source', $sourceFilter))
+            ->when($dateFrom, fn ($query) => $query->whereDate('created_at', '>=', $dateFrom))
+            ->when($dateTo, fn ($query) => $query->whereDate('created_at', '<=', $dateTo))
+            ->when($statusFilter !== '', fn ($query) => $query->whereHas('messages', fn ($messages) => $messages->where('status', $statusFilter)));
+
+        $applySection = function ($query, string $selectedSection) {
+            return match ($selectedSection) {
+                'completed' => $query->where('status', 'completed')
+                    ->whereDoesntHave('messages', fn ($messages) => $messages->whereIn('status', ['pending', 'sending', 'failed'])),
+                'cancelled' => $query->where('status', 'cancelled'),
+                default => $query->where('status', '!=', 'cancelled')
+                    ->where(function ($attention): void {
+                        $attention->whereIn('status', ['queued', 'running', 'cancelling', 'completed_with_errors'])
+                            ->orWhereHas('messages', fn ($messages) => $messages->whereIn('status', ['pending', 'sending', 'failed']));
+                    }),
+            };
+        };
+
+        $sectionCounts = [];
+        foreach (['attention', 'completed', 'cancelled'] as $sectionName) {
+            $sectionCounts[$sectionName] = $applySection($baseBatches(), $sectionName)->count();
+        }
+
+        $batches = $applySection($baseBatches(), $section)
             ->with('creator:id,name')
             ->withCount([
                 'messages as total_count',
@@ -1777,11 +1784,24 @@ class WhatsAppControlCenterController extends Controller
                 'messages as failed_count' => fn ($query) => $query->where('status', 'failed'),
                 'messages as cancelled_count' => fn ($query) => $query->where('status', 'cancelled'),
             ])
-            ->whereNull('archived_at')
-            ->when($sourceFilter !== '', fn ($query) => $query->where('source', $sourceFilter))
             ->latest()
-            ->paginate(20, ['*'], 'batches_page')
+            ->paginate(10, ['*'], 'batches_page')
             ->withQueryString();
+
+        $selectedBatch = null;
+        $messages = null;
+        if ($batchFilter !== null) {
+            $selectedBatch = $applySection($baseBatches(), $section)->find($batchFilter);
+            if ($selectedBatch) {
+                $messages = $selectedBatch->messages()
+                    ->when($statusFilter !== '', fn ($query) => $query->where('status', $statusFilter))
+                    ->when($dateFrom, fn ($query) => $query->whereDate('created_at', '>=', $dateFrom))
+                    ->when($dateTo, fn ($query) => $query->whereDate('created_at', '<=', $dateTo))
+                    ->latest()
+                    ->paginate(10, ['*'], 'messages_page')
+                    ->withQueryString();
+            }
+        }
 
         $legacyBatches = WhatsAppMessageLog::query()
             ->whereNull('batch_id')
@@ -1790,7 +1810,7 @@ class WhatsAppControlCenterController extends Controller
             ->selectRaw("sent_by, COUNT(*) total_count, SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) pending_count, SUM(CASE WHEN status = 'sending' THEN 1 ELSE 0 END) sending_count, SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) sent_count, SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) failed_count, SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) cancelled_count, MAX(created_at) created_at")
             ->groupBy('sent_by')
             ->orderByDesc('created_at')
-            ->limit(50)
+            ->limit(10)
             ->get();
 
         return view('dashbord.whatsapp.queue', [
@@ -1800,12 +1820,15 @@ class WhatsAppControlCenterController extends Controller
             'queuePaused' => $queueState->paused(),
             'statusFilter' => $statusFilter,
             'sourceFilter' => $sourceFilter,
+            'section' => $section,
+            'sectionCounts' => $sectionCounts,
             'dateFrom' => $dateFrom?->toDateString(),
             'dateTo' => $dateTo?->toDateString(),
             'sourceOptions' => ['' => 'كل المصادر', 'manual' => 'يدوي', 'automation' => 'آلي', 'autoreceipt' => 'إيصال تلقائي', 'calendar' => 'تقويم', 'cron' => 'مجدول', 'system' => 'نظام'],
             'batches' => $batches,
             'legacyBatches' => $legacyBatches,
-            'recent' => $recent,
+            'selectedBatch' => $selectedBatch,
+            'messages' => $messages,
         ]);
     }
 
