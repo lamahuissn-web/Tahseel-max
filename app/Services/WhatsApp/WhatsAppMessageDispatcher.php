@@ -13,10 +13,14 @@ use Throwable;
 
 class WhatsAppMessageDispatcher
 {
-    public function __construct(private readonly CacheRepository $cache) {}
+    public function __construct(
+        private readonly CacheRepository $cache,
+        private readonly WhatsAppBatchService $batches,
+    ) {}
 
     public function dispatch(WhatsAppMessageLog $messageLog): void
     {
+        $this->batches->resolveForMessage($messageLog);
         $messageLogId = $messageLog->id;
 
         DB::afterCommit(function () use ($messageLogId): void {

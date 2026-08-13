@@ -146,6 +146,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | OpenWA API
+    |--------------------------------------------------------------------------
+    |
+    | Read OpenWA environment values while Laravel builds its configuration.
+    | This keeps the integration available after `config:cache`, when direct
+    | env() calls from application services are intentionally unavailable.
+    |
+    */
+
+    'openwa_api_url' => env('OPENWA_API_URL', 'http://192.168.0.75:2785/api'),
+    'openwa_api_key' => env('OPENWA_API_KEY', ''),
+    'openwa_session_id' => env('OPENWA_SESSION_ID', ''),
+
+    /*
+    |--------------------------------------------------------------------------
     | Autoloaded Service Providers
     |--------------------------------------------------------------------------
     |

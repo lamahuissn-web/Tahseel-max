@@ -273,7 +273,7 @@ Route::group(
                 Route::get('/send/search-clients', [WhatsAppControlCenterController::class, 'searchClients'])->name('send.search_clients');
                 Route::get('/log', [WhatsAppControlCenterController::class, 'log'])->name('log');
                 Route::get('/log/data', [WhatsAppControlCenterController::class, 'logData'])->name('log.data');
-                Route::post('/log/{id}/resend', [WhatsAppControlCenterController::class, 'resendMessage'])->name('log.resend');
+                Route::post('/log/{id}/resend', [WhatsAppControlCenterController::class, 'resendMessage'])->middleware('can:control_whatsapp_queue')->name('log.resend');
                 Route::get('/automation', [WhatsAppControlCenterController::class, 'automation'])->name('automation');
                 Route::post('/automation/{id}/toggle', [WhatsAppControlCenterController::class, 'toggleAutomationRule'])->name('automation.toggle');
                 Route::post('/automation/{id}/run', [WhatsAppControlCenterController::class, 'runAutomationRule'])->name('automation.run');
@@ -281,8 +281,11 @@ Route::group(
                 Route::match(['get', 'post'], '/automation/{id}/send-from-preview', [WhatsAppControlCenterController::class, 'sendFromPreview'])->name('automation.send_from_preview');
                 Route::post('/automation/{id}/save', [WhatsAppControlCenterController::class, 'saveAutomationRule'])->name('automation.save');
                 Route::get('/queue', [WhatsAppControlCenterController::class, 'queue'])->name('queue');
-                Route::post('/queue/resend-failed', [WhatsAppControlCenterController::class, 'resendAllFailed'])->name('queue.resend_failed');
-                Route::post('/queue/pause', [WhatsAppControlCenterController::class, 'toggleQueuePause'])->name('queue.pause');
+                Route::post('/queue/pause', [WhatsAppControlCenterController::class, 'toggleQueuePause'])->middleware('can:control_whatsapp_queue')->name('queue.pause');
+                Route::get('/queue/batches/{batch}/cancel-preview', [WhatsAppControlCenterController::class, 'cancelBatchPreview'])->middleware('can:control_whatsapp_queue')->name('queue.batches.cancel_preview');
+                Route::post('/queue/batches/{batch}/cancel', [WhatsAppControlCenterController::class, 'cancelBatch'])->middleware('can:control_whatsapp_queue')->name('queue.batches.cancel');
+                Route::post('/queue/batches/{batch}/retry', [WhatsAppControlCenterController::class, 'retryBatch'])->middleware('can:control_whatsapp_queue')->name('queue.batches.retry');
+                Route::post('/queue/batches/{batch}/archive', [WhatsAppControlCenterController::class, 'archiveBatch'])->middleware('can:control_whatsapp_queue')->name('queue.batches.archive');
                 Route::get('/automation/calendar-data', [WhatsAppControlCenterController::class, 'calendarData'])->name('automation.calendar_data');
                 Route::get('/automation/calendar-day', [WhatsAppControlCenterController::class, 'calendarDay'])->name('automation.calendar_day');
                 Route::post('/automation/calendar-send', [WhatsAppControlCenterController::class, 'calendarSend'])->name('automation.calendar_send');

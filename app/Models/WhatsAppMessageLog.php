@@ -3,8 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @property string|null $delivery_token Durable owner of the active serialized queue attempt.
+ */
 class WhatsAppMessageLog extends Model
 {
     use HasFactory;
@@ -18,6 +22,14 @@ class WhatsAppMessageLog extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
+
+    /**
+     * Get the durable batch associated with this message.
+     */
+    public function batch(): BelongsTo
+    {
+        return $this->belongsTo(WhatsAppBatch::class, 'batch_id');
+    }
 
     /**
      * Get the client that owns this message log.
