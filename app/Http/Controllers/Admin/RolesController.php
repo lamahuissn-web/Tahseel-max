@@ -228,6 +228,7 @@ class RolesController extends Controller
 
             'WhatsApp Safety' => Permission::whereIn('name', [
                 'update_whatsapp_safety_settings',
+                'control_whatsapp_queue',
             ])->get(),
 
             'Financial Transactions' => Permission::whereIn('name', [

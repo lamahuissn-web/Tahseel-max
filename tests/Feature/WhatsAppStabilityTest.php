@@ -7,12 +7,14 @@ use App\Jobs\SendWhatsAppMessage;
 use App\Models\Admin\Invoice;
 use App\Models\WhatsAppMessageLog;
 use App\Services\WhatsApp\PaymentReceiptNotifier;
+use App\Services\WhatsApp\WhatsAppBatchService;
 use App\Services\WhatsApp\WhatsAppMessageDispatcher;
 use App\Services\WhatsApp\WhatsAppRateLimiter;
 use App\Services\WhatsApp\WhatsAppSendLock;
 use App\Services\WhatsAppService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Request;
 use Illuminate\Queue\Worker;
 use Illuminate\Queue\WorkerOptions;
 use Illuminate\Support\Facades\Artisan;
@@ -39,6 +41,15 @@ class WhatsAppStabilityTest extends TestCase
         $this->createTables();
     }
 
+    public function test_openwa_environment_values_are_part_of_cached_laravel_configuration(): void
+    {
+        $appConfig = require base_path('config/app.php');
+
+        $this->assertArrayHasKey('openwa_api_url', $appConfig);
+        $this->assertArrayHasKey('openwa_api_key', $appConfig);
+        $this->assertArrayHasKey('openwa_session_id', $appConfig);
+    }
+
     public function test_receipt_uses_latest_revenue_and_dispatches_a_durable_job(): void
     {
         Queue::fake();
@@ -48,6 +59,8 @@ class WhatsAppStabilityTest extends TestCase
 
         $log = WhatsAppMessageLog::query()->sole();
         $this->assertSame('pending', $log->status);
+        $this->assertNotNull($log->batch_id);
+        $this->assertSame('autoreceipt', $log->batch->source);
         $this->assertStringContainsString('$15.00', $log->message);
         $this->assertStringContainsString('Latest Collector', $log->message);
         $this->assertStringNotContainsString('Old Collector', $log->message);
@@ -81,8 +94,10 @@ class WhatsAppStabilityTest extends TestCase
         ]));
 
         $response = app(WhatsAppControlCenterController::class)->resendMessage(
+            Request::create('/admin/whatsapp/log/'.$log->id.'/resend', 'POST'),
             $log->id,
-            app(WhatsAppMessageDispatcher::class)
+            app(WhatsAppMessageDispatcher::class),
+            app(WhatsAppBatchService::class)
         );
 
         $this->assertTrue($response->getData(true)['success']);
@@ -284,13 +299,15 @@ class WhatsAppStabilityTest extends TestCase
 
     public function test_stale_sending_receipt_is_failed_as_ambiguous_instead_of_duplicated(): void
     {
+        $job = new SendWhatsAppMessage(1);
         $log = WhatsAppMessageLog::query()->create(array_merge($this->messageAttributes(), [
             'status' => 'sending',
+            'delivery_token' => $job->attemptToken,
             'updated_at' => now()->subMinutes(16),
         ]));
         $service = $this->fakeWhatsAppService(['connected' => true], ['success' => true]);
 
-        (new SendWhatsAppMessage($log->id))->handle($service);
+        $job->handle($service);
 
         $this->assertSame('failed', $log->fresh()->status);
         $this->assertStringContainsString('Ambiguous delivery', $log->fresh()->error);
@@ -382,6 +399,34 @@ class WhatsAppStabilityTest extends TestCase
         $this->assertSame(0, Artisan::call('whatsapp:recover-pending'));
 
         Queue::assertPushed(SendWhatsAppMessage::class, 2);
+    }
+
+    public function test_recovery_uses_authoritative_batch_id_and_skips_inactive_batches(): void
+    {
+        Queue::fake();
+        $activeBatchId = DB::table('whatsapp_batches')->insertGetId([
+            'uuid' => 'recovery-active', 'source' => 'system', 'title' => 'Active',
+            'status' => 'queued', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        foreach (['cancelled', 'archived'] as $state) {
+            $batchId = DB::table('whatsapp_batches')->insertGetId([
+                'uuid' => 'recovery-'.$state, 'source' => 'system', 'title' => $state,
+                'status' => $state === 'cancelled' ? 'cancelled' : 'completed',
+                'archived_at' => $state === 'archived' ? now() : null,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+            WhatsAppMessageLog::query()->create(array_merge($this->messageAttributes(), [
+                'batch_id' => $batchId, 'sent_by' => 'system:without-marker',
+            ]));
+        }
+        $authoritative = WhatsAppMessageLog::query()->create(array_merge($this->messageAttributes(), [
+            'batch_id' => $activeBatchId, 'sent_by' => null,
+        ]));
+
+        $this->assertSame(0, Artisan::call('whatsapp:recover-pending'));
+
+        Queue::assertPushed(SendWhatsAppMessage::class, 1);
+        Queue::assertPushed(SendWhatsAppMessage::class, fn ($job) => $job->messageLogId === $authoritative->id);
     }
 
     public function test_recovery_cursor_rotates_past_the_first_limited_page(): void
@@ -527,8 +572,24 @@ class WhatsAppStabilityTest extends TestCase
             $table->unsignedInteger('available_at');
             $table->unsignedInteger('created_at');
         });
+        Schema::create('whatsapp_batches', function (Blueprint $table) {
+            $table->id();
+            $table->uuid('uuid')->unique();
+            $table->string('source');
+            $table->string('title');
+            $table->string('template_type')->nullable();
+            $table->string('status')->default('queued');
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->unsignedBigInteger('cancelled_by')->nullable();
+            $table->timestamp('cancelled_at')->nullable();
+            $table->string('cancellation_reason', 500)->nullable();
+            $table->unsignedBigInteger('archived_by')->nullable();
+            $table->timestamp('archived_at')->nullable();
+            $table->timestamps();
+        });
         Schema::create('whatsapp_message_logs', function (Blueprint $table) {
             $table->id();
+            $table->unsignedBigInteger('batch_id')->nullable();
             $table->unsignedBigInteger('client_id')->nullable();
             $table->string('client_name')->nullable();
             $table->unsignedBigInteger('invoice_id')->nullable();
@@ -537,7 +598,9 @@ class WhatsAppStabilityTest extends TestCase
             $table->text('message');
             $table->string('template_type')->nullable();
             $table->string('sent_by')->nullable();
+            $table->string('payment_reference')->nullable();
             $table->string('status')->default('pending');
+            $table->uuid('delivery_token')->nullable()->index();
             $table->text('error')->nullable();
             $table->timestamps();
         });

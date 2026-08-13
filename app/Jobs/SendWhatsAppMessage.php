@@ -4,6 +4,8 @@ namespace App\Jobs;
 
 use App\Models\Admin\Invoice;
 use App\Models\WhatsAppMessageLog;
+use App\Services\WhatsApp\WhatsAppBatchService;
+use App\Services\WhatsApp\WhatsAppQueueState;
 use App\Services\WhatsAppService;
 use Carbon\Carbon;
 use DateTimeInterface;
@@ -13,6 +15,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
 
@@ -28,11 +31,15 @@ class SendWhatsAppMessage implements ShouldBeUnique, ShouldQueue
 
     public readonly int $retryDeadline;
 
+    public readonly string $attemptToken;
+
     public function __construct(
         public readonly int $messageLogId,
-        ?int $retryDeadline = null
+        ?int $retryDeadline = null,
+        ?string $attemptToken = null
     ) {
         $this->retryDeadline = $retryDeadline ?? now()->addDay()->getTimestamp();
+        $this->attemptToken = $attemptToken ?? (string) Str::uuid();
     }
 
     public function uniqueId(): string
@@ -52,9 +59,22 @@ class SendWhatsAppMessage implements ShouldBeUnique, ShouldQueue
 
     public function handle(WhatsAppService $service): void
     {
-        $messageLog = WhatsAppMessageLog::query()->find($this->messageLogId);
+        $messageLog = WhatsAppMessageLog::query()->with('batch')->find($this->messageLogId);
 
-        if (! $messageLog || $messageLog->status === 'sent') {
+        if (! $messageLog || in_array($messageLog->status, ['sent', 'cancelled'], true)) {
+            return;
+        }
+
+        if ($messageLog->batch && (
+            $messageLog->batch->archived_at !== null
+            || in_array($messageLog->batch->status, ['cancelling', 'cancelled'], true)
+        )) {
+            return;
+        }
+
+        if (app(WhatsAppQueueState::class)->paused()) {
+            $this->release(60);
+
             return;
         }
 
@@ -70,12 +90,19 @@ class SendWhatsAppMessage implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        $this->deliver($messageLog, $service);
+        $claimed = app(WhatsAppBatchService::class)->claimForDelivery(
+            $messageLog->id,
+            $this->attemptToken
+        );
+        if (! $claimed) {
+            return;
+        }
+
+        $this->deliver($claimed, $service);
     }
 
     private function deliver(WhatsAppMessageLog $messageLog, WhatsAppService $service): void
     {
-        $messageLog->update(['status' => 'sending', 'error' => null]);
         $sendResult = $service->send($messageLog->phone, $messageLog->message, [
             'rate_context' => ['source' => 'database-queue'],
         ]);
@@ -106,7 +133,13 @@ class SendWhatsAppMessage implements ShouldBeUnique, ShouldQueue
             $this->recordTransientFailure($messageLog, $sendResult);
         }
 
-        $messageLog->update(['status' => 'sent', 'error' => null]);
+        if (! app(WhatsAppBatchService::class)->transitionClaimedMessage(
+            $messageLog->id,
+            $this->attemptToken,
+            'sent'
+        )) {
+            return;
+        }
         if ($messageLog->template_type !== 'receipt') {
             $this->markInvoicesNotified($messageLog);
         }
@@ -124,7 +157,12 @@ class SendWhatsAppMessage implements ShouldBeUnique, ShouldQueue
     private function recordTransientFailure(WhatsAppMessageLog $messageLog, array $sendResult): never
     {
         $error = $sendResult['error'] ?? 'OpenWA send failed';
-        $messageLog->update(['status' => 'pending', 'error' => $error]);
+        app(WhatsAppBatchService::class)->transitionClaimedMessage(
+            $messageLog->id,
+            $this->attemptToken,
+            'pending',
+            $error
+        );
 
         throw new RuntimeException($error);
     }
@@ -154,24 +192,47 @@ class SendWhatsAppMessage implements ShouldBeUnique, ShouldQueue
 
     private function markFailed(WhatsAppMessageLog $messageLog, string $error): void
     {
-        $messageLog->update(['status' => 'failed', 'error' => $error]);
+        app(WhatsAppBatchService::class)->transitionClaimedMessage(
+            $messageLog->id,
+            $this->attemptToken,
+            'failed',
+            $error
+        );
     }
 
     public function failed(?Throwable $exception): void
     {
-        WhatsAppMessageLog::query()
-            ->whereKey($this->messageLogId)
-            ->where('status', '!=', 'sent')
-            ->update([
-                'status' => 'failed',
-                'error' => $exception?->getMessage() ?? 'WhatsApp retry deadline reached',
-                'updated_at' => now(),
-            ]);
+        if (app(WhatsAppQueueState::class)->paused()) {
+            WhatsAppMessageLog::query()
+                ->whereKey($this->messageLogId)
+                ->where('status', 'pending')
+                ->update(['updated_at' => now()]);
+
+            return;
+        }
+
+        app(WhatsAppBatchService::class)->expireMessage(
+            $this->messageLogId,
+            $this->attemptToken,
+            $exception?->getMessage() ?? 'WhatsApp retry deadline reached'
+        );
     }
 
     private function retryLater(WhatsAppMessageLog $messageLog, string $error, int $delay): void
     {
-        $messageLog->update(['status' => 'pending', 'error' => $error]);
+        $transitioned = app(WhatsAppBatchService::class)->transitionClaimedMessage(
+            $messageLog->id,
+            $this->attemptToken,
+            'pending',
+            $error
+        );
+        if (! $transitioned) {
+            WhatsAppMessageLog::query()
+                ->whereKey($messageLog->id)
+                ->where('status', 'pending')
+                ->whereNull('delivery_token')
+                ->update(['error' => $error, 'updated_at' => now()]);
+        }
         $this->release(max(15, $delay));
     }
 

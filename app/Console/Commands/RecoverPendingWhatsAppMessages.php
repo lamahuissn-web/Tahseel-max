@@ -21,7 +21,15 @@ class RecoverPendingWhatsAppMessages extends Command
         $cursor = (int) Cache::get(self::CURSOR_CACHE_KEY, 0);
         $query = WhatsAppMessageLog::query()
             ->where('status', 'pending')
-            ->where('sent_by', 'like', '%|batch:%');
+            ->where(function ($query): void {
+                $query->where(function ($query): void {
+                    $query->whereNotNull('batch_id')->whereHas('batch', function ($query): void {
+                        $query->whereNull('archived_at')->whereNotIn('status', ['cancelling', 'cancelled']);
+                    });
+                })->orWhere(function ($query): void {
+                    $query->whereNull('batch_id')->where('sent_by', 'like', '%|batch:%');
+                });
+            });
         $messages = (clone $query)
             ->where('id', '>', $cursor)
             ->orderBy('id')

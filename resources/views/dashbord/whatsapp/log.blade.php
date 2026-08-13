@@ -108,9 +108,11 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-light" data-bs-dismiss="modal">{{ trans('clients.close') ?? 'إغلاق' }}</button>
+                @can('control_whatsapp_queue')
                 <button type="button" class="btn btn-success" id="resendBtn">
                     <i class="bi bi-arrow-clockwise"></i> {{ trans('clients.whatsapp_log_resend') ?? 'إعادة إرسال' }}
                 </button>
+                @endcan
             </div>
         </div>
     </div>
@@ -120,6 +122,7 @@
 @section('js')
 <script>
 $(document).ready(function() {
+    const canControlQueue = @can('control_whatsapp_queue') true @else false @endcan;
     let logTable = $('#logTable').DataTable({
         processing: true,
         serverSide: true,
@@ -181,7 +184,7 @@ $(document).ready(function() {
                                 data-status="${data.status}">
                             <i class="bi bi-eye"></i>
                         </button>
-                        ${data.status === 'failed' ? `
+                        ${canControlQueue && data.retry_eligible ? `
                         <button class="btn btn-sm btn-warning resend-message" data-id="${data.id}">
                             <i class="bi bi-arrow-clockwise"></i>
                         </button>` : ''}
@@ -220,16 +223,30 @@ $(document).ready(function() {
             $('#modalError').addClass('d-none');
         }
         $('#resendBtn').data('id', $(this).data('id'));
+        const selected = logTable.rows().data().toArray().find(item => String(item.id) === String($(this).data('id')));
+        $('#resendBtn').toggle(canControlQueue && Boolean(selected && selected.retry_eligible));
         $('#messageModal').modal('show');
     });
 
-    // Resend from modal
-    $('#resendBtn').on('click', function() {
-        const id = $(this).data('id');
-        const btn = $(this);
-        btn.prop('disabled', true).html('<i class="bi bi-arrow-repeat spinner"></i>');
+    function resendMessage(id, btn) {
+        const row = logTable.rows().data().toArray().find(item => String(item.id) === String(id));
+        const confirmResend = row && row.is_ambiguous
+            ? Swal.fire({
+                icon: 'warning',
+                title: 'نتيجة الإرسال غير مؤكدة',
+                text: 'قد تكون الرسالة وصلت بالفعل. إعادة الإرسال قد تنشئ رسالة مكررة. هل تقر بذلك وتريد المتابعة؟',
+                showCancelButton: true,
+                confirmButtonText: 'أقر بالمخاطرة وأعد الإرسال',
+                cancelButtonText: 'إلغاء'
+            }).then(result => result.isConfirmed)
+            : Promise.resolve(true);
+
+        confirmResend.then(confirmed => {
+            if (!confirmed) return;
+            btn.prop('disabled', true).html('<i class="bi bi-arrow-repeat spinner"></i>');
         $.post('{{ route("admin.whatsapp.log.resend", "__ID__") }}'.replace('__ID__', id), {
-            _token: '{{ csrf_token() }}'
+            _token: '{{ csrf_token() }}',
+            acknowledge_ambiguous: row && row.is_ambiguous ? 1 : 0
         }).done(function(res) {
             Swal.fire({ icon: res.success ? 'success' : 'error', text: res.message });
             logTable.ajax.reload();
@@ -239,23 +256,17 @@ $(document).ready(function() {
         }).always(function() {
             btn.prop('disabled', false).html('<i class="bi bi-arrow-clockwise"></i> {{ trans("clients.whatsapp_log_resend") ?? "إعادة إرسال" }}');
         });
+        });
+    }
+
+    // Resend from modal
+    $('#resendBtn').on('click', function() {
+        resendMessage($(this).data('id'), $(this));
     });
 
     // Resend from table
     $(document).on('click', '.resend-message', function() {
-        const id = $(this).data('id');
-        const btn = $(this);
-        btn.prop('disabled', true).html('<i class="bi bi-arrow-repeat spinner"></i>');
-        $.post('{{ route("admin.whatsapp.log.resend", "__ID__") }}'.replace('__ID__', id), {
-            _token: '{{ csrf_token() }}'
-        }).done(function(res) {
-            Swal.fire({ icon: res.success ? 'success' : 'error', text: res.message });
-            logTable.ajax.reload();
-        }).fail(function() {
-            Swal.fire({ icon: 'error', text: '{{ trans("clients.whatsapp_test_error") ?? "حدث خطأ" }}' });
-        }).always(function() {
-            btn.prop('disabled', false).html('<i class="bi bi-arrow-clockwise"></i>');
-        });
+        resendMessage($(this).data('id'), $(this));
     });
 });
 </script>

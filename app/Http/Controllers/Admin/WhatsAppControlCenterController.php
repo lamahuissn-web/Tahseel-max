@@ -6,10 +6,13 @@ use App\Exports\CollectorMarkedCustomersExport;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\UpdateWhatsAppSafetySettingsRequest;
 use App\Models\Log as ActivityLog;
+use App\Models\WhatsAppBatch;
 use App\Models\WhatsAppMessageLog;
 use App\Services\WhatsApp\CollectorReminderService;
 use App\Services\WhatsApp\InvoiceEligibilityService;
+use App\Services\WhatsApp\WhatsAppBatchService;
 use App\Services\WhatsApp\WhatsAppMessageDispatcher;
+use App\Services\WhatsApp\WhatsAppQueueState;
 use App\Services\WhatsApp\WhatsAppRateLimiter;
 use App\Services\WhatsApp\WhatsAppSafetySettings;
 use App\Services\WhatsApp\WhatsAppTemplateService;
@@ -21,6 +24,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -1144,7 +1148,7 @@ class WhatsAppControlCenterController extends Controller
      */
     public function logData(Request $request)
     {
-        $query = WhatsAppMessageLog::query();
+        $query = WhatsAppMessageLog::query()->with('batch');
 
         if ($request->search) {
             $query->search($request->search);
@@ -1184,6 +1188,11 @@ class WhatsAppControlCenterController extends Controller
                 'message_preview' => mb_substr($log->message, 0, 100),
                 'message_full' => $log->message,
                 'error' => $log->error,
+                'is_ambiguous' => str_contains((string) $log->error, 'Ambiguous')
+                    || str_contains((string) $log->error, 'automatic resend suppressed'),
+                'retry_eligible' => $log->status === 'failed'
+                    && (! $log->batch || ($log->batch->archived_at === null
+                        && ! in_array($log->batch->status, ['cancelling', 'cancelled'], true))),
                 'created_at' => $log->created_at->format('Y-m-d h:i A'),
                 'sent_by' => $log->sent_by,
                 'source_label' => $this->getMessageSourceMeta($log->sent_by)['label'],
@@ -1196,10 +1205,29 @@ class WhatsAppControlCenterController extends Controller
     /**
      * 🔄 Resend a failed message.
      */
-    public function resendMessage($id, WhatsAppMessageDispatcher $dispatcher)
-    {
-        $log = WhatsAppMessageLog::findOrFail($id);
-        $this->queueMessageForResend($log, $dispatcher);
+    public function resendMessage(
+        Request $request,
+        $id,
+        WhatsAppMessageDispatcher $dispatcher,
+        WhatsAppBatchService $batches
+    ) {
+        $validated = $request->validate(['acknowledge_ambiguous' => 'sometimes|boolean']);
+        $log = WhatsAppMessageLog::query()->with('batch')->findOrFail($id);
+
+        try {
+            $message = $batches->retryMessage(
+                $log,
+                (bool) ($validated['acknowledge_ambiguous'] ?? false)
+            );
+        } catch (\DomainException $exception) {
+            return response()->json([
+                'success' => false,
+                'error' => $exception->getMessage(),
+                'message' => 'لا يمكن إعادة إرسال هذه الرسالة بحالتها الحالية.',
+            ], 409);
+        }
+
+        $dispatcher->dispatch($message);
 
         return response()->json([
             'success' => true,
@@ -1704,142 +1732,183 @@ class WhatsAppControlCenterController extends Controller
     /**
      * ⏳ Queue — View pending/recent messages. (P2)
      */
-    public function queue(Request $request)
+    public function queue(Request $request, WhatsAppQueueState $queueState)
     {
-        $pending = WhatsAppMessageLog::where('status', 'pending')->count();
-        $sending = WhatsAppMessageLog::where('status', 'sending')->count();
-        $failed = WhatsAppMessageLog::where('status', 'failed')->count();
-
         $statusFilter = trim((string) $request->input('status', ''));
         $sourceFilter = trim((string) $request->input('source', ''));
+        $batchFilter = $request->input('batch');
+        $batchFilter = is_numeric($batchFilter) ? (int) $batchFilter : null;
+        $dateFrom = $request->date('date_from');
+        $dateTo = $request->date('date_to');
 
-        $recentQuery = WhatsAppMessageLog::query();
-
+        $messageQuery = WhatsAppMessageLog::query()->with('batch');
+        if ($batchFilter !== null) {
+            $messageQuery->where('batch_id', $batchFilter);
+        }
         if ($statusFilter !== '') {
-            $recentQuery->where('status', $statusFilter);
+            $messageQuery->where('status', $statusFilter);
+        }
+        if ($dateFrom) {
+            $messageQuery->whereDate('created_at', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $messageQuery->whereDate('created_at', '<=', $dateTo);
+        }
+        if ($sourceFilter !== '') {
+            $messageQuery->where(function ($query) use ($sourceFilter): void {
+                $query->whereHas('batch', fn ($batch) => $batch->where('source', $sourceFilter))
+                    ->orWhere('sent_by', 'like', '%'.$sourceFilter.'%');
+            });
         }
 
-        $recent = $recentQuery->orderByRaw("CASE WHEN status = 'sending' THEN 0 WHEN status = 'pending' THEN 1 WHEN status = 'failed' THEN 2 ELSE 3 END")
-            ->orderBy('created_at', 'desc')
-            ->limit(180)
-            ->get();
+        $recent = $messageQuery->latest()->paginate(50)->withQueryString();
+        $statusCounts = WhatsAppMessageLog::query()
+            ->selectRaw('status, COUNT(*) aggregate')
+            ->groupBy('status')
+            ->pluck('aggregate', 'status');
 
-        $recent = $recent->filter(function ($log) use ($sourceFilter) {
-            if ($sourceFilter === '') {
-                return true;
-            }
+        $batches = WhatsAppBatch::query()
+            ->with('creator:id,name')
+            ->withCount([
+                'messages as total_count',
+                'messages as pending_count' => fn ($query) => $query->where('status', 'pending'),
+                'messages as sending_count' => fn ($query) => $query->where('status', 'sending'),
+                'messages as sent_count' => fn ($query) => $query->where('status', 'sent'),
+                'messages as failed_count' => fn ($query) => $query->where('status', 'failed'),
+                'messages as cancelled_count' => fn ($query) => $query->where('status', 'cancelled'),
+            ])
+            ->whereNull('archived_at')
+            ->when($sourceFilter !== '', fn ($query) => $query->where('source', $sourceFilter))
+            ->latest()
+            ->paginate(20, ['*'], 'batches_page')
+            ->withQueryString();
 
-            $source = $this->getMessageSourceMeta($log->sent_by)['key'];
-
-            return $source === $sourceFilter;
-        })->values();
-
-        $batchRows = WhatsAppMessageLog::query()
+        $legacyBatches = WhatsAppMessageLog::query()
+            ->whereNull('batch_id')
             ->whereNotNull('sent_by')
             ->where('sent_by', 'like', '%|batch:%')
-            ->orderBy('created_at', 'desc')
-            ->limit(500)
-            ->get(['sent_by', 'status', 'created_at']);
-
-        $batchSummaries = $batchRows
+            ->selectRaw("sent_by, COUNT(*) total_count, SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) pending_count, SUM(CASE WHEN status = 'sending' THEN 1 ELSE 0 END) sending_count, SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) sent_count, SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) failed_count, SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) cancelled_count, MAX(created_at) created_at")
             ->groupBy('sent_by')
-            ->map(function ($rows, $sentBy) {
-                $meta = $this->getMessageSourceMeta($sentBy);
+            ->orderByDesc('created_at')
+            ->limit(50)
+            ->get();
 
-                return [
-                    'sent_by' => $sentBy,
-                    'source_key' => $meta['key'],
-                    'source_label' => $meta['label'],
-                    'source_badge' => $meta['badge'],
-                    'batch_label' => $meta['detail'],
-                    'total' => $rows->count(),
-                    'pending' => $rows->where('status', 'pending')->count(),
-                    'sending' => $rows->where('status', 'sending')->count(),
-                    'sent' => $rows->where('status', 'sent')->count(),
-                    'failed' => $rows->where('status', 'failed')->count(),
-                    'last_activity' => $rows->max('created_at'),
-                ];
-            })
-            ->filter(function ($batch) use ($sourceFilter) {
-                return $sourceFilter === '' || $batch['source_key'] === $sourceFilter;
-            })
-            ->sortByDesc(function ($batch) {
-                return (string) $batch['last_activity'];
-            })
-            ->take(12)
-            ->values();
-
-        $queuePaused = DB::table('app_config')->where('key', 'whatsapp_auto_enabled')->value('value') == '0';
-        $sourceOptions = [
-            '' => 'All Sources',
-            'manual_bulk' => 'Manual Bulk',
-            'manual_single' => 'Manual Single',
-            'automation' => 'Automation',
-            'autoreceipt' => 'Auto Receipt',
-            'collector_reminder' => 'Collector Reminder',
-            'calendar' => 'Calendar',
-            'cron' => 'Cron',
-            'hermes' => 'Hermes/Test',
-            'system' => 'System',
-            'other' => 'Other',
-        ];
-
-        return view('dashbord.whatsapp.queue', compact(
-            'pending',
-            'sending',
-            'failed',
-            'recent',
-            'queuePaused',
-            'statusFilter',
-            'sourceFilter',
-            'sourceOptions',
-            'batchSummaries'
-        ));
-    }
-
-    /**
-     * 🔄 Resend all failed messages. (P2)
-     */
-    public function resendAllFailed(WhatsAppMessageDispatcher $dispatcher)
-    {
-        $failed = WhatsAppMessageLog::where('status', 'failed')->limit(50)->get();
-        $results = ['queued' => 0];
-
-        foreach ($failed as $log) {
-            $this->queueMessageForResend($log, $dispatcher);
-            $results['queued']++;
-        }
-
-        return response()->json($results);
-    }
-
-    private function queueMessageForResend(
-        WhatsAppMessageLog $log,
-        WhatsAppMessageDispatcher $dispatcher
-    ): void {
-        $sentBy = (string) ($log->sent_by ?: 'admin:resend');
-        if (! str_contains($sentBy, '|batch:')) {
-            $sentBy .= '|batch:'.Str::uuid();
-        }
-
-        $log->update([
-            'status' => 'pending',
-            'error' => null,
-            'sent_by' => $sentBy,
+        return view('dashbord.whatsapp.queue', [
+            'pending' => (int) ($statusCounts['pending'] ?? 0),
+            'sending' => (int) ($statusCounts['sending'] ?? 0),
+            'failedToday' => WhatsAppMessageLog::where('status', 'failed')->whereDate('created_at', today())->count(),
+            'queuePaused' => $queueState->paused(),
+            'statusFilter' => $statusFilter,
+            'sourceFilter' => $sourceFilter,
+            'dateFrom' => $dateFrom?->toDateString(),
+            'dateTo' => $dateTo?->toDateString(),
+            'sourceOptions' => ['' => 'كل المصادر', 'manual' => 'يدوي', 'automation' => 'آلي', 'autoreceipt' => 'إيصال تلقائي', 'calendar' => 'تقويم', 'cron' => 'مجدول', 'system' => 'نظام'],
+            'batches' => $batches,
+            'legacyBatches' => $legacyBatches,
+            'recent' => $recent,
         ]);
-        $dispatcher->dispatch($log);
     }
+
 
     /**
      * ⏸️ Toggle queue pause. (P2)
      */
-    public function toggleQueuePause()
+    public function toggleQueuePause(WhatsAppQueueState $queueState)
     {
-        $current = DB::table('app_config')->where('key', 'whatsapp_auto_enabled')->value('value');
-        $new = $current == '1' ? '0' : '1';
-        DB::table('app_config')->where('key', 'whatsapp_auto_enabled')->update(['value' => $new]);
+        $paused = DB::transaction(function () use ($queueState): bool {
+            $paused = $queueState->toggle();
+            $this->auditBatchAction('whatsapp_queue_pause_changed', null, ['paused' => $paused]);
 
-        return response()->json(['success' => true, 'paused' => $new == '0']);
+            return $paused;
+        });
+
+        return response()->json(['success' => true, 'paused' => $paused]);
+    }
+
+    public function cancelBatchPreview(WhatsAppBatch $batch, WhatsAppBatchService $batches)
+    {
+        return response()->json([
+            'counts' => $batches->cancelPreview($batch),
+            'warning' => 'سيتم إلغاء الرسائل المنتظرة فقط. الرسائل الجاري إرسالها ستبقى بحالة «جارٍ الإرسال» وقد يكتمل إرسالها، والرسائل المرسلة لا يمكن استرجاعها.',
+        ]);
+    }
+
+    public function cancelBatch(Request $request, WhatsAppBatch $batch, WhatsAppBatchService $batches)
+    {
+        $validated = $request->validate(['reason' => 'nullable|string|max:500']);
+        try {
+            $counts = DB::transaction(function () use ($batches, $batch, $validated): array {
+                $counts = $batches->cancel($batch, auth('admin')->id(), $validated['reason'] ?? null);
+                $this->auditBatchAction('whatsapp_batch_cancelled', $batch, $counts);
+
+                return $counts;
+            });
+        } catch (\DomainException $exception) {
+            if ($exception->getMessage() !== 'batch_not_cancellable') {
+                throw $exception;
+            }
+
+            return response()->json(['success' => false, 'error' => 'batch_not_cancellable'], 409);
+        }
+
+        return response()->json(['success' => true, 'counts' => $counts]);
+    }
+
+    public function retryBatch(Request $request, WhatsAppBatch $batch, WhatsAppBatchService $batches, WhatsAppMessageDispatcher $dispatcher)
+    {
+        $validated = $request->validate(['acknowledge_ambiguous' => 'sometimes|boolean']);
+        try {
+            [$messages, $auditData] = DB::transaction(function () use ($batches, $batch, $validated): array {
+                $messages = $batches->retryFailed($batch, (bool) ($validated['acknowledge_ambiguous'] ?? false));
+                $auditData = ['queued' => $messages->count()];
+                $this->auditBatchAction('whatsapp_batch_retried', $batch, $auditData);
+
+                return [$messages, $auditData];
+            });
+        } catch (\DomainException $exception) {
+            if ($exception->getMessage() !== 'batch_not_retryable') {
+                throw $exception;
+            }
+            return response()->json(['success' => false, 'queued' => 0, 'error' => 'batch_not_retryable'], 409);
+        }
+        $messages->each(fn (WhatsAppMessageLog $message) => $dispatcher->dispatch($message));
+
+        return response()->json(['success' => true, 'queued' => $auditData['queued']]);
+    }
+
+    public function archiveBatch(WhatsAppBatch $batch, WhatsAppBatchService $batches)
+    {
+        try {
+            $batch = DB::transaction(function () use ($batch, $batches): WhatsAppBatch {
+                $archived = $batches->archive($batch, auth('admin')->id());
+                $this->auditBatchAction('whatsapp_batch_archived', $archived);
+
+                return $archived;
+            });
+        } catch (\DomainException $exception) {
+            if ($exception->getMessage() !== 'batch_not_archivable') {
+                throw $exception;
+            }
+            return response()->json(['success' => false, 'error' => 'batch_not_archivable'], 409);
+        }
+
+        return response()->json(['success' => true, 'archived_at' => $batch->archived_at]);
+    }
+
+    private function auditBatchAction(string $action, ?WhatsAppBatch $batch = null, array $data = []): void
+    {
+        if (! Schema::hasTable('logs')) {
+            return;
+        }
+
+        ActivityLog::query()->create([
+            'action' => $action,
+            'description' => $batch ? "WhatsApp batch {$batch->uuid}" : 'WhatsApp queue state',
+            'new_data' => json_encode($data, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+            'model_type' => $batch ? WhatsAppBatch::class : null,
+            'model_id' => $batch?->id,
+            'user_id' => auth('admin')->id(),
+        ]);
     }
 
     // ═══════════════════════════════════════════════════════════════
