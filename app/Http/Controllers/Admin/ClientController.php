@@ -975,10 +975,10 @@ class ClientController extends Controller
             return response()->json(['error' => trans('clients.no_sas4_username_linked')], 404);
         }
 
-        $sas4Service = app(\App\Services\Sas4\Sas4ApiService::class);
-        $info = $sas4Service->getUserFullInfo($client->sas_username);
+        $result = app(\App\Services\Sas4\Sas4Gateway::class)->clientInfo($client);
+        $info = $result['data'] ?? null;
 
-        if (!$info) {
+        if (! $result['ok']) {
             return response()->json(['error' => trans('clients.sas4_user_not_found')], 404);
         }
 
@@ -992,10 +992,10 @@ class ClientController extends Controller
             return response()->json(['error' => trans('clients.no_sas4_username_linked')], 404);
         }
 
-        $sas4Service = app(\App\Services\Sas4\Sas4ApiService::class);
-        $data = $sas4Service->getTrafficAndSessions($client->sas_username);
+        $result = app(\App\Services\Sas4\Sas4Gateway::class)->clientTraffic($client);
+        $data = $result['data'] ?? null;
 
-        if (!$data) {
+        if (! $result['ok']) {
             return response()->json(['error' => trans('clients.sas4_user_not_found')], 404);
         }
 
@@ -1012,10 +1012,10 @@ class ClientController extends Controller
         $month = request('month', date('n'));
         $year = request('year', date('Y'));
 
-        $sas4Service = app(\App\Services\Sas4\Sas4ApiService::class);
-        $data = $sas4Service->getDailyTrafficReport($client->sas_username, $month, $year);
+        $result = app(\App\Services\Sas4\Sas4Gateway::class)->clientDailyTraffic($client, (int) $month, (int) $year);
+        $data = $result['data'] ?? null;
 
-        if (!$data) {
+        if (! $result['ok']) {
             return response()->json(['error' => trans('clients.sas4_user_not_found')], 404);
         }
 
@@ -1025,43 +1025,40 @@ class ClientController extends Controller
     public function searchSas4Users()
     {
         $query = request('q', '');
-        $sas4Service = app(\App\Services\Sas4\Sas4ApiService::class);
-        $result = $sas4Service->searchUsers($query);
+        $result = app(\App\Services\Sas4\Sas4Gateway::class)->searchUsers($query);
 
-        return response()->json($result ?? ['data' => []]);
+        return response()->json($result['data'] ?? ['data' => []]);
     }
 
     public function getSas4OnlineStatus()
     {
-        $usernames = request('usernames', []);
-        if (empty($usernames)) {
-            return response()->json([]);
+        $input = request()->all();
+        $ids = $input['client_ids'] ?? null;
+        $valid = is_array($ids) && array_is_list($ids) && count($ids) >= 1 && count($ids) <= 100
+            && count($ids) === count(array_unique($ids))
+            && collect($ids)->every(fn ($id) => is_int($id) && $id > 0)
+            && array_diff(array_keys($input), ['client_ids']) === [];
+        if (! $valid) {
+            return response()->json(['error' => 'invalid_client_ids'], 422);
         }
-
-        $sas4Service = app(\App\Services\Sas4\Sas4ApiService::class);
-        $statusMap = [];
-
-        foreach ($usernames as $username) {
-            $user = $sas4Service->getUserByUsername($username);
-            if ($user && isset($user['data'])) {
-                $userData = $user['data'];
-                $statusMap[$username] = [
-                    'online' => $userData['online_status'] ?? 0,
-                    'enabled' => $userData['enabled'] ?? 0,
-                    'expiration' => $userData['expiration'] ?? '',
-                ];
-            }
-        }
-
-        return response()->json($statusMap);
+        $clients = Clients::query()->whereIn('id', $ids)->where('is_active', 1)->whereNull('deleted_at')
+            ->get(['id', 'sas_username']);
+        $result = app(\App\Services\Sas4\Sas4Gateway::class)->statuses($clients);
+        $rows = $result['data'] ?? collect($clients)->mapWithKeys(fn ($client) => [(int) $client->id => [
+            'client_id' => (int) $client->id,
+            'sas_username' => trim((string) $client->sas_username) ?: null,
+            'status' => trim((string) $client->sas_username) === '' ? 'unlinked' : 'unavailable',
+        ]])->all();
+        $ordered = [];
+        foreach ($ids as $id) if (isset($rows[$id])) $ordered[(string) $id] = $rows[$id];
+        return response()->json($ordered);
     }
 
     public function getSas4Profiles()
     {
-        $sas4Service = app(\App\Services\Sas4\Sas4ApiService::class);
-        $result = $sas4Service->getProfiles();
+        $result = app(\App\Services\Sas4\Sas4Gateway::class)->profiles();
 
-        return response()->json($result ?? ['data' => []]);
+        return response()->json($result['data'] ?? ['data' => []]);
     }
 
     public function sas4Control($id)
@@ -1074,48 +1071,24 @@ class ClientController extends Controller
         $action = request('action');
         $profileId = request('profile_id');
 
-        $sas4Service = app(\App\Services\Sas4\Sas4ApiService::class);
-        $sas4User = $sas4Service->getUserByUsername($client->sas_username);
-
-        if (!$sas4User || !isset($sas4User['data']['id'])) {
-            return response()->json(['success' => false, 'message' => trans('clients.sas4_user_not_found')], 404);
+        $messages = [
+            'enable' => trans('clients.sas4_enabled_success'),
+            'disable' => trans('clients.sas4_disabled_success'),
+            'disconnect' => trans('clients.sas4_disconnected_success'),
+            'change_profile' => trans('clients.sas4_profile_changed_success'),
+        ];
+        $result = app(\App\Services\Sas4\Sas4Gateway::class)->control(
+            $client, (string) $action, $profileId, request('expiration_date')
+        );
+        if (($result['code'] ?? null) === 'invalid_action') {
+            return response()->json(['success' => false, 'message' => trans('clients.sas4_invalid_action')], 400);
         }
-
-        $sas4UserId = $sas4User['data']['id'];
-
-        $result = null;
-        $message = '';
-
-        switch ($action) {
-            case 'enable':
-                $result = $sas4Service->enableUser($sas4UserId);
-                $message = trans('clients.sas4_enabled_success');
-                break;
-            case 'disable':
-                $result = $sas4Service->disableUser($sas4UserId);
-                $message = trans('clients.sas4_disabled_success');
-                break;
-            case 'disconnect':
-                $result = $sas4Service->disconnectUser($sas4UserId);
-                $message = trans('clients.sas4_disconnected_success');
-                break;
-            case 'change_profile':
-                if (!$profileId) {
-                    return response()->json(['success' => false, 'message' => trans('clients.sas4_profile_required')], 400);
-                }
-                $expirationDate = request('expiration_date');
-                if ($expirationDate) {
-                    $result = $sas4Service->changeProfileAndExpiration($sas4UserId, $profileId, $expirationDate);
-                } else {
-                    $result = $sas4Service->changeProfile($sas4UserId, $profileId);
-                }
-                $message = trans('clients.sas4_profile_changed_success');
-                break;
-            default:
-                return response()->json(['success' => false, 'message' => trans('clients.sas4_invalid_action')], 400);
+        if (($result['code'] ?? null) === 'profile_required') {
+            return response()->json(['success' => false, 'message' => trans('clients.sas4_profile_required')], 400);
         }
+        $message = $messages[$action] ?? trans('clients.sas4_action_failed');
 
-        if ($result && isset($result['status']) && $result['status'] == 200) {
+        if ($result['ok']) {
             return response()->json(['success' => true, 'message' => $message]);
         }
 
@@ -1147,15 +1120,14 @@ class ClientController extends Controller
                 return;
             }
 
-            $sas4Service = app(\App\Services\Sas4\Sas4ApiService::class);
-
-            if ($sas4Service->usernameExists($newUsername)) {
+            $gateway = app(\App\Services\Sas4\Sas4Gateway::class);
+            $exists = $gateway->usernameExists($newUsername);
+            if (! ($exists['ok'] ?? false) || ! array_key_exists('data', $exists) || $exists['data'] !== false) {
                 return;
             }
+            $result = $gateway->createAccount($newUsername, $newPassword, $newProfile, $client->name, $newExpiration, (int) $newEnabled);
 
-            $result = $sas4Service->createUser($newUsername, $newPassword, $newProfile, $client->name, 1, $newExpiration, $newEnabled);
-
-            if ($result && isset($result['status']) && in_array($result['status'], [200, 201])) {
+            if ($result['ok']) {
                 $client->sas_username = $newUsername;
                 $client->save();
             }

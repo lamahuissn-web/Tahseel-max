@@ -870,35 +870,35 @@
         var indicators = $('.sas4-indicator');
         if (!indicators.length) return;
 
-        var usernames = [];
+        var clientIds = [];
         var map = {};
         indicators.each(function() {
-            var username = $(this).data('username');
-            var id = $(this).data('id');
-            if (username) {
-                usernames.push(username);
-                map[username] = $(this);
+            var id = Number($(this).data('id'));
+            if (Number.isInteger(id) && id > 0 && !map[id]) {
+                clientIds.push(id);
+                map[id] = $(this);
             }
         });
 
-        if (!usernames.length) return;
+        if (!clientIds.length) return;
 
         $.ajax({
             url: '{{ route('admin.sas4.online_status') }}',
             type: 'POST',
-            data: { usernames: usernames },
+            data: JSON.stringify({ client_ids: clientIds }),
+            contentType: 'application/json',
             dataType: 'json',
             success: function(res) {
-                $.each(res, function(username, info) {
-                    var el = map[username];
+                $.each(res, function(clientId, info) {
+                    var el = map[clientId];
                     if (!el) return;
-
-                    if (info.online == 1 && info.enabled == 1) {
+                    var username = info.sas_username || '';
+                    if (info.status === 'online') {
                         el.html('<i class="bi bi-wifi text-success" title="Online"></i> ' + username);
-                    } else if (info.enabled == 0) {
-                        el.html('<i class="bi bi-wifi-off text-danger" title="Disabled"></i> ' + username);
-                    } else {
+                    } else if (info.status === 'offline') {
                         el.html('<i class="bi bi-wifi text-secondary" title="Offline"></i> ' + username);
+                    } else {
+                        el.html('<i class="bi bi-wifi-off text-warning" title="Unavailable"></i> ' + username);
                     }
                 });
             }

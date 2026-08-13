@@ -146,48 +146,50 @@
         const $badges = $('.mobile-sas-indicator').not('[data-loaded="1"]');
         if (!$badges.length) return;
 
-        let usernames = [];
+        let clientIds = [];
         let badgeMap = {};
 
         $badges.each(function() {
             const $badge = $(this);
-            const username = $badge.data('username');
-            if (username) {
-                if (!badgeMap[username]) {
-                    usernames.push(username);
-                    badgeMap[username] = [];
+            const clientId = Number($badge.data('client-id'));
+            if (Number.isInteger(clientId) && clientId > 0) {
+                if (!badgeMap[clientId]) {
+                    clientIds.push(clientId);
+                    badgeMap[clientId] = [];
                 }
-                badgeMap[username].push($badge);
+                badgeMap[clientId].push($badge);
             }
         });
 
-        if (!usernames.length) return;
+        if (!clientIds.length) return;
 
         $.ajax({
             url: sasStatusUrl,
             type: 'POST',
-            data: { usernames: usernames },
+            data: JSON.stringify({ client_ids: clientIds }),
+            contentType: 'application/json',
             dataType: 'json',
             success: function(response) {
-                usernames.forEach(function(username) {
-                    const badges = badgeMap[username] || [];
-                    const info = response[username];
+                const presentations = {
+                    online: { cssClass: 'badge-light-success', label: 'متصل' },
+                    offline: { cssClass: 'badge-light-secondary', label: 'غير متصل' },
+                    unlinked: { cssClass: 'badge-light-secondary', label: 'غير مربوط' },
+                    not_found: { cssClass: 'badge-light-secondary', label: 'غير موجود' },
+                    unavailable: { cssClass: 'badge-light-warning', label: 'غير متاح' }
+                };
+                clientIds.forEach(function(clientId) {
+                    const badges = badgeMap[clientId] || [];
+                    const info = response[String(clientId)];
+                    const status = info ? info.status : 'unavailable';
+                    const presentation = presentations[status] || presentations.unavailable;
                     badges.forEach(function($badge) {
-                        if (!info) {
-                            updateMobileSasBadge($badge, 'badge-light-secondary', 'غير معروف');
-                        } else if (String(info.enabled) === '0') {
-                            updateMobileSasBadge($badge, 'badge-light-danger', 'موقوف');
-                        } else if (String(info.online) === '1') {
-                            updateMobileSasBadge($badge, 'badge-light-success', 'متصل');
-                        } else {
-                            updateMobileSasBadge($badge, 'badge-light-secondary', 'غير متصل');
-                        }
+                        updateMobileSasBadge($badge, presentation.cssClass, presentation.label);
                     });
                 });
             },
             error: function() {
                 $badges.each(function() {
-                    updateMobileSasBadge($(this), 'badge-light-secondary', 'غير معروف');
+                    updateMobileSasBadge($(this), 'badge-light-warning', 'غير متاح');
                 });
             }
         });

@@ -25,6 +25,11 @@
              are never used in production. -->
         <env name="APP_KEY" value="base64:dGVzdC1vbmx5LWtleS1mZWF0dXJlMDA5LWJhY2tlbmQxMjM0NTY3ODkw"/>
         <env name="JWT_SECRET" value="feature009-test-only-jwt-secret-not-for-production"/>
+        <!-- Test-only non-routable SAS transport values; all SAS calls are mocked. -->
+        <env name="SAS4_URL" value="http://127.0.0.1:9"/>
+        <env name="SAS4_USERNAME" value="test-only"/>
+        <env name="SAS4_PASSWORD" value="test-only"/>
+        <env name="SAS4_AES_KEY" value="test-only-32-byte-key-0000000000"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="CACHE_DRIVER" value="array"/>
         <env name="DB_CONNECTION" value="sqlite"/>

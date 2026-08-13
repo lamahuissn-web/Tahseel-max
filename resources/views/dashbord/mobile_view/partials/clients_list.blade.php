@@ -50,7 +50,7 @@
                     </div>
                     @if(!empty($client->sas_username))
                         <span class="badge badge-light-warning fs-9 flex-shrink-0 mobile-sas-indicator"
-                              data-username="{{ e($client->sas_username) }}">
+                              data-client-id="{{ $client->id }}">
                             جاري الفحص
                         </span>
                     @else

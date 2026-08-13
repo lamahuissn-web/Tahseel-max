@@ -1,0 +1,26 @@
+# Tasks
+
+- [x] Audit live SAS4 paths and confirm read-only connectivity.
+- [x] Create clean isolated worktree and feature branch.
+- [x] Write specification, plan, contracts, risks, and rollback.
+- [x] TDD gateway configuration guard and batch-status façade.
+- [x] TDD exact client-link read methods and normalized failures.
+- [x] TDD strict admin client-ID batch status endpoint.
+- [x] Update active admin/mobile Blade status callers to client IDs.
+- [x] TDD search/profile/read controller migration.
+- [x] TDD safe control action migration and write-count guarantees.
+- [x] TDD link/create/unlink orchestration migration.
+- [x] Migrate auto-match command to gateway.
+- [x] Remove credential defaults and document required private configuration.
+- [x] Run focused and regression suites, syntax, routes, render checks, and read-only live check. (Focused GREEN; full suite and route-list environment blockers recorded in evidence.md; live check intentionally not run.)
+- [x] Scan diff for secrets, direct transport bypasses, and unrelated changes.
+- [ ] Obtain independent read-only PASS/BLOCK audit.
+- [x] Report results and leave uncommitted pending KIRA approval.
+- [x] RED→GREEN repair the active mobile admin status caller to post JSON `client_ids` and consume only the closed normalized status enum.
+- [x] RED→GREEN close gateway invariant gaps: transport-owned configuration, configuration precedence, exact control identity, single writes/no retries, and verification outcomes.
+- [x] Add static migration boundary coverage for order-independent admin keys and no direct transport use in migrated controllers/command.
+- [x] Re-run focused gateway/SAS suites, PHP syntax, active caller/direct transport scans, and diff checks after audit repairs.
+- [x] RED→GREEN bind post-write verification to normalized username and captured provider ID.
+- [x] RED→GREEN verify both profile and normalized expiration for combined writes, failing closed when expiration is absent or mismatched.
+- [x] RED→GREEN distinguish proven username absence from unavailable/invalid provider responses and prevent controller creates on ambiguous checks.
+- [x] RED→GREEN fail closed on full/truncated username search pages and validate completeness metadata before proving absence.
