@@ -24,6 +24,9 @@ class AppConfigRequest extends FormRequest
         return [
             'phone_service'=>'required',
             'currency'=>'required',
+            'telegram_backup_frequency' => 'nullable|in:hourly,every_2_hours,every_4_hours,every_6_hours,every_12_hours,daily,weekly,monthly,custom',
+            'telegram_backup_time' => 'nullable|date_format:H:i',
+            'telegram_backup_custom_cron' => 'nullable|string|max:100',
         ];
     }
 }

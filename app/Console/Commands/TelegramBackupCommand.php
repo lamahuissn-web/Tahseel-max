@@ -48,7 +48,7 @@ class TelegramBackupCommand extends Command
         ));
 
         $dumpCmd = sprintf(
-            'mysqldump --defaults-extra-file=%s %s > %s 2>/dev/null',
+            'mysqldump --defaults-extra-file=%s --single-transaction --routines --triggers --events --hex-blob --default-character-set=utf8mb4 %s > %s 2>/dev/null',
             escapeshellarg($credentialsFile),
             escapeshellarg($dbConfig['database'] ?? 'tahseel'),
             escapeshellarg($backupFile)
@@ -124,6 +124,10 @@ class TelegramBackupCommand extends Command
 
         return match ($frequency) {
             'hourly' => time() - $lastSent >= 3600,
+            'every_2_hours' => time() - $lastSent >= 2 * 3600,
+            'every_4_hours' => time() - $lastSent >= 4 * 3600,
+            'every_6_hours' => time() - $lastSent >= 6 * 3600,
+            'every_12_hours' => time() - $lastSent >= 12 * 3600,
             'daily' => $this->isDueDaily($lastSent, $backupTime),
             'weekly' => $this->isDueWeekly($lastSent, $backupTime),
             'monthly' => $this->isDueMonthly($lastSent, $backupTime),
