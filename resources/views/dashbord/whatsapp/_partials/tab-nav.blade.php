@@ -13,7 +13,7 @@
     ];
 @endphp
 
-<div class="whatsapp-tab-nav sticky-top bg-white border-bottom px-3 px-md-4 py-2" style="z-index: 1020;">
+<div class="whatsapp-tab-nav sticky-top bg-white border-bottom px-3 px-md-4 py-2">
     <div class="d-flex align-items-center gap-2 flex-nowrap overflow-auto" style="scrollbar-width:none; -ms-overflow-style:none;">
         @foreach($tabs as $tab)
             @php
@@ -71,9 +71,16 @@
 
 <style>
     .whatsapp-tab-nav {
+        z-index: 1020;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
     .whatsapp-tab-nav::-webkit-scrollbar {
         display: none;
+    }
+    @media (max-width: 991.98px) {
+        .whatsapp-tab-nav {
+            /* Keen mobile drawer/backdrop use z-index 110/109. */
+            z-index: 100 !important;
+        }
     }
 </style>
