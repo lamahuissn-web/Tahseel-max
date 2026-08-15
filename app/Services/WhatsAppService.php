@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\AppConfig;
 use App\Services\WhatsApp\WhatsAppRateLimiter;
 use App\Services\WhatsApp\WhatsAppSendLock;
+use App\Services\WhatsApp\ZernioService;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -36,6 +37,10 @@ class WhatsAppService
 
     public function status()
     {
+        if ($this->usesZernio()) {
+            return $this->zernioStatus();
+        }
+
         try {
             $response = Http::withHeaders($this->headers())
                 ->timeout(5)
@@ -157,7 +162,9 @@ class WhatsAppService
     public function send($phone, $message, array $options = [])
     {
         $sendResult = app(WhatsAppSendLock::class)->run(
-            fn () => $this->sendUnlocked($phone, $message, $options)
+            fn () => $this->usesZernio()
+                ? $this->zernioSend($phone, $message, $options)
+                : $this->sendUnlocked($phone, $message, $options)
         );
 
         return $sendResult ?? [
@@ -165,6 +172,66 @@ class WhatsAppService
             'rate_limited' => true,
             'error' => 'Another WhatsApp message is currently being sent',
             'retry_after_seconds' => 15,
+        ];
+    }
+
+    /**
+     * SPIKE: Zernio transport branch (test only — WHATSAPP_DRIVER=zernio).
+     */
+    private function usesZernio(): bool
+    {
+        return config('zernio.driver') === 'zernio';
+    }
+
+    private function zernioService(): ZernioService
+    {
+        return app(ZernioService::class);
+    }
+
+    private function zernioStatus(): array
+    {
+        $z = $this->zernioService()->status();
+
+        return [
+            'reachable' => (bool) ($z['reachable'] ?? false),
+            'connected' => (bool) ($z['ok'] ?? false),
+            'phone' => $z['sandboxNumber'] ?? null,
+            'status' => ($z['ok'] ?? false) ? 'connected' : (($z['reachable'] ?? false) ? 'disconnected' : 'unreachable'),
+            'message' => $z['error'] ?? (($z['ok'] ?? false) ? 'Zernio sandbox connected' : null),
+        ];
+    }
+
+    private function zernioSend($phone, $message, array $options = []): array
+    {
+        if (! ($options['skip_rate_limit'] ?? false)) {
+            $rateLimit = app(WhatsAppRateLimiter::class)->waitBeforeSend($options['rate_context'] ?? []);
+            if (! ($rateLimit['allowed'] ?? false)) {
+                return [
+                    'success' => false,
+                    'rate_limited' => true,
+                    'error' => $rateLimit['reason'] ?? 'WhatsApp sending paused by safety rate limiter',
+                    'retry_after_seconds' => $rateLimit['retry_after_seconds'] ?? null,
+                ];
+            }
+        }
+
+        $result = $this->zernioService()->sendText($phone, $message);
+
+        if (($result['ok'] ?? false) === true) {
+            return [
+                'success' => true,
+                'message_id' => $result['messageId'] ?? null,
+            ];
+        }
+
+        Log::warning('Zernio send failed', [
+            'phone' => substr($phone, 0, 6).'***',
+            'error' => $result['error'] ?? 'unknown',
+        ]);
+
+        return [
+            'success' => false,
+            'error' => $result['error'] ?? 'Zernio send failed',
         ];
     }
 
