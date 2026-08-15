@@ -44,6 +44,34 @@ $ php artisan zernio:test +96170781562 --message="..."        # fill from actual
 Sent OK — messageId: wamid.xxx
 ```
 
+## End-to-end receipt test (2026-08-15, PASSED)
+
+Full flow through the real Tahseel payment path, with `WHATSAPP_DRIVER=zernio`:
+
+1. Fixture: client "Zernio Test" (#1576, phone +96170781562) + unpaid invoice #17259 ($10).
+2. KIRA paid invoice #17259 in Tahseel Hub → invoice `paid`, revenue + payment ref
+   `PAY-01M02F4W8BG8DY8ND2JRS389NK`.
+3. `PaymentReceiptNotifier` created `whatsapp_message_logs` row #178 (`pending`,
+   `template_type=receipt`, full Arabic MegaNet receipt body) and dispatched
+   `SendWhatsAppMessage` to the `whatsapp_database` queue.
+4. Job → `WhatsAppService::send()` → **Zernio branch** (`zernioSend`) →
+   `ZernioService::sendText()` → inbox conversation found (24h window open) →
+   Meta Cloud delivered.
+5. Log #178 → **`sent`**, no error. Recipient confirmed delivery on WhatsApp
+   from the sandbox number.
+
+Blocker found & fixed along the way: the WIP batch migrations
+(`2026_08_13_000001..3`) were **pending** on the dev DB `tahseel_new`
+(prod dump predates the WIP) → job died on missing `batch_id` column before
+reaching Zernio. Ran the 3 migrations (additive, dev-only) → retry passed.
+This is a pre-existing dev-env gap, NOT a Zernio issue.
+
+### Notes
+- Sandbox = one phone per user: only +96170781562 has a session/window. Any
+  other recipient fails with the template-required error (expected).
+- OpenWA (CT111) untouched; flip `WHATSAPP_DRIVER=openwa` to restore.
+- Failed-jobs entry from the pre-migration run is harmless (dev).
+
 ## Constraints discovered
 
 - **24h window is hard.** Free-form text only works for recipients who have a
