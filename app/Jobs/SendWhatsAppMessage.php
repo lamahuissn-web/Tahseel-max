@@ -103,9 +103,24 @@ class SendWhatsAppMessage implements ShouldBeUnique, ShouldQueue
 
     private function deliver(WhatsAppMessageLog $messageLog, WhatsAppService $service): void
     {
-        $sendResult = $service->send($messageLog->phone, $messageLog->message, [
+        $sendOptions = [
             'rate_context' => ['source' => 'database-queue'],
-        ]);
+        ];
+
+        // Pass template variables for Zernio template sends
+        if (! empty($messageLog->template_variables) && is_array($messageLog->template_variables)) {
+            $templateName = $messageLog->template_type === 'receipt'
+                ? config('zernio.receipt_template', 'payment_receipt_v2')
+                : config('zernio.reminder_template', '');
+
+            if ($templateName) {
+                $sendOptions['template_name'] = $templateName;
+                $sendOptions['template_language'] = 'ar';
+                $sendOptions['template_variables'] = $messageLog->template_variables;
+            }
+        }
+
+        $sendResult = $service->send($messageLog->phone, $messageLog->message, $sendOptions);
 
         if (($sendResult['rate_limited'] ?? false) === true) {
             $this->retryRateLimitedMessage($messageLog, $sendResult);

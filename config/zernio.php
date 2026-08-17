@@ -23,4 +23,8 @@ return [
 
     // Webhook secret for X-Zernio-Signature verification (set in dashboard)
     'webhook_secret' => env('ZERNIO_WEBHOOK_SECRET', ''),
+
+    // Template names (Meta-approved, set after approval)
+    'receipt_template' => env('ZERNIO_RECEIPT_TEMPLATE', 'payment_receipt_v2'),
+    'reminder_template' => env('ZERNIO_REMINDER_TEMPLATE', ''),
 ];

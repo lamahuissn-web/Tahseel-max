@@ -19,6 +19,7 @@ class WhatsAppMessageLog extends Model
 
     protected $casts = [
         'invoice_ids' => 'array',
+        'template_variables' => 'array',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];

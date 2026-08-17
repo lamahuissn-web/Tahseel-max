@@ -132,6 +132,22 @@ class PaymentReceiptNotifier
                 $message .= "\n🔖 مرجع القبض: {$paymentReference}\n";
             }
 
+            // 6b. Build template variables for Zernio (stored for sendTemplate)
+            $templateVariables = $this->buildTemplateVariables(
+                $customerName,
+                $paidMonth,
+                $paidYear,
+                $paidAmount,
+                $paidDueDate,
+                $collectorName,
+                $paymentTime,
+                $lastPaidMonth,
+                $lastPaidYear,
+                $totalDue,
+                $totalBeforePayment,
+                $paymentReference
+            );
+
             // 7. Enqueue as pending so it appears in Queue
             $messageLog = null;
             try {
@@ -144,6 +160,7 @@ class PaymentReceiptNotifier
                     'phone' => $phone,
                     'message' => $message,
                     'template_type' => 'receipt',
+                    'template_variables' => $templateVariables,
                     'status' => 'pending',
                     'error' => null,
                     'sent_by' => 'system:autoreceipt|payment:'.($paymentReference ?? 'legacy').'|batch:'.$batchId,
@@ -246,5 +263,50 @@ class PaymentReceiptNotifier
         $message .= "شكراً لاختياركم MegaNet 🌹\n";
 
         return $message;
+    }
+
+    /**
+     * Build template variables array for Zernio/Meta template sends.
+     *
+     * Maps to Option A template:
+     *  {{1}} client name
+     *  {{2}} paid subscription month/year
+     *  {{3}} due date
+     *  {{4}} amount paid
+     *  {{5}} total due before payment
+     *  {{6}} collected by
+     *  {{7}} payment time
+     *  {{8}} last paid month/year
+     *  {{9}} remaining balance
+     *  {{10}} payment reference
+     *
+     * @return array<int, string>
+     */
+    public function buildTemplateVariables(
+        string $customerName,
+        string $paidMonth,
+        string $paidYear,
+        string $paidAmount,
+        string $paidDueDate,
+        string $collectorName,
+        string $paymentTime,
+        string $lastPaidMonth,
+        string $lastPaidYear,
+        float $totalDue,
+        float $totalBeforePayment,
+        ?string $paymentReference = null,
+    ): array {
+        return [
+            $customerName,                                    // {{1}}
+            "{$paidMonth} / {$paidYear}",                     // {{2}}
+            $paidDueDate,                                     // {{3}}
+            $paidAmount,                                      // {{4}}
+            number_format($totalBeforePayment, 2),            // {{5}}
+            $collectorName,                                   // {{6}}
+            $paymentTime,                                     // {{7}}
+            "{$lastPaidMonth} / {$lastPaidYear}",             // {{8}}
+            number_format($totalDue, 2),                      // {{9}}
+            $paymentReference ?? '-',                         // {{10}}
+        ];
     }
 }
