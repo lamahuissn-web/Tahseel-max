@@ -153,6 +153,59 @@
             </div>
         </div>
 
+        {{-- Transport Driver Toggle --}}
+        <div class="col-12">
+            <div class="wa-card shadow-sm">
+                <div class="wa-card-header bg-light">
+                    <i class="bi bi-arrow-left-right text-info me-2"></i> WhatsApp Transport
+                </div>
+                <div class="wa-card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="d-flex flex-column">
+                                    <span class="fw-semibold" style="font-size: 14px;">
+                                        Active Driver:
+                                        <span class="badge badge-light-{{ $activeDriver === 'zernio' ? 'info' : 'primary' }} ms-1">
+                                            {{ $activeDriver === 'zernio' ? 'Zernio (Meta Cloud API)' : 'OpenWA (Self-hosted)' }}
+                                        </span>
+                                    </span>
+                                    <span class="text-muted" style="font-size: 12px;">
+                                        @if($activeDriver === 'zernio')
+                                            Sending via Zernio WhatsApp Business API. Webhook delivery tracking active.
+                                        @else
+                                            Sending via self-hosted OpenWA gateway on CT111.
+                                        @endif
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 text-md-end mt-2 mt-md-0">
+                            @if($activeDriver === 'openwa')
+                                <form action="{{ route('admin.settings.whatsapp.toggle_driver') }}" method="POST" class="d-inline"
+                                      onsubmit="return confirm('Switch to Zernio? This will change the WhatsApp transport. Make sure Zernio API credentials are configured in .env.')">
+                                    @csrf
+                                    <input type="hidden" name="driver" value="zernio">
+                                    <button type="submit" class="btn btn-outline-info btn-sm">
+                                        <i class="bi bi-cloud me-1"></i> Switch to Zernio
+                                    </button>
+                                </form>
+                            @else
+                                <form action="{{ route('admin.settings.whatsapp.toggle_driver') }}" method="POST" class="d-inline"
+                                      onsubmit="return confirm('Switch back to OpenWA? The OpenWA gateway on CT111 will be used again.')">
+                                    @csrf
+                                    <input type="hidden" name="driver" value="openwa">
+                                    <button type="submit" class="btn btn-outline-primary btn-sm">
+                                        <i class="bi bi-phone me-1"></i> Switch to OpenWA
+                                    </button>
+                                </form>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         {{-- Reminder Settings --}}
         <div class="col-12">
             <div class="wa-card shadow-sm">

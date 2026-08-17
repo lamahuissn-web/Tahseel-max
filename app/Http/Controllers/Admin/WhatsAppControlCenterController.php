@@ -148,6 +148,7 @@ class WhatsAppControlCenterController extends Controller
     private function buildDashboardMonitorData(): array
     {
         $emergencyStop = DB::table('app_config')->where('key', 'whatsapp_emergency_stop')->value('value');
+        $activeDriver = config('zernio.driver', 'openwa');
 
         $connectionStatus = false;
         $devicePhone = null;
@@ -170,13 +171,15 @@ class WhatsAppControlCenterController extends Controller
         if ($emergencyStop != '1') {
             try {
                 $device = $service->status();
-                $qrState = $service->getQR();
+                if ($activeDriver === 'openwa') {
+                    $qrState = $service->getQR();
+                }
                 if ($device && ($device['connected'] ?? false)) {
                     $connectionStatus = true;
                     $devicePhone = $device['phone'] ?? null;
                 }
             } catch (\Exception $e) {
-                // OpenWA not reachable — stay disconnected and use fallback states.
+                // Transport not reachable — stay disconnected and use fallback states.
             }
         }
 
@@ -267,7 +270,7 @@ class WhatsAppControlCenterController extends Controller
         ];
 
         return compact(
-            'connectionStatus', 'emergencyStop',
+            'connectionStatus', 'emergencyStop', 'activeDriver',
             'messagesToday', 'messagesThisMonth', 'failuresToday',
             'totalClients', 'clientsWithPhone', 'lastSent',
             'devicePhone', 'monitor'

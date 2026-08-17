@@ -5,8 +5,12 @@
             Connection Monitor
         </h3>
         <div class="card-toolbar d-flex flex-wrap gap-2">
+            <span class="badge badge-light-{{ $activeDriver === 'zernio' ? 'info' : 'primary' }}">
+                <i class="bi {{ $activeDriver === 'zernio' ? 'bi-cloud' : 'bi-phone' }} me-1"></i>
+                {{ $activeDriver === 'zernio' ? 'Zernio' : 'OpenWA' }}
+            </span>
             <span class="badge {{ $monitor['api_reachable'] ? 'badge-light-success' : 'badge-light-danger' }}">
-                {{ $monitor['api_reachable'] ? 'OpenWA Reachable' : 'OpenWA Unreachable' }}
+                {{ $monitor['api_reachable'] ? 'Reachable' : 'Unreachable' }}
             </span>
             <span class="badge badge-light-{{ $monitor['overall_alert_level'] }}">{{ $monitor['overall_alert_label'] }}</span>
             <span class="text-muted fs-8" id="monitor-last-checked">
@@ -50,7 +54,7 @@
                     <table class="table table-row-dashed align-middle gs-0 gy-3 mb-0">
                         <tbody>
                             <tr>
-                                <th class="text-muted fw-semibold w-200px">OpenWA API</th>
+                                <th class="text-muted fw-semibold w-200px">{{ $activeDriver === 'zernio' ? 'Zernio API' : 'OpenWA API' }}</th>
                                 <td><span class="badge {{ $monitor['api_reachable'] ? 'badge-light-success' : 'badge-light-danger' }}">{{ $monitor['api_reachable'] ? 'Reachable' : 'Unreachable' }}</span></td>
                             </tr>
                             <tr>

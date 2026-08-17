@@ -242,6 +242,9 @@ Route::group(
             Route::post('settings/whatsapp/emergency-stop', [WhatsAppSettingsController::class, 'emergencyStop'])->name('settings.whatsapp.emergency_stop');
             Route::post('settings/whatsapp/emergency-restart', [WhatsAppSettingsController::class, 'emergencyRestart'])->name('settings.whatsapp.emergency_restart');
 
+            // 🔄 Transport Driver Toggle
+            Route::post('settings/whatsapp/toggle-driver', [WhatsAppSettingsController::class, 'toggleDriver'])->name('settings.whatsapp.toggle_driver');
+
             // 📱 WhatsApp Control Center
             Route::prefix('whatsapp')->name('whatsapp.')->group(function () {
                 Route::get('/dashboard', [WhatsAppControlCenterController::class, 'dashboard'])->name('dashboard');

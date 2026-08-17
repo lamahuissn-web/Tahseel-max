@@ -72,7 +72,9 @@ class WhatsAppSettingsController extends Controller
             'whatsapp_emergency_stopped_at' => DB::table('app_config')->where('key', 'whatsapp_emergency_stopped_at')->value('value') ?? '',
         ];
 
-        return view('dashbord.settings.whatsapp', compact('status', 'qr', 'logs', 'settings'));
+        $activeDriver = config('zernio.driver', 'openwa');
+
+        return view('dashbord.settings.whatsapp', compact('status', 'qr', 'logs', 'settings', 'activeDriver'));
     }
 
     public function update(Request $request)
@@ -101,6 +103,39 @@ class WhatsAppSettingsController extends Controller
         }
 
         return redirect()->back()->with('success', trans('clients.whatsapp_settings_saved'));
+    }
+
+    /**
+     * Toggle WhatsApp transport driver (openwa ↔ zernio).
+     * Stores the driver choice in .env via config cache.
+     */
+    public function toggleDriver(Request $request)
+    {
+        $driver = $request->input('driver', 'openwa');
+
+        if (! in_array($driver, ['openwa', 'zernio'], true)) {
+            return redirect()->back()->with('error', 'Invalid driver: '.$driver);
+        }
+
+        // Update .env file
+        $envPath = base_path('.env');
+        $envContent = file_get_contents($envPath);
+
+        if (preg_match('/^WHATSAPP_DRIVER=.*/m', $envContent)) {
+            $envContent = preg_replace('/^WHATSAPP_DRIVER=.*/m', "WHATSAPP_DRIVER={$driver}", $envContent);
+        } else {
+            $envContent .= "\nWHATSAPP_DRIVER={$driver}\n";
+        }
+
+        file_put_contents($envPath, $envContent);
+
+        // Clear config cache so the new driver takes effect
+        Artisan::call('config:clear');
+        Artisan::call('cache:clear');
+
+        $label = $driver === 'zernio' ? 'Zernio (Meta Cloud API)' : 'OpenWA (Self-hosted)';
+
+        return redirect()->back()->with('success', "WhatsApp driver switched to: {$label}");
     }
 
     public function preview(Request $request)
