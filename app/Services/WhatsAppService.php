@@ -201,6 +201,16 @@ class WhatsAppService
         ];
     }
 
+    /**
+     * Send via Zernio transport.
+     *
+     * Options:
+     *  - template_name: Meta-approved template name (for business-initiated / outside 24h window)
+     *  - template_language: template language code (default: 'ar')
+     *  - template_variables: array of template body variables
+     *  - skip_rate_limit: bypass safety rate limiter (testing only)
+     *  - rate_context: rate limiter context tags
+     */
     private function zernioSend($phone, $message, array $options = []): array
     {
         if (! ($options['skip_rate_limit'] ?? false)) {
@@ -215,17 +225,31 @@ class WhatsAppService
             }
         }
 
-        $result = $this->zernioService()->sendText($phone, $message);
+        $templateName = $options['template_name'] ?? null;
+        $templateLang = $options['template_language'] ?? 'ar';
+        $templateVars = $options['template_variables'] ?? [];
+
+        $zernio = $this->zernioService();
+
+        // Use smart send if template is provided (auto-fallback: text → template)
+        if ($templateName) {
+            $result = $zernio->sendSmart($phone, $message, $templateName, $templateLang, $templateVars);
+        } else {
+            $result = $zernio->sendText($phone, $message);
+            $result['method'] = 'text';
+        }
 
         if (($result['ok'] ?? false) === true) {
             return [
                 'success' => true,
                 'message_id' => $result['messageId'] ?? null,
+                'method' => $result['method'] ?? 'text',
             ];
         }
 
         Log::warning('Zernio send failed', [
             'phone' => substr($phone, 0, 6).'***',
+            'method' => $result['method'] ?? 'text',
             'error' => $result['error'] ?? 'unknown',
         ]);
 

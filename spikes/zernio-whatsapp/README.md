@@ -1,6 +1,6 @@
 # Spike: Zernio WhatsApp Adapter for Tahseel
 
-**Date:** 2026-08-15
+**Date:** 2026-08-15 (initial) → 2026-08-17 (Phase 1: real WABA upgrade)
 **Branch:** `spike/zernio-whatsapp-adapter`
 **Question:** Can Tahseel's Laravel stack send WhatsApp messages through Zernio
 (official Meta Cloud API) the same way it sends receipts through OpenWA today?
@@ -10,45 +10,84 @@ Given a Zernio API key + active sandbox session,
 when a Laravel service posts a free-form receipt text to the inbox-messages endpoint,
 then the message is delivered on WhatsApp via Meta Cloud with a real `wamid`.
 
-## Approach
+## Architecture
 
-- `app/Services/WhatsApp/ZernioService.php` — thin HTTP adapter (status /
-  findConversation / sendText) mirroring the surface Tahseel's
-  `WhatsAppService` exposes today.
-- `app/Console/Commands/ZernioTestCommand.php` — `php artisan zernio:test {phone}`
-  for observable, interactive testing against the Zernio shared sandbox.
-- Config via `.env` (untracked): `ZERNIO_API_KEY`, `ZERNIO_ACCOUNT_ID`, `ZERNIO_BASE_URL`.
-- Not wired into the WhatsApp control center — deliberate. This spike only
-  validates the transport.
+```
+WhatsAppService (driver switch)
+├── WHATSAPP_DRIVER=openwa  → OpenWA (CT111, QR-based, current production)
+└── WHATSAPP_DRIVER=zernio  → ZernioService
+    ├── sendText()     — free-form within 24h customer-service window
+    ├── sendTemplate() — Meta-approved templates (business-initiated)
+    ├── sendSmart()    — auto-detect: try text → fallback to template
+    └── status()       — sandbox or real WABA connection check
+```
+
+## Files
+
+| File | Purpose |
+|------|---------|
+| `app/Services/WhatsApp/ZernioService.php` | Zernio API adapter (sandbox + real WABA) |
+| `app/Services/WhatsAppService.php` | Driver switch (`WHATSAPP_DRIVER` env) |
+| `config/zernio.php` | API config (key, account, WABA, sandbox flag) |
+| `app/Console/Commands/ZernioTestCommand.php` | `php artisan zernio:test {phone}` |
+| `tests/Feature/ZernioSpikeTest.php` | 11 unit tests (all passing) |
+| `.env` → `ZERNIO_*` | API credentials (untracked) |
+
+## Phase 1: Real WABA Upgrade (2026-08-17)
+
+Upgraded from sandbox-only to production-ready with template support.
+
+### What changed
+
+1. **`config/zernio.php`** — Added `waba_id` and `sandbox` flag
+   - `ZERNIO_WABA_ID` env var for real WABA
+   - `ZERNIO_SANDBOX=true` (default) keeps sandbox mode safe
+
+2. **`ZernioService.php`** — Full rewrite supporting both modes
+   - `status()`: sandbox (`/whatsapp/sandbox/sessions`) vs real WABA (`/whatsapp/accounts`)
+   - `sendText()`: free-form via inbox API (24h window)
+   - `sendTemplate()`: Meta-approved templates via `/whatsapp/{wabaId}/messages`
+   - `sendSmart()`: auto-detect text → template fallback
+   - `findConversation()`: inbox conversation lookup (unchanged)
+
+3. **`WhatsAppService.php`** — Extended `zernioSend()` with template options
+   - `template_name`, `template_language`, `template_variables` options
+   - Smart send when template is provided (auto-fallback)
+   - `method` field in response (`text` or `template`)
+
+4. **`ZernioSpikeTest.php`** — 11 tests (was 2)
+   - sendText: inbox endpoint, no-window error
+   - sendTemplate: sandbox rejection, real WABA endpoint, missing WABA ID, API error
+   - sendSmart: text path, template fallback, no-conversation-no-template failure
+   - status: sandbox sessions, real WABA accounts
+
+### Config needed for real WABA
+
+```env
+WHATSAPP_DRIVER=zernio          # flip from 'openwa'
+ZERNIO_API_KEY=sk_...           # your Zernio API key
+ZERNIO_ACCOUNT_ID=...           # connected WhatsApp account ID
+ZERNIO_WABA_ID=...              # WhatsApp Business Account ID
+ZERNIO_SANDBOX=false            # switch to real WABA (default: true)
+```
 
 ## Test evidence (2026-08-15)
 
 1. **Sandbox activation** — `POST /v1/whatsapp/sandbox/sessions` with
-   `+96170781562` → session `pending` → user replied → `active` (expires Aug 22).
+   `+961****1562` → session `pending` → user replied → `active` (expires Aug 22).
 2. **Raw API send (curl)** — free-form text receipt to the user's phone via
    `POST /v1/inbox/conversations/{id}/messages` → delivered, real
    `wamid.HBgLOTYxNzA3ODE1NjIV...` confirmed by recipient on WhatsApp.
-3. **Laravel path** — `php artisan zernio:test +96170781562 --message=...`
+3. **Laravel path** — `php artisan zernio:test +961****1562 --message=...`
    (see run log below) → same inbox endpoint through `Http` facade.
 4. **Deterministic unit test** — `tests/Feature/ZernioSpikeTest.php` with
    `Http::fake()` asserts the request shape and the no-window error path.
-
-## Run log
-
-```
-$ php artisan zernio:test +96170781562 --check-only
-Status: {"ok":true,"reachable":true,"sandboxNumber":"+120****7457",...}
-Sandbox connected (+120****7457).
-
-$ php artisan zernio:test +96170781562 --message="..."        # fill from actual run
-Sent OK — messageId: wamid.xxx
-```
 
 ## End-to-end receipt test (2026-08-15, PASSED)
 
 Full flow through the real Tahseel payment path, with `WHATSAPP_DRIVER=zernio`:
 
-1. Fixture: client "Zernio Test" (#1576, phone +96170781562) + unpaid invoice #17259 ($10).
+1. Fixture: client "Zernio Test" (#1576, phone +961****1562) + unpaid invoice #17259 ($10).
 2. KIRA paid invoice #17259 in Tahseel Hub → invoice `paid`, revenue + payment ref
    `PAY-01M02F4W8BG8DY8ND2JRS389NK`.
 3. `PaymentReceiptNotifier` created `whatsapp_message_logs` row #178 (`pending`,
@@ -60,18 +99,6 @@ Full flow through the real Tahseel payment path, with `WHATSAPP_DRIVER=zernio`:
 5. Log #178 → **`sent`**, no error. Recipient confirmed delivery on WhatsApp
    from the sandbox number.
 
-Blocker found & fixed along the way: the WIP batch migrations
-(`2026_08_13_000001..3`) were **pending** on the dev DB `tahseel_new`
-(prod dump predates the WIP) → job died on missing `batch_id` column before
-reaching Zernio. Ran the 3 migrations (additive, dev-only) → retry passed.
-This is a pre-existing dev-env gap, NOT a Zernio issue.
-
-### Notes
-- Sandbox = one phone per user: only +96170781562 has a session/window. Any
-  other recipient fails with the template-required error (expected).
-- OpenWA (CT111) untouched; flip `WHATSAPP_DRIVER=openwa` to restore.
-- Failed-jobs entry from the pre-migration run is harmless (dev).
-
 ## Constraints discovered
 
 - **24h window is hard.** Free-form text only works for recipients who have a
@@ -80,43 +107,15 @@ This is a pre-existing dev-env gap, NOT a Zernio issue.
   inactive clients REQUIRE Meta-approved templates** — the single biggest
   behavioral difference vs OpenWA.
 - **No conversation = no send.** `findConversation()` returns null → the adapter
-  must fall back to template sends (`POST /v1/inbox/conversations` with
-  `templateName`/`templateParams`).
+  must fall back to template sends.
 - **Sandbox caps:** 50 msgs/day, 1 recipient, one active session per user,
   only the `sandbox_start` template allowed for opens.
 - **Sender number is foreign** in sandbox (+1 202...); production with a BYO
   Lebanese WABA number would show the real number.
 
-## Verdict: VALIDATED (with template caveat)
+## Phases
 
-### What worked
-- End-to-end free-form WhatsApp delivery via Zernio from both raw curl and
-  Laravel `Http` facade — real `wamid`, recipient-confirmed.
-- Sandbox session lifecycle (pending → active on reply) is clean and free.
-- Zernio-side cost for messaging = $0 (platform free for 1 account; sandbox free).
-
-### What didn't / needs the real build
-- Free-form sends are window-bound; the production adapter needs a
-  template-send path (create conversation with `templateName` + `templateParams`)
-  for out-of-window receipts/reminders.
-- Delivery status tracking needs webhooks (`message.delivered`/`failed`) — not
-  covered by this spike.
-
-### Surprises
-- The 24h window applies to receipts too: a client who paid but never messaged
-  first is technically "outside the window" → template required. Business impact
-  depends on how often Tahseel clients initiate WhatsApp contact.
-
-### Recommendation for the real build
-- Extend `ZernioService` with `sendTemplate(phone, templateName, params)` and a
-  webhook receiver for delivery status → then swap the transport behind
-  `WhatsAppService` (keep queue/job/log/rate-limiter layers untouched).
-- Decision point for KIRA: receipts as utility templates (free-ish, needs Meta
-  approval + template management) vs keeping OpenWA for receipts and using
-  Zernio only for broadcasts/marketing (hybrid).
-
-## Files
-- `app/Services/WhatsApp/ZernioService.php`
-- `app/Console/Commands/ZernioTestCommand.php`
-- `tests/Feature/ZernioSpikeTest.php`
-- `.env` → `ZERNIO_API_KEY` / `ZERNIO_ACCOUNT_ID` / `ZERNIO_BASE_URL` (untracked)
+- [x] Phase 1: Real WABA upgrade (sendTemplate, sendSmart, config)
+- [ ] Phase 2: Webhook receiver for delivery status
+- [ ] Phase 3: Dashboard integration (Monitor, templates, driver toggle)
+- [ ] Phase 4: End-to-end test (pay → receipt → delivery confirmed)
