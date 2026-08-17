@@ -133,6 +133,11 @@ class SendWhatsAppMessage implements ShouldBeUnique, ShouldQueue
             $this->recordTransientFailure($messageLog, $sendResult);
         }
 
+        // Store provider message ID for webhook delivery tracking (Zernio wamid)
+        if (! empty($sendResult['message_id']) && is_null($messageLog->provider_message_id)) {
+            $messageLog->update(['provider_message_id' => $sendResult['message_id']]);
+        }
+
         if (! app(WhatsAppBatchService::class)->transitionClaimedMessage(
             $messageLog->id,
             $this->attemptToken,

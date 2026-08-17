@@ -21,6 +21,10 @@ use App\Http\Controllers\Api\MasrofatController;
 use Illuminate\Support\Facades\Route;
 
 Route::group(['middleware' => 'api', 'prefix' => 'v1'], function ($router) {
+    // Zernio webhook — public endpoint, no auth (signature-verified internally)
+    Route::post('webhooks/zernio', [\App\Http\Controllers\Admin\ZernioWebhookController::class, 'handle'])
+        ->withoutMiddleware([\Illuminate\Routing\Middleware\ThrottleRequests::class]);
+
     Route::post('login', [AuthController::class, 'login']);
     Route::post('refresh', [AuthController::class, 'refresh']);
 

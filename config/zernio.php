@@ -20,4 +20,7 @@ return [
     // Sandbox mode: uses /whatsapp/sandbox/* endpoints (free, 50 msgs/day)
     // Set to false for real WABA production sending
     'sandbox' => env('ZERNIO_SANDBOX', true),
+
+    // Webhook secret for X-Zernio-Signature verification (set in dashboard)
+    'webhook_secret' => env('ZERNIO_WEBHOOK_SECRET', ''),
 ];
