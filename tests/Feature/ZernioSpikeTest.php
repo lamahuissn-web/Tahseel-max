@@ -94,14 +94,15 @@ class ZernioSpikeTest extends TestCase
         $this->assertStringContainsString('sandbox', strtolower((string) $result['error']));
     }
 
-    public function test_send_template_posts_to_whatsapp_messages_endpoint(): void
+    public function test_send_template_posts_to_inbox_conversations_endpoint(): void
     {
         config(['zernio.sandbox' => false]);
 
         Http::fake([
-            'https://zernio.com/api/v1/whatsapp/waba_test_123/messages' => Http::response([
-                'messages' => [['id' => 'wamid.TPL456']],
-            ], 200),
+            'https://zernio.com/api/v1/inbox/conversations' => Http::response([
+                'success' => true,
+                'data' => ['messageId' => 'wamid.TPL456'],
+            ], 201),
         ]);
 
         $service = new ZernioService();
@@ -113,11 +114,11 @@ class ZernioSpikeTest extends TestCase
         Http::assertSent(function ($request) {
             $body = $request->data();
             return $request->method() === 'POST'
-                && str_contains($request->url(), '/whatsapp/waba_test_123/messages')
-                && $body['type'] === 'template'
-                && $body['template']['name'] === 'payment_receipt'
-                && $body['template']['language']['code'] === 'ar'
-                && $body['template']['components'][0]['parameters'][0]['text'] === '$10';
+                && str_contains($request->url(), '/inbox/conversations')
+                && $body['participantId'] === '96170781562'
+                && $body['templateName'] === 'payment_receipt'
+                && $body['templateLanguage'] === 'ar'
+                && $body['templateParams'] === ['$10', '2026-08-17'];
         });
     }
 
@@ -137,8 +138,10 @@ class ZernioSpikeTest extends TestCase
         config(['zernio.sandbox' => false]);
 
         Http::fake([
-            'https://zernio.com/api/v1/whatsapp/waba_test_123/messages' => Http::response([
-                'error' => ['message' => 'Template not found'],
+            'https://zernio.com/api/v1/inbox/conversations' => Http::response([
+                'error' => 'Template not found',
+                'type' => 'invalid_request_error',
+                'code' => 'not_found',
             ], 404),
         ]);
 
@@ -149,44 +152,49 @@ class ZernioSpikeTest extends TestCase
         $this->assertStringContainsString('Template not found', (string) $result['error']);
     }
 
-    // ─── sendSmart (auto-detect text vs template) ───
+    // ─── sendSmart (template priority, text fallback) ───
 
-    public function test_send_smart_uses_text_when_conversation_exists(): void
+    public function test_send_smart_uses_template_when_template_provided(): void
     {
         config(['zernio.sandbox' => false]);
 
         Http::fake([
-            'https://zernio.com/api/v1/inbox/conversations/conv999/messages' => Http::response([
+            'https://zernio.com/api/v1/inbox/conversations' => Http::response([
                 'success' => true,
                 'data' => ['messageId' => 'wamid.SMART1'],
-            ], 200),
-            'https://zernio.com/api/v1/inbox/conversations*' => Http::response([
-                'data' => [['id' => 'conv999', 'participantId' => '96170781562']],
-                'pagination' => ['hasMore' => false, 'nextCursor' => null],
-            ], 200),
+            ], 201),
         ]);
 
         $service = new ZernioService();
         $result = $service->sendSmart('+96170781562', 'Your receipt', 'payment_receipt');
 
         $this->assertTrue($result['ok']);
-        $this->assertEquals('text', $result['method']);
+        $this->assertEquals('template', $result['method']);
         $this->assertEquals('wamid.SMART1', $result['messageId']);
     }
 
-    public function test_send_smart_falls_back_to_template_when_no_conversation(): void
+    public function test_send_smart_falls_back_to_text_when_template_fails(): void
     {
         config(['zernio.sandbox' => false]);
 
         Http::fake([
-            // No conversations found
-            'https://zernio.com/api/v1/inbox/conversations*' => Http::response([
-                'data' => [],
-                'pagination' => ['hasMore' => false, 'nextCursor' => null],
-            ], 200),
-            // Template send succeeds
-            'https://zernio.com/api/v1/whatsapp/waba_test_123/messages' => Http::response([
-                'messages' => [['id' => 'wamid.SMART2']],
+            // Same URL serves GET (findConversation) and POST (template send)
+            'https://zernio.com/api/v1/inbox/conversations' => function ($request) {
+                if ($request->method() === 'POST') {
+                    // Template send fails
+                    return Http::response(['error' => 'Template not found'], 404);
+                }
+
+                // GET — open conversation exists for free-form text fallback
+                return Http::response([
+                    'data' => [['id' => 'conv999', 'participantId' => '96170781562']],
+                    'pagination' => ['hasMore' => false, 'nextCursor' => null],
+                ], 200);
+            },
+            // Free-form reply succeeds
+            'https://zernio.com/api/v1/inbox/conversations/conv999/messages' => Http::response([
+                'success' => true,
+                'data' => ['messageId' => 'wamid.SMART2'],
             ], 200),
         ]);
 
@@ -200,7 +208,7 @@ class ZernioSpikeTest extends TestCase
         );
 
         $this->assertTrue($result['ok']);
-        $this->assertEquals('template', $result['method']);
+        $this->assertEquals('text', $result['method']);
         $this->assertEquals('wamid.SMART2', $result['messageId']);
     }
 
@@ -242,15 +250,17 @@ class ZernioSpikeTest extends TestCase
         $this->assertEquals('+12025551234', $result['sandboxNumber']);
     }
 
-    public function test_status_real_waba_checks_whatsapp_accounts(): void
+    public function test_status_real_waba_checks_number_info(): void
     {
         config(['zernio.sandbox' => false]);
 
         Http::fake([
-            'https://zernio.com/api/v1/whatsapp/accounts' => Http::response([
-                'data' => [
-                    ['id' => 'waba_test_123', 'status' => 'connected', 'phoneNumber' => '+96170781562'],
+            'https://zernio.com/api/v1/whatsapp/number-info*' => Http::response([
+                'phone' => [
+                    'status' => 'CONNECTED',
+                    'display_phone_number' => '+96170781562',
                 ],
+                'waba' => ['id' => 'waba_test_123'],
             ], 200),
         ]);
 

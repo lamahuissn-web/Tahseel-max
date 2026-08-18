@@ -192,19 +192,19 @@ class ZernioService
     }
 
     /**
-     * Send a Meta-approved WhatsApp template message.
-     *
-     * Used for business-initiated messages (reminders, receipts outside 24h window).
-     * Templates must be pre-approved by Meta via the WABA.
-     *
-     * @param  string  $phone  E.164 phone number (e.g. "+96170781562")
-     * @param  string  $templateName  Meta-approved template name (e.g. "payment_receipt")
-     * @param  string  $language  Template language code (e.g. "ar", "en")
-     * @param  array  $variables  Template body variables (e.g. ["10", "2026-08-17"])
-     * @return array{ok: bool, messageId: ?string, error: ?string}
-     */
-    public function sendTemplate(string $phone, string $templateName, string $language = 'ar', array $variables = []): array
-    {
+         * Send a Meta-approved WhatsApp template message.
+         *
+         * Correct Zernio endpoint: POST /v1/inbox/conversations with
+         * templateName + templateLanguage + templateParams (flat array).
+         *
+         * @param  string  $phone  E.164 phone number (e.g. "+96170781562")
+         * @param  string  $templateName  Meta-approved template name (e.g. "payment_receipt")
+         * @param  string  $language  Template language code (e.g. "ar", "en_US")
+         * @param  array  $variables  Template body variables in order (e.g. ["10", "2026-08-17"])
+         * @return array{ok: bool, messageId: ?string, error: ?string}
+         */
+        public function sendTemplate(string $phone, string $templateName, string $language = 'ar', array $variables = []): array
+        {
         if ($this->sandbox) {
             return [
                 'ok' => false,
@@ -223,40 +223,23 @@ class ZernioService
 
         $cleanPhone = preg_replace('/^\+/', '', $phone);
 
-        // Build template body parameters
-        $bodyParams = [];
-        foreach ($variables as $variable) {
-            $bodyParams[] = ['type' => 'text', 'text' => (string) $variable];
-        }
-
         $payload = [
-            'messaging_product' => 'whatsapp',
-            'to' => $cleanPhone,
-            'type' => 'template',
-            'template' => [
-                'name' => $templateName,
-                'language' => ['code' => $language],
-            ],
+            'accountId' => $this->accountId,
+            'participantId' => $cleanPhone,
+            'templateName' => $templateName,
+            'templateLanguage' => $language,
+            'templateParams' => array_map(fn ($v) => (string) $v, $variables),
         ];
-
-        if (! empty($bodyParams)) {
-            $payload['template']['components'] = [
-                [
-                    'type' => 'body',
-                    'parameters' => $bodyParams,
-                ],
-            ];
-        }
 
         try {
             $response = Http::withHeaders($this->headers())
                 ->timeout(20)
-                ->post("{$this->baseUrl}/whatsapp/{$this->wabaId}/messages", $payload);
+                ->post("{$this->baseUrl}/inbox/conversations", $payload);
 
             $data = $response->json();
 
             if (! $response->successful()) {
-                $error = $data['error']['message'] ?? $data['message'] ?? $data['error'] ?? $response->body();
+                $error = $data['error'] ?? $data['message'] ?? $response->body();
                 Log::warning('Zernio template send failed', [
                     'phone' => substr($phone, 0, 6).'***',
                     'template' => $templateName,
@@ -267,7 +250,10 @@ class ZernioService
                 return ['ok' => false, 'messageId' => null, 'error' => (string) $error];
             }
 
-            $messageId = $data['messages'][0]['id'] ?? $data['data']['messageId'] ?? null;
+            $messageId = $data['data']['messageId']
+                ?? $data['messages'][0]['id']
+                ?? $data['data']['id']
+                ?? null;
 
             return ['ok' => true, 'messageId' => $messageId, 'error' => null];
         } catch (\Exception $e) {
@@ -280,25 +266,21 @@ class ZernioService
     /**
      * Auto-detect whether to send free-form text or template based on 24h window.
      *
-     * Tries free-form first; if no conversation exists, falls back to template.
+     * If template variables are provided, ALWAYS prefer the template
+     * (receipts/reminders are business-initiated — template is the only
+     * compliant path outside the 24h window). Free-form text is only used
+     * when no template is available (e.g. manual replies within 24h window).
      *
      * @param  string  $phone
      * @param  string  $message  Free-form message text
-     * @param  string|null  $templateName  Template to use if outside 24h window
+     * @param  string|null  $templateName  Template to use for business-initiated sends
      * @param  string  $language
      * @param  array  $variables
      * @return array{ok: bool, messageId: ?string, method: string, error: ?string}
      */
     public function sendSmart(string $phone, string $message, ?string $templateName = null, string $language = 'ar', array $variables = []): array
     {
-        // Try free-form text first (within 24h window)
-        $result = $this->sendText($phone, $message);
-
-        if ($result['ok']) {
-            return [...$result, 'method' => 'text'];
-        }
-
-        // No open window — try template if available
+        // Template takes priority when provided (business-initiated: receipts, reminders)
         if ($templateName && ! $this->sandbox) {
             $templateResult = $this->sendTemplate($phone, $templateName, $language, $variables);
 
@@ -306,19 +288,30 @@ class ZernioService
                 return [...$templateResult, 'method' => 'template'];
             }
 
-            return [
-                'ok' => false,
-                'messageId' => null,
-                'method' => 'none',
-                'error' => 'Free-form failed: '.$result['error'].' | Template failed: '.$templateResult['error'],
-            ];
+            Log::warning('Zernio template send failed — falling back to text', [
+                'phone' => substr($phone, 0, 6).'***',
+                'template' => $templateName,
+                'error' => $templateResult['error'] ?? 'unknown',
+            ]);
         }
+
+        // No template available or template failed — try free-form text (within 24h window)
+        $result = $this->sendText($phone, $message);
+
+        if ($result['ok']) {
+            return [...$result, 'method' => 'text'];
+        }
+
+        // Both failed
+        $templateError = ($templateName && ! $this->sandbox)
+            ? ' | Template failed: '.($templateResult['error'] ?? 'unknown')
+            : '';
 
         return [
             'ok' => false,
             'messageId' => null,
             'method' => 'none',
-            'error' => $result['error'],
+            'error' => $result['error'].$templateError,
         ];
     }
 }
