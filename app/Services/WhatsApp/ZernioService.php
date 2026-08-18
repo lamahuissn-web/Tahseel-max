@@ -86,44 +86,29 @@ class ZernioService
 
     protected function wabaStatus(): array
     {
-        // Check WABA accounts endpoint
+        // Use number-info endpoint (the correct Zernio API for WABA status)
         $response = Http::withHeaders($this->headers())
             ->timeout(10)
-            ->get("{$this->baseUrl}/whatsapp/accounts");
+            ->get("{$this->baseUrl}/whatsapp/number-info", [
+                'accountId' => $this->accountId,
+            ]);
 
         if (! $response->successful()) {
             return ['ok' => false, 'reachable' => true, 'error' => $response->body()];
         }
 
         $data = $response->json();
-        $accounts = $data['data'] ?? $data['accounts'] ?? [];
+        $phone = $data['phone'] ?? [];
+        $waba = $data['waba'] ?? [];
 
-        // Find our WABA
-        $waba = null;
-        foreach ($accounts as $account) {
-            if (($account['id'] ?? $account['_id'] ?? '') === $this->wabaId) {
-                $waba = $account;
-                break;
-            }
-        }
-
-        if (! $waba) {
-            return [
-                'ok' => false,
-                'reachable' => true,
-                'error' => 'WABA '.$this->wabaId.' not found in connected accounts',
-            ];
-        }
-
-        $connected = ($waba['status'] ?? '') === 'connected'
-            || ($waba['accountStatus'] ?? '') === 'ACTIVE';
+        $connected = ($phone['status'] ?? '') === 'CONNECTED';
 
         return [
             'ok' => $connected,
             'reachable' => true,
-            'wabaId' => $this->wabaId,
-            'phone' => $waba['phoneNumber'] ?? $waba['displayPhoneNumber'] ?? null,
-            'status' => $waba['status'] ?? $waba['accountStatus'] ?? 'unknown',
+            'wabaId' => $waba['id'] ?? $this->wabaId,
+            'phone' => $phone['display_phone_number'] ?? null,
+            'status' => $phone['status'] ?? 'unknown',
             'waba' => $waba,
         ];
     }
