@@ -7,6 +7,7 @@ use App\Models\Admin\Invoice;
 use App\Models\Clients;
 use App\Services\WhatsAppMessageBuilder;
 use App\Services\WhatsAppService;
+use App\Services\WhatsApp\MonthlyReminderNotifier;
 use App\Services\WhatsApp\InvoiceEligibilityService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -1075,6 +1076,34 @@ class WhatsAppSettingsController extends Controller
             return response()->json(['success' => false, 'error' => trans('clients.no_unpaid_invoices')]);
         }
 
+        // Option A (Spec 018): when the Zernio driver + Meta reminder template are configured,
+        // route through MonthlyReminderNotifier so the APPROVED monthly_reminder_v1 template is
+        // used (business-initiated, works outside the 24h window on Zernio). The notifier is
+        // fail-closed (ZERNIO_MONTHLY_REMINDER_ENABLED must be true) and manual-only.
+        if (
+            config('zernio.driver') === 'zernio'
+            && ! empty(config('zernio.reminder_template'))
+            && config('zernio.monthly_reminder_enabled') === true
+            && class_exists(MonthlyReminderNotifier::class)
+        ) {
+            $notifier = app(MonthlyReminderNotifier::class);
+            $outcome = $notifier->notify((int) $id);
+
+            if ($outcome === 'queued') {
+                return response()->json([
+                    'success' => true,
+                    'message' => trans('clients.whatsapp_reminder_sent'),
+                ]);
+            }
+
+            $reason = $outcome === 'disabled'
+                ? trans('clients.whatsapp_disabled')
+                : trans('clients.whatsapp_send_failed');
+
+            return response()->json(['success' => false, 'error' => $reason]);
+        }
+
+        // Legacy fallback path (OpenWA driver, or Meta template not configured): free-text send.
         $template = DB::table('app_config')->where('key', 'whatsapp_message_template')->value('value')
             ?? WhatsAppMessageBuilder::defaultTemplate();
 
