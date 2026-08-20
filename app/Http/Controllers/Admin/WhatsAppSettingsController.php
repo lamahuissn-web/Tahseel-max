@@ -649,15 +649,28 @@ class WhatsAppSettingsController extends Controller
         $client = $clientInvoices->first()->client;
         if (!$client || !$client->phone) continue;
         if (!$this->isValidPhone($client->phone)) continue;
-    
-    
-        $totalAmount = $clientInvoices->sum('remaining_amount');
-        $invoiceDetailsList = WhatsAppMessageBuilder::buildInvoiceDetailsList($clientInvoices);
-        $message = WhatsAppMessageBuilder::buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
-        $phone = preg_replace('/[^0-9]/', '', $client->phone);
-        $invoiceIds = $clientInvoices->pluck('id')->toArray();
-    
-        $result = $this->whatsapp->send($phone, $message, ['rate_context' => ['sent_in_batch' => $currentIndex]]);
+        
+                $phone = preg_replace('/[^0-9]/', '', $client->phone);
+                // Spec 018 (Button 2): route through MonthlyReminderNotifier when Zernio + Meta template set
+                if (config('zernio.driver') === 'zernio'
+                    && ! empty(config('zernio.reminder_template'))
+                    && class_exists(\App\Services\WhatsApp\MonthlyReminderNotifier::class)
+                ) {
+                    $notifyResult = app(\App\Services\WhatsApp\MonthlyReminderNotifier::class)->notify($client->id);
+                    if ($notifyResult === 'queued') {
+                        $sentCount++;
+                        $results[] = ['client' => $client->name, 'phone' => $phone, 'status' => 'queued'];
+                        $currentIndex++;
+                        continue;
+                    }
+                }
+        
+                $totalAmount = $clientInvoices->sum('remaining_amount');
+                $invoiceDetailsList = WhatsAppMessageBuilder::buildInvoiceDetailsList($clientInvoices);
+                $message = WhatsAppMessageBuilder::buildMessage($template, $client->name, $totalAmount, $invoiceDetailsList);
+                $invoiceIds = $clientInvoices->pluck('id')->toArray();
+        
+                $result = $this->whatsapp->send($phone, $message, ['rate_context' => ['sent_in_batch' => $currentIndex]]);
     
         DB::table('whatsapp_message_logs')->insert([
             'client_id' => $clientId,

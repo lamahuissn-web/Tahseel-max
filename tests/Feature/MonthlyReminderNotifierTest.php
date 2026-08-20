@@ -6,6 +6,7 @@ use App\Models\WhatsAppMessageLog;
 use App\Services\WhatsApp\MonthlyReminderNotifier;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Mockery;
 use Tests\TestCase;
 
 /**
@@ -41,6 +42,19 @@ class MonthlyReminderNotifierTest extends TestCase
 
         DB::purge('mysql');
         DB::reconnect('mysql');
+
+        // The rate limiter is always-enabled (settings() hardcodes enabled=true) and the
+        // dev DB has hundreds of real 'sent' logs in the last hour, so the hourly cap
+        // blocks test sends. Mock it for this test only — no production behavior change.
+        $limiter = \Mockery::mock(\App\Services\WhatsApp\WhatsAppRateLimiter::class);
+        $limiter->shouldReceive('waitBeforeSend')->andReturn(['allowed' => true, 'waited_seconds' => 0]);
+        $this->app->instance(\App\Services\WhatsApp\WhatsAppRateLimiter::class, $limiter);
+    }
+
+    protected function tearDown(): void
+    {
+        \Mockery::close();
+        parent::tearDown();
     }
 
     private function seedClientWithInvoices(): int
