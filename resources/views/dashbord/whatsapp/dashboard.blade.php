@@ -137,6 +137,55 @@
         </div>
     </div>
 
+    {{-- Driver Selector --}}
+    <div class="row g-5 g-xl-8 mb-8">
+        <div class="col-xl-6">
+            <div class="card card-xl-stretch mb-xl-3">
+                <div class="card-body d-flex align-items-center py-6">
+                    <div class="symbol symbol-50px me-5">
+                        <span class="symbol-label bg-{{ $activeDriver === 'zernio' ? 'info' : 'primary' }}-light">
+                            <i class="bi bi-arrow-left-right fs-2x text-{{ $activeDriver === 'zernio' ? 'info' : 'primary' }}"></i>
+                        </span>
+                    </div>
+                    <div class="d-flex flex-column flex-grow-1 min-w-0">
+                        <h6 class="fw-bold text-gray-800 mb-1">مزود WhatsApp</h6>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <span class="badge badge-light-{{ $activeDriver === 'zernio' ? 'info' : 'primary' }} fs-7">
+                                {{ $activeDriver === 'zernio' ? 'Zernio (Meta Cloud API)' : 'OpenWA (محلي)' }}
+                            </span>
+                            @if($activeDriver === 'zernio')
+                                <span class="text-muted fs-7">إرسال عبر Zernio — تتبع التسليم مفعل</span>
+                            @else
+                                <span class="text-muted fs-7">إرسال عبر OpenWA على CT111</span>
+                            @endif
+                        </div>
+                    </div>
+                    <div class="ms-auto flex-shrink-0">
+                        @if($activeDriver === 'openwa')
+                            <form action="{{ route('admin.settings.whatsapp.toggle_driver') }}" method="POST" class="d-inline"
+                                  onsubmit="return confirm('التبديل إلى Zernio؟ تأكد من تكوين بيانات اعتماد Zernio API.')">
+                                @csrf
+                                <input type="hidden" name="driver" value="zernio">
+                                <button type="submit" class="btn btn-outline-info btn-sm">
+                                    <i class="bi bi-cloud me-1"></i> Zernio
+                                </button>
+                            </form>
+                        @else
+                            <form action="{{ route('admin.settings.whatsapp.toggle_driver') }}" method="POST" class="d-inline"
+                                  onsubmit="return confirm('التبديل إلى OpenWA؟ سيتم استخدام بوابة OpenWA على CT111.')">
+                                @csrf
+                                <input type="hidden" name="driver" value="openwa">
+                                <button type="submit" class="btn btn-outline-primary btn-sm">
+                                    <i class="bi bi-phone me-1"></i> OpenWA
+                                </button>
+                            </form>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {{-- QR Code Section (shown when disconnected) --}}
     @if(!$connectionStatus && $emergencyStop != '1')
     <div class="row g-5 g-xl-8 mb-8" id="qr-section">

@@ -59,11 +59,17 @@ class PaymentReceiptNotifier
                 ? date('Y', strtotime($invoice->due_date))
                 : date('Y');
             $paymentDate = $invoice->paid_date
-                ? date('d/m/Y', strtotime($invoice->paid_date))
-                : date('d/m/Y');
+                ? date('d/m/Y h:i A', strtotime($invoice->paid_date))
+                : date('d/m/Y h:i A');
             $paidDueDate = $invoice->due_date
                 ? date('d/m/Y', strtotime($invoice->due_date))
                 : $paymentDate;
+
+            // 2b. For service invoices, show description instead of date in {{2}}
+            $isService = $invoice->invoice_type === 'service';
+            $paidDescription = $isService
+                ? ($invoice->notes ?: 'خدمة')
+                : "{$paidMonth} / {$paidYear}";
 
             // 3a. Get collector name and payment time from Revenue record
             $revenue = $paymentRevenue
@@ -102,6 +108,33 @@ class PaymentReceiptNotifier
             // Do NOT include future invoices in the receipt message — they confuse customers.
             $unpaidInvoices = InvoiceEligibilityService::getEligibleInvoices($client->id);
 
+            // 4b. Query ALL non-deleted unpaid invoices for total outstanding + breakdown
+            $allUnpaid = \App\Models\Admin\Invoice::where('client_id', $client->id)
+                ->where('status', 'unpaid')
+                ->where('id', '!=', $invoice->id)
+                ->whereNull('deleted_at')
+                ->get();
+
+            // Unpaid subscription months (for {{8}}) — always show regardless of invoice type
+            $unpaidSubMonths = $allUnpaid->where('invoice_type', 'subscription')
+                ->pluck('due_date')
+                ->map(fn ($d) => (int) date('m', strtotime($d)))
+                ->sort()
+                ->values();
+            $unpaidSubStr = $unpaidSubMonths->isEmpty() ? 'لا يوجد' : $unpaidSubMonths->implode(', ');
+
+            // Unpaid services with notes fallback (for {{9}}) — exclude the just-paid invoice
+            $unpaidServices = $allUnpaid->where('invoice_type', 'service');
+            $svcParts = [];
+            foreach ($unpaidServices as $svc) {
+                $desc = ! empty($svc->notes) ? $svc->notes : 'خدمة';
+                $svcParts[] = "{$desc} (\${$svc->amount})";
+            }
+            $unpaidSvcStr = empty($svcParts) ? 'لا يوجد' : implode(', ', $svcParts);
+
+            // Total outstanding across ALL unpaid invoices (for {{5}})
+            $totalOutstanding = (float) $allUnpaid->sum('amount');
+
             // 5. Calculate totals
             // Total due BEFORE this payment (the paid invoice plus other due invoices)
             // We exclude the just-paid invoice from remaining, but count its amount
@@ -135,17 +168,14 @@ class PaymentReceiptNotifier
             // 6b. Build template variables for Zernio (stored for sendTemplate)
             $templateVariables = $this->buildTemplateVariables(
                 $customerName,
-                $paidMonth,
-                $paidYear,
+                $paidDescription,
                 $paidAmount,
                 $paidDueDate,
                 $collectorName,
                 $paymentTime,
-                $lastPaidMonth,
-                $lastPaidYear,
-                $totalDue,
-                $totalBeforePayment,
-                $paymentReference
+                $totalOutstanding,
+                $unpaidSubStr,
+                $unpaidSvcStr,
             );
 
             // 7. Enqueue as pending so it appears in Queue
@@ -284,29 +314,25 @@ class PaymentReceiptNotifier
      */
     public function buildTemplateVariables(
         string $customerName,
-        string $paidMonth,
-        string $paidYear,
+        string $paidDescription,
         string $paidAmount,
         string $paidDueDate,
         string $collectorName,
         string $paymentTime,
-        string $lastPaidMonth,
-        string $lastPaidYear,
-        float $totalDue,
-        float $totalBeforePayment,
-        ?string $paymentReference = null,
+        float $totalOutstanding,
+        string $unpaidSubStr,
+        string $unpaidSvcStr,
     ): array {
         return [
             $customerName,                                    // {{1}}
-            "{$paidMonth} / {$paidYear}",                     // {{2}}
+            $paidDescription,                                 // {{2}} — date for subscription, description for service
             $paidDueDate,                                     // {{3}}
             $paidAmount,                                      // {{4}}
-            number_format($totalBeforePayment, 2),            // {{5}}
+            number_format($totalOutstanding, 2),              // {{5}}
             $collectorName,                                   // {{6}}
             $paymentTime,                                     // {{7}}
-            "{$lastPaidMonth} / {$lastPaidYear}",             // {{8}}
-            number_format($totalDue, 2),                      // {{9}}
-            $paymentReference ?? '-',                         // {{10}}
+            $unpaidSubStr,                                    // {{8}}
+            $unpaidSvcStr,                                    // {{9}}
         ];
     }
 }

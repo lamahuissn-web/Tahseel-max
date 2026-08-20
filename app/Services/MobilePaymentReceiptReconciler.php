@@ -41,6 +41,8 @@ class MobilePaymentReceiptReconciler
             Log::warning('Mobile payment receipt reconciliation failed', [
                 'payment_operation_id' => $operationId,
                 'exception' => get_class($exception),
+                'message' => $exception->getMessage(),
+                'file' => $exception->getFile() . ':' . $exception->getLine(),
             ]);
         }
 

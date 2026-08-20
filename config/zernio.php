@@ -25,6 +25,6 @@ return [
     'webhook_secret' => env('ZERNIO_WEBHOOK_SECRET', ''),
 
     // Template names (Meta-approved, set after approval)
-    'receipt_template' => env('ZERNIO_RECEIPT_TEMPLATE', 'payment_receipt_v3'),
+    'receipt_template' => env('ZERNIO_RECEIPT_TEMPLATE', 'payment_receipt_v4'),
     'reminder_template' => env('ZERNIO_REMINDER_TEMPLATE', ''),
 ];
