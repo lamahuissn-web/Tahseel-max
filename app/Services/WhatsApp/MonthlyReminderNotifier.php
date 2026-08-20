@@ -33,6 +33,17 @@ class MonthlyReminderNotifier
      */
     public function notify(int $clientId): string
     {
+        // FAIL-CLOSED manual-only guard (Spec 018, post-incident hardening):
+        // monthly reminders must never auto-fire. Even a manual send is blocked
+        // unless the operator has explicitly enabled the feature (ZERNIO_MONTHLY_REMINDER_ENABLED=true).
+        if (config('zernio.monthly_reminder_enabled') !== true) {
+            Log::warning('[WhatsApp Reminder] Monthly reminders disabled (ZERNIO_MONTHLY_REMINDER_ENABLED not true) — refusing to enqueue', [
+                'client_id' => $clientId,
+            ]);
+
+            return 'disabled';
+        }
+
         try {
             $client = Clients::find($clientId);
             if (! $client) {

@@ -27,4 +27,11 @@ return [
     // Template names (Meta-approved, set after approval)
     'receipt_template' => env('ZERNIO_RECEIPT_TEMPLATE', 'payment_receipt_v4'),
     'reminder_template' => env('ZERNIO_REMINDER_TEMPLATE', ''),
+
+    // Manual-only kill switch for monthly reminders.
+    // Monthly reminders are DESIGNED to be manual (you click Send). This flag is a
+    // defensive FAIL-CLOSED guard: MonthlyReminderNotifier refuses to enqueue anything
+    // unless ZERNIO_MONTHLY_REMINDER_ENABLED=true. It can never auto-fire, and even
+    // manual sends require this to be explicitly on.
+    'monthly_reminder_enabled' => env('ZERNIO_MONTHLY_REMINDER_ENABLED', false),
 ];

@@ -126,6 +126,10 @@ Full flow through the real Tahseel payment path, with `WHATSAPP_DRIVER=zernio`:
         * Settings → WhatsApp → Reminders Preview (`ReminderService::enqueueReminders`)
         * Settings → WhatsApp → Monthly Reminders card (`sendMonthly`)  ← Button 2 wired
       - `.env`: `ZERNIO_REMINDER_TEMPLATE=monthly_reminder_v1` (live switch; inert until Meta approves)
+      - FAIL-CLOSED guard: monthly reminders are MANUAL-ONLY. `MonthlyReminderNotifier`
+        refuses to enqueue unless `ZERNIO_MONTHLY_REMINDER_ENABLED=true` (config default false).
+        No automatic path may ever fire them. (Post-incident hardening: tests mock the
+        dispatcher/notifier so they can never enqueue a real job.)
 - [ ] Phase 2: Webhook receiver for delivery status (superseded by `ZernioWebhookController`)
 - [ ] Phase 3: Dashboard integration (Monitor, templates, driver toggle)
 - [ ] Phase 4: End-to-end test (pay → receipt → delivery confirmed)

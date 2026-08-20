@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\WhatsAppMessageLog;
 use App\Services\WhatsApp\MonthlyReminderNotifier;
+use App\Services\WhatsApp\WhatsAppMessageDispatcher;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Mockery;
@@ -15,9 +17,14 @@ use Tests\TestCase;
  * Validates that MonthlyReminderNotifier builds the 5 Meta template variables,
  * stores them on the log row with template_type='monthly_reminder', and that
  * SendWhatsAppMessage routes that type to the configured reminder template.
+ *
+ * SAFETY: WhatsAppMessageDispatcher is MOCKED as a no-op, so notify() can never
+ * enqueue a real job on the WhatsApp queue. No real message can be produced.
  */
 class MonthlyReminderNotifierTest extends TestCase
 {
+    use DatabaseTransactions;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -38,6 +45,8 @@ class MonthlyReminderNotifierTest extends TestCase
             'zernio.waba_id' => 'waba_test',
             'zernio.receipt_template' => 'payment_receipt_v4',
             'zernio.reminder_template' => 'monthly_reminder_v1',
+            // Explicitly enable for the test (the guard otherwise fails closed)
+            'zernio.monthly_reminder_enabled' => true,
         ]);
 
         DB::purge('mysql');
@@ -49,6 +58,11 @@ class MonthlyReminderNotifierTest extends TestCase
         $limiter = \Mockery::mock(\App\Services\WhatsApp\WhatsAppRateLimiter::class);
         $limiter->shouldReceive('waitBeforeSend')->andReturn(['allowed' => true, 'waited_seconds' => 0]);
         $this->app->instance(\App\Services\WhatsApp\WhatsAppRateLimiter::class, $limiter);
+
+        // CRITICAL SAFETY: stub the dispatcher so notify() never enqueues a real job.
+        $dispatcher = \Mockery::mock(WhatsAppMessageDispatcher::class);
+        $dispatcher->shouldReceive('dispatch')->andReturnNull();
+        $this->app->instance(WhatsAppMessageDispatcher::class, $dispatcher);
     }
 
     protected function tearDown(): void
@@ -167,6 +181,26 @@ class MonthlyReminderNotifierTest extends TestCase
         WhatsAppMessageLog::where('client_id', $clientId)->delete();
         DB::table('tbl_invoices')->where('client_id', $clientId)->delete();
         DB::table('tbl_clients')->where('id', $clientId)->delete();
+    }
+
+    public function test_notifier_fails_closed_when_monthly_reminders_disabled(): void
+    {
+        // Guard must be OFF for this test
+        config(['zernio.monthly_reminder_enabled' => false]);
+
+        $clientId = $this->seedClientWithInvoices();
+
+        $notifier = app(MonthlyReminderNotifier::class);
+        $result = $notifier->notify($clientId);
+
+        $this->assertEquals('disabled', $result, 'Should refuse to enqueue when feature disabled');
+
+        // No log row, no job, nothing sent
+        $log = WhatsAppMessageLog::where('client_id', $clientId)
+            ->where('template_type', 'monthly_reminder')
+            ->first();
+        $this->assertNull($log, 'No monthly_reminder log row may be created when disabled');
+        $this->assertEquals(0, DB::table('jobs')->where('queue', 'whatsapp')->count(), 'No job may be enqueued');
     }
 
     public function test_job_routes_monthly_reminder_to_configured_template(): void
