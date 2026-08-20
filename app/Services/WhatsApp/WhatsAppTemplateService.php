@@ -43,6 +43,14 @@ class WhatsAppTemplateService
                 'body' => "🌐 MegaNet\n\n👤 عزيزي المشترك: {name}\n\n{message_body}\n\nشكراً لاختياركم MegaNet 🌹",
                 'variables' => ['{name}', '{message_body}'],
             ],
+            'monthly_reminder' => [
+                'label' => 'تذكير شهري (Meta)',
+                'label_en' => 'Monthly Reminder (Meta)',
+                // Sent via the approved monthly_reminder_v1 template on Zernio;
+                // body is the free-text fallback for OpenWA / pre-send display only.
+                'body' => "🌐 MegaNet — تذكير شهري\n\n👤 اسم المشترك: {name}\n📅 الاشتراك المستحق: {due_date}\n📊 الاشهر غير المدفوعة: {invoice_details_list}\n💵 المبلغ الإجمالي: \${total_amount}\n\nشكراً لاختياركم MegaNet 🌹",
+                'variables' => ['{name}', '{due_date}', '{invoice_details_list}', '{total_amount}'],
+            ],
         ];
     }
 

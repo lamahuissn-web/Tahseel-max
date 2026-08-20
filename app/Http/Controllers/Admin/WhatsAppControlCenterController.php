@@ -10,6 +10,7 @@ use App\Models\WhatsAppBatch;
 use App\Models\WhatsAppMessageLog;
 use App\Services\WhatsApp\CollectorReminderService;
 use App\Services\WhatsApp\InvoiceEligibilityService;
+use App\Services\WhatsApp\MonthlyReminderNotifier;
 use App\Services\WhatsApp\WhatsAppBatchService;
 use App\Services\WhatsApp\WhatsAppMessageDispatcher;
 use App\Services\WhatsApp\WhatsAppQueueState;
@@ -757,6 +758,28 @@ class WhatsAppControlCenterController extends Controller
 
         $autoTemplate = $request->template_type === 'auto';
         $body = $autoTemplate ? null : WhatsAppTemplateService::getBody($request->template_type);
+
+        // Spec 018 (send page): "Monthly Reminder" routes each client through the
+        // approved monthly_reminder_v1 Meta template via MonthlyReminderNotifier.
+        // This works on Zernio anytime (no 24h window), and is fail-closed + manual-only.
+        if ($request->template_type === 'monthly_reminder') {
+            $notifier = app(MonthlyReminderNotifier::class);
+            $queued = 0;
+            foreach ($request->client_ids as $clientId) {
+                $outcome = $notifier->notify((int) $clientId);
+                if ($outcome === 'queued') {
+                    $queued++;
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'queued' => $queued,
+                'failed' => count($request->client_ids) - $queued,
+                'errors' => [],
+                'total' => count($request->client_ids),
+            ]);
+        }
 
         if (! $autoTemplate && empty($body)) {
             return response()->json([
