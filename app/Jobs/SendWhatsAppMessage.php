@@ -109,9 +109,13 @@ class SendWhatsAppMessage implements ShouldBeUnique, ShouldQueue
 
         // Pass template variables for Zernio template sends
         if (! empty($messageLog->template_variables) && is_array($messageLog->template_variables)) {
-            $templateName = $messageLog->template_type === 'receipt'
-                ? config('zernio.receipt_template', 'payment_receipt_v2')
-                : config('zernio.reminder_template', '');
+            // Explicit map: only these types are Meta-approved templates.
+            // collector_reminder and legacy 'reminder' stay free-text (no template_name).
+            $templateName = match ($messageLog->template_type) {
+                'receipt' => config('zernio.receipt_template', 'payment_receipt_v2'),
+                'monthly_reminder' => config('zernio.reminder_template', ''),
+                default => '',
+            };
 
             if ($templateName) {
                 $sendOptions['template_name'] = $templateName;

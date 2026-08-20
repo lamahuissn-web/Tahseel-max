@@ -116,6 +116,13 @@ Full flow through the real Tahseel payment path, with `WHATSAPP_DRIVER=zernio`:
 ## Phases
 
 - [x] Phase 1: Real WABA upgrade (sendTemplate, sendSmart, config)
-- [ ] Phase 2: Webhook receiver for delivery status
+- [x] Phase 2a: `payment_receipt_v4` (9 params) — live, approved by Meta
+- [x] Phase 2b: Service payment fix (description instead of date)
+- [x] Phase 2c: `monthly_reminder_v1` wiring (Spec 018) — code ready-to-fire; template PENDING Meta approval
+      - `MonthlyReminderNotifier` builds 5 template vars; `SendWhatsAppMessage` maps
+        `template_type='monthly_reminder'` → `config('zernio.reminder_template')`
+      - Trigger paths wired: `calendarSend()` + `ReminderService::enqueueReminders()`
+      - `.env`: `ZERNIO_REMINDER_TEMPLATE=monthly_reminder_v1` (live switch; inert until Meta approves)
+- [ ] Phase 2: Webhook receiver for delivery status (superseded by `ZernioWebhookController`)
 - [ ] Phase 3: Dashboard integration (Monitor, templates, driver toggle)
 - [ ] Phase 4: End-to-end test (pay → receipt → delivery confirmed)

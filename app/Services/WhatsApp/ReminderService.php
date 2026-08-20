@@ -5,6 +5,7 @@ namespace App\Services\WhatsApp;
 use App\Models\Clients;
 use App\Models\Admin\Invoice;
 use App\Models\WhatsAppMessageLog;
+use App\Services\WhatsApp\MonthlyReminderNotifier;
 use App\Services\WhatsAppMessageBuilder;
 use App\Services\WhatsAppService;
 use Carbon\Carbon;
@@ -187,6 +188,30 @@ class ReminderService
             }
 
             $message = $this->buildMessage($client, $invoices, $template);
+
+            // Spec 018: when Zernio driver is active and a Meta reminder template is
+            // configured, route through MonthlyReminderNotifier so the approved template
+            // variables are populated and template_type is 'monthly_reminder'.
+            if ($template === 'reminder'
+                && $this->shouldUseMetaReminderTemplate()
+                && class_exists(MonthlyReminderNotifier::class)
+            ) {
+                $notifyResult = app(MonthlyReminderNotifier::class)->notify($client->id);
+                if ($notifyResult === 'queued') {
+                    $queued++;
+                    $details[] = [
+                        'queue_log_id' => null,
+                        'client_id' => $clientId,
+                        'client_name' => $client->name,
+                        'phone' => $client->phone,
+                        'status' => 'pending',
+                        'invoice_count' => $invoices->count(),
+                        'total_amount' => $this->sumInvoiceAmounts($invoices),
+                    ];
+                    continue;
+                }
+                // Fall through to legacy free-text log if notify could not enqueue
+            }
 
             $log = WhatsAppMessageLog::create([
                 'client_id' => $client->id,
@@ -394,5 +419,15 @@ class ReminderService
     private function normalizeRuleId(string $ruleId): string
     {
         return $ruleId === 'whatsapp_custom' ? 'whatsapp_overdue' : $ruleId;
+    }
+
+    /**
+     * Spec 018 — should reminders be sent via the Meta-approved monthly_reminder template?
+     * True only when the Zernio driver is active AND a reminder template name is configured.
+     */
+    private function shouldUseMetaReminderTemplate(): bool
+    {
+        return config('zernio.driver') === 'zernio'
+            && ! empty(config('zernio.reminder_template'));
     }
 }

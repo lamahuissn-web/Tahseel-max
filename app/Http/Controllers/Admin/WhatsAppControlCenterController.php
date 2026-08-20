@@ -2116,6 +2116,19 @@ class WhatsAppControlCenterController extends Controller
                 $message = str_replace('{datetime}', now()->format('Y-m-d h:i A'), $message);
                 $message = str_replace('{balance_status}', 'الرصيد الحالي: $'.number_format($totalAmount, 2), $message);
 
+                // Spec 018: route through MonthlyReminderNotifier when Zernio + template configured
+                if (config('zernio.driver') === 'zernio'
+                    && ! empty(config('zernio.reminder_template'))
+                    && class_exists(\App\Services\WhatsApp\MonthlyReminderNotifier::class)
+                ) {
+                    $notifyResult = app(\App\Services\WhatsApp\MonthlyReminderNotifier::class)->notify($client->id);
+                    if ($notifyResult === 'queued') {
+                        $queued++;
+                        continue;
+                    }
+                    // Fall through to legacy free-text log if notify could not enqueue
+                }
+
                 WhatsAppMessageLog::create([
                     'client_id' => $client->id,
                     'client_name' => $client->name,
