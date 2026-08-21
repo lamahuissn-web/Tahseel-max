@@ -17,7 +17,7 @@ class WhatsAppMessageBuilder
         $serviceLines = [];
 
         foreach ($clientInvoices as $invoice) {
-            $amount = number_format($invoice->remaining_amount, 2);
+            $amount = WhatsAppMessageBuilder::formatAmount($invoice->remaining_amount);
             $monthNum = Carbon::parse($invoice->due_date)->format("m");
             $yearNum = Carbon::parse($invoice->due_date)->format("Y");
             $formattedMonth = str_pad($monthNum, 2, "0", STR_PAD_LEFT);
@@ -55,9 +55,22 @@ class WhatsAppMessageBuilder
     public static function buildMessage(string $template, string $clientName, float $totalAmount, string $invoiceDetailsList): string
     {
         $message = str_replace("{name}", $clientName, $template);
-        $message = str_replace("{total_amount}", number_format($totalAmount, 2), $message);
+        $message = str_replace("{total_amount}", WhatsAppMessageBuilder::formatAmount($totalAmount), $message);
         $message = str_replace("{invoice_details_list}", $invoiceDetailsList, $message);
         return $message;
+    }
+
+    /**
+     * Format a money amount without unnecessary decimals.
+     * 25.00 -> 25, 10.50 -> 10.50, 105.00 -> 105.
+     */
+    public static function formatAmount(mixed $value): string
+    {
+        $amount = (float) $value;
+        // If it's a whole number, drop the decimals; otherwise keep 2.
+        return (string) (abs($amount - round($amount)) < 0.0000001
+            ? number_format($amount, 0)
+            : number_format($amount, 2));
     }
 
     /**

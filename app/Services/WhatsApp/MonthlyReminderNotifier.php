@@ -96,7 +96,7 @@ class MonthlyReminderNotifier
             $svcParts = [];
             foreach ($unpaidServices as $svc) {
                 $desc = ! empty($svc->notes) ? $svc->notes : 'خدمة';
-                $svcParts[] = "{$desc} (\${$svc->amount})";
+                $svcParts[] = "{$desc} (\$".WhatsAppMessageBuilder::formatAmount($svc->amount).")";
             }
             $unpaidSvcStr = empty($svcParts) ? 'لا يوجد' : implode(', ', $svcParts);
 
@@ -117,7 +117,7 @@ class MonthlyReminderNotifier
                 $soonestSubStr,          // {{2}}
                 $unpaidSubStr,           // {{3}}
                 $unpaidSvcStr,           // {{4}}
-                number_format($totalOutstanding, 2), // {{5}}
+                WhatsAppMessageBuilder::formatAmount($totalOutstanding), // {{5}}
             ];
 
             try {
@@ -178,7 +178,7 @@ class MonthlyReminderNotifier
         $message .= "📅 الاشتراك المستحق: {$soonestSubStr}\n";
         $message .= "📊 الاشهر غير المدفوعة: {$unpaidSubStr}\n";
         $message .= "📊 الخدمات الغير مدفوعة: {$unpaidSvcStr}\n\n";
-        $message .= "💵 المبلغ الإجمالي: \$".number_format($totalOutstanding, 2)."\n\n";
+        $message .= "💵 المبلغ الإجمالي: \$".WhatsAppMessageBuilder::formatAmount($totalOutstanding)."\n\n";
         $message .= "شكراً لاختياركم MegaNet 🌹\n";
         $message .= "للمراجعة وللصيانة 70618897";
 

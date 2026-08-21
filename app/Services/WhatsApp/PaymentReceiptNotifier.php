@@ -6,6 +6,7 @@ use App\Models\Admin;
 use App\Models\Admin\Invoice;
 use App\Models\Admin\Revenue;
 use App\Models\WhatsAppMessageLog;
+use App\Services\WhatsAppMessageBuilder;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -75,7 +76,7 @@ class PaymentReceiptNotifier
             $revenue = $paymentRevenue
                 ?? Revenue::where('invoice_id', $invoice->id)->latest('id')->first();
             $paidAmountNumeric = (float) ($revenue?->amount ?: $invoice->paid_amount ?: $invoice->amount);
-            $paidAmount = number_format($paidAmountNumeric, 2);
+            $paidAmount = WhatsAppMessageBuilder::formatAmount($paidAmountNumeric);
             $collectorName = 'النظام';
             $paymentTime = $paymentDate;
             if ($revenue) {
@@ -128,7 +129,7 @@ class PaymentReceiptNotifier
             $svcParts = [];
             foreach ($unpaidServices as $svc) {
                 $desc = ! empty($svc->notes) ? $svc->notes : 'خدمة';
-                $svcParts[] = "{$desc} (\${$svc->amount})";
+                $svcParts[] = "{$desc} (\$".WhatsAppMessageBuilder::formatAmount($svc->amount).")";
             }
             $unpaidSvcStr = empty($svcParts) ? 'لا يوجد' : implode(', ', $svcParts);
 
@@ -260,7 +261,7 @@ class PaymentReceiptNotifier
         $message .= "📅 الاشتراك المسدد: {$paidMonth} / {$paidYear}\n";
         $message .= "🗓 تاريخ الاستحقاق: {$paidDueDate}\n";
         $message .= "💵 المبلغ المدفوع: \${$paidAmount}\n";
-        $message .= '📊 إجمالي المستحق قبل الدفع: $'.number_format($totalBeforePayment, 2)."\n";
+        $message .= '📊 إجمالي المستحق قبل الدفع: $'.WhatsAppMessageBuilder::formatAmount($totalBeforePayment)."\n";
         $message .= "🧑 قبضت بواسطة: {$collectorName}\n";
         $message .= "⏱ وقت الدفع: {$paymentTime}\n";
 
@@ -276,7 +277,7 @@ class PaymentReceiptNotifier
                 $uMonth = $unpaid->due_date ? date('m', strtotime($unpaid->due_date)) : '??';
                 $uYear = $unpaid->due_date ? date('Y', strtotime($unpaid->due_date)) : '??';
                 $uDate = $unpaid->due_date ? date('d/m/Y', strtotime($unpaid->due_date)) : '??/??/????';
-                $uAmount = number_format((float) $unpaid->remaining_amount, 2);
+                $uAmount = WhatsAppMessageBuilder::formatAmount($unpaid->remaining_amount);
 
                 $message .= "❌ {$uMonth} / {$uYear} — {$uDate}      \${$uAmount}\n";
             }
@@ -284,7 +285,7 @@ class PaymentReceiptNotifier
             $message .= "\n🟢 لا توجد أي فواتير غير مدفوعة.\n";
         }
 
-        $message .= "\n💰 إجمالي المستحق: \$".number_format($totalDue, 2)."\n";
+        $message .= "\n💰 إجمالي المستحق: \$".WhatsAppMessageBuilder::formatAmount($totalDue)."\n";
 
         $message .= "\n━━━━━━━━━━━━━━━━━━\n";
 
@@ -328,7 +329,7 @@ class PaymentReceiptNotifier
             $paidDescription,                                 // {{2}} — date for subscription, description for service
             $paidDueDate,                                     // {{3}}
             $paidAmount,                                      // {{4}}
-            number_format($totalOutstanding, 2),              // {{5}}
+            WhatsAppMessageBuilder::formatAmount($totalOutstanding),  // {{5}}
             $collectorName,                                   // {{6}}
             $paymentTime,                                     // {{7}}
             $unpaidSubStr,                                    // {{8}}

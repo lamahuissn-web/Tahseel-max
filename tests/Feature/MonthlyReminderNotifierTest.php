@@ -171,11 +171,11 @@ class MonthlyReminderNotifierTest extends TestCase
         // {{3}} unpaid subscription months comma-joined -> "7, 8"
         $this->assertEquals('7, 8', $vars[2], 'Unpaid subscription months list');
 
-        // {{4}} unpaid services desc+amount -> "باقي حساب راوتر ($10.00)"
-        $this->assertEquals('باقي حساب راوتر ($10.00)', $vars[3], 'Unpaid services list');
+        // {{4}} unpaid services desc+amount -> "باقي حساب راوتر ($10)" (decimals stripped)
+        $this->assertEquals('باقي حساب راوتر ($10)', $vars[3], 'Unpaid services list');
 
-        // {{5}} total outstanding = 25 + 25 + 10 = 60 (deleted 99 excluded)
-        $this->assertEquals('60.00', $vars[4], 'Total excludes soft-deleted invoice');
+        // {{5}} total outstanding = 25 + 25 + 10 = 60 (deleted 99 excluded) — whole number, no decimals
+        $this->assertEquals('60', $vars[4], 'Total excludes soft-deleted invoice');
 
         // Cleanup
         WhatsAppMessageLog::where('client_id', $clientId)->delete();
