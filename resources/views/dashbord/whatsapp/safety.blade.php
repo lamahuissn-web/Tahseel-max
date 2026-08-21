@@ -152,6 +152,25 @@ WhatsApp Safety
             </div>
         </div>
         <div class="card-body pt-4">
+            {{-- Rate limiter on/off (audit 2026-08-21: the flag is now real) --}}
+            <div class="alert alert-custom alert-light-{{ ($settings['enabled'] ?? true) ? 'success' : 'danger' }} d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-7" dir="rtl">
+                <div>
+                    <div class="fw-bold fs-5">
+                        حماية التوقيت: {{ ($settings['enabled'] ?? true) ? 'مفعّلة' : 'متوقفة' }}
+                        <span class="badge badge-{{ ($settings['enabled'] ?? true) ? 'success' : 'danger' }} ms-2">{{ ($settings['enabled'] ?? true) ? 'ON' : 'OFF' }}</span>
+                    </div>
+                    <div class="text-muted fs-7 mt-1">عند الإيقاف: لا تأخير ولا حدود ساعية/يومية — الإرسال فوري. يُنصح بإبقائها مفعّلة لحماية الرقم.</div>
+                </div>
+                @if($canUpdateSafety)
+                <form method="POST" action="{{ route('admin.whatsapp.safety.toggle_limiter') }}" class="m-0">
+                    @csrf
+                    <input type="hidden" name="enabled" value="{{ ($settings['enabled'] ?? true) ? '0' : '1' }}">
+                    <button type="submit" class="btn btn-sm btn-{{ ($settings['enabled'] ?? true) ? 'danger' : 'success' }}">
+                        {{ ($settings['enabled'] ?? true) ? 'إيقاف الحماية' : 'تفعيل الحماية' }}
+                    </button>
+                </form>
+                @endif
+            </div>
             @php($selectedPreset = old('preset', $settings['preset'] ?? 'balanced'))
             <div class="row g-4 mb-7">
                 <div class="col-lg-4">

@@ -258,6 +258,9 @@ Route::group(
                 Route::post('/safety', [WhatsAppControlCenterController::class, 'updateSafety'])
                     ->middleware('can:update_whatsapp_safety_settings')
                     ->name('safety.update');
+                Route::post('/safety/toggle-limiter', [WhatsAppControlCenterController::class, 'toggleRateLimiter'])
+                    ->middleware('can:update_whatsapp_safety_settings')
+                    ->name('safety.toggle_limiter');
                 Route::post('/monitor/revoke-session', [WhatsAppControlCenterController::class, 'revokeWhatsAppSession'])->name('monitor.revoke_session');
                 Route::get('/templates', [WhatsAppControlCenterController::class, 'templates'])->name('templates');
                 Route::post('/templates/save', [WhatsAppControlCenterController::class, 'saveTemplate'])->name('templates.save');

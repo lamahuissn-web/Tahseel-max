@@ -31,6 +31,7 @@ class WhatsAppSafetySettings
     public const MAX_BATCH_PAUSE = 3600;
 
     private const CONFIG_KEYS = [
+        'enabled' => 'whatsapp_rate_limiter_enabled',
         'preset' => 'whatsapp_rate_preset',
         'base_delay' => 'whatsapp_rate_base_delay',
         'jitter_percent' => 'whatsapp_rate_jitter_percent',
@@ -88,17 +89,26 @@ class WhatsAppSafetySettings
             ->whereIn('key', [...array_values(self::CONFIG_KEYS), self::LEGACY_BASE_DELAY_KEY])
             ->pluck('value', 'key');
 
+        // The limiter enable flag is now REAL (audit 2026-08-21): read from app_config,
+        // default ON when the key is absent. Previously this was hardcoded true and the
+        // stored flag was never read — a dead UI control.
+        $enabledRaw = $stored->get(self::CONFIG_KEYS['enabled']);
+        $enabled = $enabledRaw === null ? true : in_array(trim((string) $enabledRaw), ['1', 'true', 'on'], true);
+
         $preset = $stored->get(self::CONFIG_KEYS['preset']);
         $presetWasMissing = $preset === null;
         if ($preset === null) {
-            $preset = $stored->except([self::CONFIG_KEYS['preset']])->isEmpty() ? 'balanced' : 'custom';
+            // "custom" classification must still consider the legacy delay key and all
+            // rate keys — only preset/enabled themselves are excluded.
+            $otherKeys = $stored->except([self::CONFIG_KEYS['preset'], self::CONFIG_KEYS['enabled']]);
+            $preset = $otherKeys->isEmpty() ? 'balanced' : 'custom';
         } elseif (! in_array($preset, ['very_safe', 'balanced', 'custom'], true)) {
-            return ['enabled' => true] + $this->normalize(['preset' => 'balanced'] + $defaults);
+            return ['enabled' => $enabled] + $this->normalize(['preset' => 'balanced'] + $defaults);
         }
 
         $candidate = ['preset' => $preset];
         foreach (self::CONFIG_KEYS as $name => $key) {
-            if ($name !== 'preset') {
+            if (! in_array($name, ['preset', 'enabled'], true)) {
                 $candidate[$name] = $name === 'base_delay'
                     ? $stored->get($key, $stored->get(self::LEGACY_BASE_DELAY_KEY, $defaults[$name]))
                     : $stored->get($key, $defaults[$name]);
@@ -115,7 +125,7 @@ class WhatsAppSafetySettings
             }
         }
 
-        return ['enabled' => true] + $normalized;
+        return ['enabled' => $enabled] + $normalized;
     }
 
     public function save(array $validated, array $auditContext): array
@@ -132,9 +142,21 @@ class WhatsAppSafetySettings
             $oldSettings = $this->settings();
             $preset = $validated['preset'];
             $candidate = $preset === 'custom' ? $validated : $this->presets()[$preset];
-            $newSettings = ['enabled' => true] + $this->normalize(['preset' => $preset] + $candidate);
+            // Preserve the current enable flag on preset saves; the dedicated
+            // setEnabled() method is the only way to change it.
+            $newSettings = ['enabled' => $oldSettings['enabled']] + $this->normalize(['preset' => $preset] + $candidate);
 
             $this->persist($newSettings, $auditContext['admin_id']);
+            // Keep the persisted flag row in sync with its (unchanged) value so the
+            // row always exists with the correct updated_by/updated_at metadata.
+            DB::table('app_config')->updateOrInsert(
+                ['key' => self::CONFIG_KEYS['enabled']],
+                [
+                    'value' => $oldSettings['enabled'] ? '1' : '0',
+                    'updated_by' => $auditContext['admin_id'],
+                    'updated_at' => now(),
+                ]
+            );
             $this->recordAudit($oldSettings, $newSettings, $auditContext);
 
             return $newSettings;
@@ -184,6 +206,9 @@ class WhatsAppSafetySettings
     private function persist(array $settings, ?int $adminId): void
     {
         foreach (self::CONFIG_KEYS as $name => $key) {
+            if ($name === 'enabled') {
+                continue; // handled by setEnabled() only
+            }
             DB::table('app_config')->updateOrInsert(
                 ['key' => $key],
                 [
@@ -195,13 +220,42 @@ class WhatsAppSafetySettings
         }
 
         DB::table('app_config')->updateOrInsert(
-            ['key' => 'whatsapp_rate_limiter_enabled'],
-            ['value' => '1', 'updated_by' => $adminId, 'updated_at' => now()]
-        );
-        DB::table('app_config')->updateOrInsert(
             ['key' => 'whatsapp_auto_delay'],
             ['value' => (string) $settings['base_delay'], 'updated_by' => $adminId, 'updated_at' => now()]
         );
+    }
+
+    /**
+     * Turn the safety rate limiter on/off (audit 2026-08-21: the flag is now real).
+     * Fail-safe: any truthy string enables; anything else disables. Audited.
+     */
+    public function setEnabled(bool $enabled, array $auditContext): array
+    {
+        return DB::transaction(function () use ($enabled, $auditContext): array {
+            $lockRow = DB::table('app_config')
+                ->where('key', self::LOCK_KEY)
+                ->lockForUpdate()
+                ->first();
+            if ($lockRow === null) {
+                throw new \RuntimeException('WhatsApp safety settings lock row is missing. Run database migrations.');
+            }
+
+            $oldSettings = $this->settings();
+            $newSettings = ['enabled' => $enabled] + $oldSettings;
+
+            DB::table('app_config')->updateOrInsert(
+                ['key' => self::CONFIG_KEYS['enabled']],
+                [
+                    'value' => $enabled ? '1' : '0',
+                    'updated_by' => $auditContext['admin_id'],
+                    'updated_at' => now(),
+                ]
+            );
+
+            $this->recordAudit($oldSettings, $newSettings, $auditContext);
+
+            return $newSettings;
+        });
     }
 
     private function safeInteger(mixed $value, int $minimum, int $maximum, int $default): int

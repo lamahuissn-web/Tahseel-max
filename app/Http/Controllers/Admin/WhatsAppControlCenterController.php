@@ -103,6 +103,32 @@ class WhatsAppControlCenterController extends Controller
             ->with('success', 'تم تطبيق إعدادات توقيت WhatsApp الآمنة بنجاح.');
     }
 
+    /**
+     * Toggle the safety rate limiter on/off (audit 2026-08-21: flag is now real).
+     * Permission-gated by the same can:update_whatsapp_safety_settings middleware.
+     */
+    public function toggleRateLimiter(Request $request)
+    {
+        $request->validate([
+            'enabled' => 'required|boolean',
+        ]);
+
+        app(WhatsAppSafetySettings::class)->setEnabled(
+            (bool) $request->boolean('enabled'),
+            [
+                'admin_id' => auth('admin')->id(),
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]
+        );
+
+        return redirect()
+            ->route('admin.whatsapp.safety')
+            ->with('success', $request->boolean('enabled')
+                ? 'تم تفعيل حماية توقيت WhatsApp.'
+                : 'تم إيقاف حماية توقيت WhatsApp — الإرسال لن يتم تأخيره أو تحديده.');
+    }
+
     public function revokeWhatsAppSession(Request $request)
     {
         $request->validate([
