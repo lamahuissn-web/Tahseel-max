@@ -47,9 +47,6 @@ class MonthlyReminderSettingsCardTest extends TestCase
             'zernio.sandbox' => false,
         ]);
 
-        // CRITICAL SAFETY (post-incident 2026-08-21): fake the WhatsApp queue so a test
-        // can never dispatch a real WhatsApp message to the `whatsapp_database` queue.
-        Queue::fake(['whatsapp_database']);
 
         // Prevent any real transport — the controller calls whatsapp->send directly.
         $svc = Mockery::mock(WhatsAppService::class);

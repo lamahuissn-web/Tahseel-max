@@ -103,6 +103,20 @@ class SendWhatsAppMessage implements ShouldBeUnique, ShouldQueue
 
     private function deliver(WhatsAppMessageLog $messageLog, WhatsAppService $service): void
     {
+        // SAFETY (audit 2026-08-21): re-verify the monthly-reminder kill switch at
+        // DELIVERY time. A job enqueued while the feature was enabled must not send
+        // if the operator flipped ZERNIO_MONTHLY_REMINDER_ENABLED off afterwards.
+        if ($messageLog->template_type === 'monthly_reminder'
+            && config('zernio.monthly_reminder_enabled') !== true
+        ) {
+            $this->markFailed(
+                $messageLog,
+                'Monthly reminders disabled (ZERNIO_MONTHLY_REMINDER_ENABLED not true) — send blocked at delivery time'
+            );
+
+            return;
+        }
+
         $sendOptions = [
             'rate_context' => ['source' => 'database-queue'],
         ];

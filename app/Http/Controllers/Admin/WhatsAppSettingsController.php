@@ -652,7 +652,9 @@ class WhatsAppSettingsController extends Controller
         if (!$this->isValidPhone($client->phone)) continue;
         
                 $phone = preg_replace('/[^0-9]/', '', $client->phone);
-                // Spec 018 (Button 2): route through MonthlyReminderNotifier when Zernio + Meta template set
+                // Spec 018 (Button 2): route through MonthlyReminderNotifier when Zernio + Meta template set.
+                // SAFETY: when this path applies it is TERMINAL — 'disabled' (kill switch off)
+                // must NOT fall through to legacy free-text sending.
                 if (config('zernio.driver') === 'zernio'
                     && ! empty(config('zernio.reminder_template'))
                     && class_exists(\App\Services\WhatsApp\MonthlyReminderNotifier::class)
@@ -664,6 +666,10 @@ class WhatsAppSettingsController extends Controller
                         $currentIndex++;
                         continue;
                     }
+
+                    $failedCount++;
+                    $results[] = ['client' => $client->name, 'phone' => $phone, 'status' => 'failed', 'error' => 'not enqueued ('.$notifyResult.')'];
+                    continue;
                 }
         
                 $totalAmount = $clientInvoices->sum('remaining_amount');

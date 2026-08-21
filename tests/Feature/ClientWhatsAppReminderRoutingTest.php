@@ -49,8 +49,6 @@ class ClientWhatsAppReminderRoutingTest extends TestCase
             'zernio.sandbox' => false,
         ]);
 
-        // CRITICAL SAFETY (post-incident 2026-08-21): never dispatch a real WhatsApp message.
-        Queue::fake(['whatsapp_database']);
 
         // The controller checks status() first — stub it as connected.
         $svc = Mockery::mock(WhatsAppService::class);

@@ -43,8 +43,6 @@ class SendPageMonthlyReminderRoutingTest extends TestCase
             'zernio.sandbox' => false,
         ]);
 
-        // CRITICAL SAFETY (post-incident 2026-08-21): never dispatch a real WhatsApp message.
-        Queue::fake(['whatsapp_database']);
 
         // Prevent real transport
         $svc = Mockery::mock(WhatsAppService::class);

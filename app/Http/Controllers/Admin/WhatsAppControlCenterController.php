@@ -763,10 +763,24 @@ class WhatsAppControlCenterController extends Controller
         // approved monthly_reminder_v1 Meta template via MonthlyReminderNotifier.
         // This works on Zernio anytime (no 24h window), and is fail-closed + manual-only.
         if ($request->template_type === 'monthly_reminder') {
+            // STORM GUARD (audit 2026-08-21): one request may never enqueue more than
+            // 200 reminders. Larger selections are rejected outright — a runaway
+            // "select all" must not be able to enqueue thousands of real sends.
+            $clientIds = array_values(array_unique(array_map('intval', $request->client_ids)));
+            if (count($clientIds) > 200) {
+                return response()->json([
+                    'success' => false,
+                    'queued' => 0,
+                    'failed' => count($clientIds),
+                    'errors' => ['Bulk limit exceeded: maximum 200 clients per send (got '.count($clientIds).').'],
+                    'total' => count($clientIds),
+                ], 422);
+            }
+
             $notifier = app(MonthlyReminderNotifier::class);
             $queued = 0;
-            foreach ($request->client_ids as $clientId) {
-                $outcome = $notifier->notify((int) $clientId);
+            foreach ($clientIds as $clientId) {
+                $outcome = $notifier->notify($clientId);
                 if ($outcome === 'queued') {
                     $queued++;
                 }
@@ -775,9 +789,9 @@ class WhatsAppControlCenterController extends Controller
             return response()->json([
                 'success' => true,
                 'queued' => $queued,
-                'failed' => count($request->client_ids) - $queued,
+                'failed' => count($clientIds) - $queued,
                 'errors' => [],
-                'total' => count($request->client_ids),
+                'total' => count($clientIds),
             ]);
         }
 
@@ -2139,7 +2153,9 @@ class WhatsAppControlCenterController extends Controller
                 $message = str_replace('{datetime}', now()->format('Y-m-d h:i A'), $message);
                 $message = str_replace('{balance_status}', 'الرصيد الحالي: $'.number_format($totalAmount, 2), $message);
 
-                // Spec 018: route through MonthlyReminderNotifier when Zernio + template configured
+                // Spec 018: route through MonthlyReminderNotifier when Zernio + template configured.
+                // SAFETY: 'disabled' (kill switch off) is TERMINAL — never fall through to
+                // legacy free-text, otherwise the kill switch could be bypassed.
                 if (config('zernio.driver') === 'zernio'
                     && ! empty(config('zernio.reminder_template'))
                     && class_exists(\App\Services\WhatsApp\MonthlyReminderNotifier::class)
@@ -2149,7 +2165,12 @@ class WhatsAppControlCenterController extends Controller
                         $queued++;
                         continue;
                     }
-                    // Fall through to legacy free-text log if notify could not enqueue
+
+                    // Not queued (disabled / duplicate / not_applicable / retry): skip this
+                    // client entirely — do NOT create a legacy free-text message.
+                    $results['failed']++;
+                    $results['errors'][] = $client->name.': monthly reminder not enqueued ('.$notifyResult.')';
+                    continue;
                 }
 
                 WhatsAppMessageLog::create([

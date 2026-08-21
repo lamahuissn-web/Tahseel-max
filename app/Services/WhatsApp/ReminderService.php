@@ -192,6 +192,8 @@ class ReminderService
             // Spec 018: when Zernio driver is active and a Meta reminder template is
             // configured, route through MonthlyReminderNotifier so the approved template
             // variables are populated and template_type is 'monthly_reminder'.
+            // SAFETY: when the notifier path applies, it is TERMINAL. In particular
+            // 'disabled' (kill switch off) must NOT fall through to legacy free-text.
             if ($template === 'reminder'
                 && $this->shouldUseMetaReminderTemplate()
                 && class_exists(MonthlyReminderNotifier::class)
@@ -210,7 +212,16 @@ class ReminderService
                     ];
                     continue;
                 }
-                // Fall through to legacy free-text log if notify could not enqueue
+
+                $failed++;
+                $details[] = [
+                    'client_id' => $clientId,
+                    'client_name' => $client->name,
+                    'phone' => $client->phone,
+                    'status' => 'failed',
+                    'error' => 'Monthly reminder not enqueued ('.$notifyResult.')',
+                ];
+                continue;
             }
 
             $log = WhatsAppMessageLog::create([

@@ -71,6 +71,33 @@ class MonthlyReminderNotifier
                 return 'not_applicable';
             }
 
+            // IDEMPOTENCY GUARD (audit 2026-08-21): one monthly reminder per client per
+            // window. Protects against double-clicks, double POSTs, and concurrent
+            // requests enqueueing duplicates. 'pending'/'sending' rows block outright;
+            // a recently 'sent' reminder blocks re-sends within the window.
+            $recentDuplicate = WhatsAppMessageLog::query()
+                ->where('client_id', $client->id)
+                ->where('template_type', 'monthly_reminder')
+                ->whereIn('status', ['pending', 'sending'])
+                ->exists();
+
+            if (! $recentDuplicate) {
+                $recentDuplicate = WhatsAppMessageLog::query()
+                    ->where('client_id', $client->id)
+                    ->where('template_type', 'monthly_reminder')
+                    ->where('status', 'sent')
+                    ->where('updated_at', '>=', now()->subHours(12))
+                    ->exists();
+            }
+
+            if ($recentDuplicate) {
+                Log::info('[WhatsApp Reminder] Duplicate suppressed (recent reminder exists)', [
+                    'client_id' => $client->id,
+                ]);
+
+                return 'duplicate';
+            }
+
             // {{2}} + {{3}} — unpaid subscription months
             $unpaidSub = $unpaid->where('invoice_type', 'subscription');
             $subMonths = $unpaidSub

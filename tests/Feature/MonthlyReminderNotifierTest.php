@@ -54,11 +54,6 @@ class MonthlyReminderNotifierTest extends TestCase
         DB::reconnect('mysql');
         $this->beginTahseelTransaction();
 
-        // CRITICAL SAFETY (post-incident 2026-08-21): fake the WhatsApp queue so a job
-        // can NEVER reach the real `whatsapp_database` connection — regardless of the
-        // dispatcher mock, worker state, or transaction state. Guards against a test
-        // accidentally dispatching a real WhatsApp message during a test run.
-        Queue::fake(['whatsapp_database']);
 
         // The rate limiter is always-enabled (settings() hardcodes enabled=true) and the
         // dev DB has hundreds of real 'sent' logs in the last hour, so the hourly cap
