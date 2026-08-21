@@ -6,11 +6,12 @@ use App\Http\Controllers\Admin\WhatsAppControlCenterController;
 use App\Models\Admin\Invoice;
 use App\Services\WhatsApp\MonthlyReminderNotifier;
 use App\Services\WhatsAppService;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Http\Request;
 use Mockery;
 use Tests\TestCase;
+use Tests\Traits\WrapsMysqlTransaction;
 
 /**
  * Spec 018 (send page): the WhatsApp Control Center "send" page (/whatsapp/send)
@@ -23,7 +24,7 @@ use Tests\TestCase;
  */
 class SendPageMonthlyReminderRoutingTest extends TestCase
 {
-    use DatabaseTransactions;
+    use WrapsMysqlTransaction;
 
     protected function setUp(): void
     {
@@ -33,6 +34,7 @@ class SendPageMonthlyReminderRoutingTest extends TestCase
         putenv('DB_DATABASE=tahseel_new');
         config(['database.default' => 'mysql']);
         config(['database.connections.mysql.database' => 'tahseel_new']);
+        $this->beginTahseelTransaction();
 
         config([
             'zernio.driver' => 'zernio',
@@ -40,6 +42,9 @@ class SendPageMonthlyReminderRoutingTest extends TestCase
             'zernio.monthly_reminder_enabled' => true,
             'zernio.sandbox' => false,
         ]);
+
+        // CRITICAL SAFETY (post-incident 2026-08-21): never dispatch a real WhatsApp message.
+        Queue::fake(['whatsapp_database']);
 
         // Prevent real transport
         $svc = Mockery::mock(WhatsAppService::class);
@@ -55,6 +60,7 @@ class SendPageMonthlyReminderRoutingTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->rollbackTahseelTransaction();
         Mockery::close();
         parent::tearDown();
     }

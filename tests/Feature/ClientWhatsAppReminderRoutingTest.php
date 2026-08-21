@@ -7,11 +7,12 @@ use App\Models\Admin\Invoice;
 use App\Models\Clients;
 use App\Services\WhatsApp\MonthlyReminderNotifier;
 use App\Services\WhatsAppService;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Http\Request;
 use Mockery;
 use Tests\TestCase;
+use Tests\Traits\WrapsMysqlTransaction;
 
 /**
  * Spec 018 (Option A): the "إرسال تذكير واتساب" (Send WhatsApp reminder) button
@@ -24,7 +25,7 @@ use Tests\TestCase;
  */
 class ClientWhatsAppReminderRoutingTest extends TestCase
 {
-    use DatabaseTransactions;
+    use WrapsMysqlTransaction;
 
     protected function setUp(): void
     {
@@ -34,6 +35,7 @@ class ClientWhatsAppReminderRoutingTest extends TestCase
         putenv('DB_DATABASE=tahseel_new');
         config(['database.default' => 'mysql']);
         config(['database.connections.mysql.database' => 'tahseel_new']);
+        $this->beginTahseelTransaction();
 
         DB::table('app_config')->updateOrInsert(
             ['key' => 'whatsapp_enabled'],
@@ -47,6 +49,9 @@ class ClientWhatsAppReminderRoutingTest extends TestCase
             'zernio.sandbox' => false,
         ]);
 
+        // CRITICAL SAFETY (post-incident 2026-08-21): never dispatch a real WhatsApp message.
+        Queue::fake(['whatsapp_database']);
+
         // The controller checks status() first — stub it as connected.
         $svc = Mockery::mock(WhatsAppService::class);
         $svc->shouldReceive('status')->andReturn(['connected' => true]);
@@ -55,6 +60,7 @@ class ClientWhatsAppReminderRoutingTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->rollbackTahseelTransaction();
         Mockery::close();
         parent::tearDown();
     }

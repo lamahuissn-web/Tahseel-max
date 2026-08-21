@@ -5,11 +5,12 @@ namespace Tests\Feature;
 use App\Models\WhatsAppMessageLog;
 use App\Services\WhatsApp\MonthlyReminderNotifier;
 use App\Services\WhatsApp\WhatsAppMessageDispatcher;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Mockery;
 use Tests\TestCase;
+use Tests\Traits\WrapsMysqlTransaction;
 
 /**
  * Tests for Spec 018 — Monthly Reminder Template Wiring (monthly_reminder_v1).
@@ -23,7 +24,7 @@ use Tests\TestCase;
  */
 class MonthlyReminderNotifierTest extends TestCase
 {
-    use DatabaseTransactions;
+    use WrapsMysqlTransaction;
 
     protected function setUp(): void
     {
@@ -51,6 +52,13 @@ class MonthlyReminderNotifierTest extends TestCase
 
         DB::purge('mysql');
         DB::reconnect('mysql');
+        $this->beginTahseelTransaction();
+
+        // CRITICAL SAFETY (post-incident 2026-08-21): fake the WhatsApp queue so a job
+        // can NEVER reach the real `whatsapp_database` connection — regardless of the
+        // dispatcher mock, worker state, or transaction state. Guards against a test
+        // accidentally dispatching a real WhatsApp message during a test run.
+        Queue::fake(['whatsapp_database']);
 
         // The rate limiter is always-enabled (settings() hardcodes enabled=true) and the
         // dev DB has hundreds of real 'sent' logs in the last hour, so the hourly cap
@@ -67,6 +75,7 @@ class MonthlyReminderNotifierTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->rollbackTahseelTransaction();
         \Mockery::close();
         parent::tearDown();
     }

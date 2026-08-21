@@ -7,11 +7,12 @@ use App\Models\Admin\Invoice;
 use App\Models\Clients;
 use App\Services\WhatsApp\MonthlyReminderNotifier;
 use App\Services\WhatsAppService;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Http\Request;
 use Mockery;
 use Tests\TestCase;
+use Tests\Traits\WrapsMysqlTransaction;
 
 /**
  * Spec 018 (Button 2): the Settings -> WhatsApp -> Monthly Reminders card
@@ -23,7 +24,7 @@ use Tests\TestCase;
  */
 class MonthlyReminderSettingsCardTest extends TestCase
 {
-    use DatabaseTransactions;
+    use WrapsMysqlTransaction;
 
     protected function setUp(): void
     {
@@ -33,6 +34,7 @@ class MonthlyReminderSettingsCardTest extends TestCase
         putenv('DB_DATABASE=tahseel_new');
         config(['database.default' => 'mysql']);
         config(['database.connections.mysql.database' => 'tahseel_new']);
+        $this->beginTahseelTransaction();
 
         DB::table('app_config')->updateOrInsert(
             ['key' => 'whatsapp_enabled'],
@@ -44,6 +46,10 @@ class MonthlyReminderSettingsCardTest extends TestCase
             'zernio.reminder_template' => 'monthly_reminder_v1',
             'zernio.sandbox' => false,
         ]);
+
+        // CRITICAL SAFETY (post-incident 2026-08-21): fake the WhatsApp queue so a test
+        // can never dispatch a real WhatsApp message to the `whatsapp_database` queue.
+        Queue::fake(['whatsapp_database']);
 
         // Prevent any real transport — the controller calls whatsapp->send directly.
         $svc = Mockery::mock(WhatsAppService::class);
@@ -61,6 +67,7 @@ class MonthlyReminderSettingsCardTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->rollbackTahseelTransaction();
         Mockery::close();
         parent::tearDown();
     }
