@@ -13,6 +13,7 @@ use App\Services\WhatsApp\InvoiceEligibilityService;
 use App\Services\WhatsApp\MonthlyReminderNotifier;
 use App\Services\WhatsApp\WhatsAppBatchService;
 use App\Services\WhatsApp\WhatsAppMessageDispatcher;
+use App\Services\WhatsApp\WhatsAppPhoneValidator;
 use App\Services\WhatsApp\WhatsAppQueueState;
 use App\Services\WhatsApp\WhatsAppRateLimiter;
 use App\Services\WhatsApp\WhatsAppSafetySettings;
@@ -340,6 +341,15 @@ class WhatsAppControlCenterController extends Controller
         ]);
 
         $body = WhatsAppTemplateService::getBody($request->type);
+
+        // Spec 019: reject unsendable phone numbers before any provider call.
+        $phoneCheck = WhatsAppPhoneValidator::normalize($request->phone);
+        if (! $phoneCheck['valid']) {
+            return response()->json([
+                'success' => false,
+                'message' => 'رقم واتساب غير صالح: '.$phoneCheck['reason'],
+            ], 422);
+        }
 
         $sampleData = [
             '{name}' => 'زبون تجريبي',
@@ -908,8 +918,11 @@ class WhatsAppControlCenterController extends Controller
 
         foreach ($request->client_ids as $clientId) {
             $client = DB::table('tbl_clients')->find($clientId);
-            if (! $client || empty($client->phone)) {
+            if (! $client || WhatsAppPhoneValidator::isUnsendable($client->phone ?? null)) {
                 $results['failed']++;
+                if ($client) {
+                    $results['errors'][] = $client->name.': رقم واتساب غير صالح ('.$client->phone.')';
+                }
 
                 continue;
             }
@@ -2145,8 +2158,11 @@ class WhatsAppControlCenterController extends Controller
 
             foreach ($request->client_ids as $clientId) {
                 $client = DB::table('tbl_clients')->find($clientId);
-                if (! $client || empty($client->phone)) {
+                if (! $client || WhatsAppPhoneValidator::isUnsendable($client->phone ?? null)) {
                     $results['failed']++;
+                    if ($client) {
+                        $results['errors'][] = $client->name.': رقم واتساب غير صالح ('.$client->phone.')';
+                    }
 
                     continue;
                 }
@@ -2231,8 +2247,11 @@ class WhatsAppControlCenterController extends Controller
 
         foreach ($request->client_ids as $clientId) {
             $client = DB::table('tbl_clients')->find($clientId);
-            if (! $client || empty($client->phone)) {
+            if (! $client || WhatsAppPhoneValidator::isUnsendable($client->phone ?? null)) {
                 $results['failed']++;
+                if ($client) {
+                    $results['errors'][] = $client->name.': رقم واتساب غير صالح ('.$client->phone.')';
+                }
 
                 continue;
             }

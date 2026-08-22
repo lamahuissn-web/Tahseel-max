@@ -7,6 +7,7 @@ use App\Models\Admin\Invoice;
 use App\Models\Admin\Revenue;
 use App\Models\WhatsAppMessageLog;
 use App\Services\WhatsAppMessageBuilder;
+use App\Services\WhatsApp\WhatsAppPhoneValidator;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -51,6 +52,11 @@ class PaymentReceiptNotifier
 
                 return 'not_applicable';
             }
+
+            // Spec 019: fail fast on unsendable numbers (e.g. 961000000).
+            // The payment itself is never blocked; we log a failed row so the
+            // admin can SEE why no receipt arrived, and skip the provider call.
+            $normalized = WhatsAppPhoneValidator::normalize($phone);
 
             // 2. Get paid invoice details
             $paidMonth = $invoice->due_date
@@ -182,13 +188,41 @@ class PaymentReceiptNotifier
             // 7. Enqueue as pending so it appears in Queue
             $messageLog = null;
             try {
+                // Spec 019: invalid phone -> create a FAILED row (visible reason),
+                // never dispatch to the provider, never block the payment.
+                if (! $normalized['valid']) {
+                    WhatsAppMessageLog::query()->create([
+                        'client_id' => $client->id,
+                        'client_name' => $client->name ?? $customerName,
+                        'invoice_id' => $invoice->id,
+                        'payment_reference' => $paymentReference,
+                        'phone' => $phone,
+                        'message' => $message,
+                        'template_type' => 'receipt',
+                        'template_variables' => $templateVariables,
+                        'status' => 'failed',
+                        'error' => 'Invalid phone number ('.$normalized['reason'].'): '.$phone,
+                        'sent_by' => 'system:autoreceipt|invalid-phone',
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                    Log::warning('[WhatsApp Receipt] Invalid phone — receipt NOT sent', [
+                        'client_id' => $client->id,
+                        'invoice_id' => $invoice->id,
+                        'phone' => $phone,
+                        'reason' => $normalized['reason'],
+                    ]);
+
+                    return 'not_applicable';
+                }
+
                 $batchId = (string) Str::uuid();
                 $messageData = [
                     'client_id' => $client->id,
                     'client_name' => $client->name ?? $customerName,
                     'invoice_id' => $invoice->id,
                     'payment_reference' => $paymentReference,
-                    'phone' => $phone,
+                    'phone' => $normalized['e164'],
                     'message' => $message,
                     'template_type' => 'receipt',
                     'template_variables' => $templateVariables,

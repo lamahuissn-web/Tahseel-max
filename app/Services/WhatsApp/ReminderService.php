@@ -6,6 +6,7 @@ use App\Models\Clients;
 use App\Models\Admin\Invoice;
 use App\Models\WhatsAppMessageLog;
 use App\Services\WhatsApp\MonthlyReminderNotifier;
+use App\Services\WhatsApp\WhatsAppPhoneValidator;
 use App\Services\WhatsAppMessageBuilder;
 use App\Services\WhatsAppService;
 use Carbon\Carbon;
@@ -64,14 +65,14 @@ class ReminderService
 
         foreach ($clientIds as $clientId) {
             $client = Clients::find($clientId);
-            if (!$client || empty($client->phone)) {
+            if (!$client || WhatsAppPhoneValidator::isUnsendable($client->phone ?? null)) {
                 $failed++;
                 $details[] = [
                     'client_id' => $clientId,
                     'client_name' => $client->name ?? 'Unknown',
                     'phone' => $client->phone ?? '',
                     'status' => 'failed',
-                    'error' => 'Client missing or phone number empty',
+                    'error' => $client ? 'Invalid or empty phone number' : 'Client missing or phone number empty',
                 ];
                 continue;
             }
@@ -162,14 +163,14 @@ class ReminderService
 
         foreach ($clientIds as $clientId) {
             $client = Clients::find($clientId);
-            if (!$client || empty($client->phone)) {
+            if (!$client || WhatsAppPhoneValidator::isUnsendable($client->phone ?? null)) {
                 $failed++;
                 $details[] = [
                     'client_id' => $clientId,
                     'client_name' => $client->name ?? 'Unknown',
                     'phone' => $client->phone ?? '',
                     'status' => 'failed',
-                    'error' => 'Client missing or phone number empty',
+                    'error' => $client ? 'Invalid or empty phone number' : 'Client missing or phone number empty',
                 ];
                 continue;
             }

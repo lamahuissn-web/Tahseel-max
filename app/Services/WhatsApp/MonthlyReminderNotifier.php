@@ -5,6 +5,7 @@ namespace App\Services\WhatsApp;
 use App\Models\Clients;
 use App\Models\WhatsAppMessageLog;
 use App\Services\WhatsAppMessageBuilder;
+use App\Services\WhatsApp\WhatsAppPhoneValidator;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -52,8 +53,8 @@ class MonthlyReminderNotifier
                 return 'not_applicable';
             }
 
-            if (empty($client->phone)) {
-                Log::info('[WhatsApp Reminder] Client has no phone — skipping', ['client_id' => $clientId]);
+            if (empty($client->phone) || WhatsAppPhoneValidator::isUnsendable($client->phone)) {
+                Log::info('[WhatsApp Reminder] Client has no usable phone — skipping', ['client_id' => $clientId]);
 
                 return 'not_applicable';
             }

@@ -117,6 +117,19 @@ class SendWhatsAppMessage implements ShouldBeUnique, ShouldQueue
             return;
         }
 
+        // Spec 019: defense-in-depth phone validation at DELIVERY time. Catches
+        // legacy queued rows and any future path that skips entry-point gating.
+        // The provider is never called for an unsendable number.
+        $phoneCheck = \App\Services\WhatsApp\WhatsAppPhoneValidator::normalize($messageLog->phone);
+        if (! $phoneCheck['valid']) {
+            $this->markFailed(
+                $messageLog,
+                'Invalid phone number ('.$phoneCheck['reason'].'): '.$messageLog->phone.' — send blocked at delivery time'
+            );
+
+            return;
+        }
+
         $sendOptions = [
             'rate_context' => ['source' => 'database-queue'],
         ];
