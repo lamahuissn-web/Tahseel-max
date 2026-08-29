@@ -698,8 +698,10 @@ class InvoiceController extends Controller
             sendTelegramNotification($notificationMessage, 'invoice_paid');
 
             DB::commit();
-            // WhatsApp receipt notification (non-blocking)
-            app(PaymentReceiptNotifier::class)->notify($invoice);
+            // WhatsApp receipt notification (non-blocking) — only on actual payment, not price-edit
+            if ($request->paid_amount) {
+                app(PaymentReceiptNotifier::class)->notify($invoice);
+            }
 
             log_helper(
                 'invoice_paid',
@@ -786,8 +788,10 @@ class InvoiceController extends Controller
             sendTelegramNotification($notificationMessage, 'invoice_paid');
 
             DB::commit();
-            // WhatsApp receipt notification (non-blocking)
-            app(PaymentReceiptNotifier::class)->notify($invoice);
+            // WhatsApp receipt notification (non-blocking) — only on actual payment, not price-edit
+            if ($request->paid_amount) {
+                app(PaymentReceiptNotifier::class)->notify($invoice);
+            }
 
             log_helper(
                 'invoice_paid',
