@@ -262,9 +262,11 @@ class SendWhatsAppMessage implements ShouldBeUnique, ShouldQueue
             return;
         }
 
+        // attemptToken may be uninitialized after deserialization (readonly property)
+        $token = $this->attemptToken ?? (string) Str::uuid();
         app(WhatsAppBatchService::class)->expireMessage(
             $this->messageLogId,
-            $this->attemptToken,
+            $token,
             $exception?->getMessage() ?? 'WhatsApp retry deadline reached'
         );
     }
