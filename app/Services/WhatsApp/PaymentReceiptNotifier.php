@@ -8,6 +8,7 @@ use App\Models\Admin\Revenue;
 use App\Models\WhatsAppMessageLog;
 use App\Services\WhatsAppMessageBuilder;
 use App\Services\WhatsApp\WhatsAppPhoneValidator;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -115,9 +116,11 @@ class PaymentReceiptNotifier
             // Do NOT include future invoices in the receipt message — they confuse customers.
             $unpaidInvoices = InvoiceEligibilityService::getEligibleInvoices($client->id);
 
-            // 4b. Query ALL non-deleted unpaid invoices for total outstanding + breakdown
+            // 4b. Query unpaid invoices that are due/overdue for breakdown ({{8}}, {{9}}, {{5}})
+            // Only include invoices where due_date <= today — future months confuse customers
             $allUnpaid = \App\Models\Admin\Invoice::where('client_id', $client->id)
                 ->where('status', 'unpaid')
+                ->where('due_date', '<=', Carbon::today())
                 ->where('id', '!=', $invoice->id)
                 ->whereNull('deleted_at')
                 ->get();
