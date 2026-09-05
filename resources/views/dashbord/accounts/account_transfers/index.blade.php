@@ -304,6 +304,27 @@
                     $('#amount_warning').fadeOut();
                 }, 3000);
             }
+
+            // Double-click protection: disable submit button on first submit to
+            // prevent duplicate transfers from a second click.
+            $('#accountTransferForm').on('submit', function(e) {
+                var $btn = $(this).find('button[type="submit"]');
+                if ($btn.data('submitted')) {
+                    e.preventDefault();
+                    return false;
+                }
+                $btn.data('submitted', true).prop('disabled', true).html(
+                    '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>{{ trans("account_transfers.saving") }}'
+                );
+            });
+
+            // Reset the button state every time the modal is opened for a fresh transfer.
+            $('#modalAccountTransfers').on('show.bs.modal', function() {
+                $('#accountTransferForm button[type="submit"]')
+                    .data('submitted', false)
+                    .prop('disabled', false)
+                    .html('{{ trans("account_transfers.save") }}');
+            });
         });
     </script>
 

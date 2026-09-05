@@ -215,6 +215,23 @@ class AccountTransferController extends Controller
         ]);
 
         try {
+            // Idempotency guard: reject an identical transfer created within the last
+            // 45 seconds (prevents double-submit from creating a duplicate record).
+            $recentDuplicate = AccountTransfer::query()
+                ->where('from_account', $validated_data['from_account'])
+                ->where('to_account', $validated_data['to_account'])
+                ->where('amount', $validated_data['amount'])
+                ->where('created_by', Auth::id())
+                ->where('created_at', '>=', now()->subSeconds(45))
+                ->whereNull('deleted_at')
+                ->exists();
+
+            if ($recentDuplicate) {
+                toastr()->addWarning(trans('account_transfers.transfer_duplicate_declined'));
+
+                return redirect()->route('admin.account_transfers');
+            }
+
             DB::beginTransaction();
 
             $transferData = [
