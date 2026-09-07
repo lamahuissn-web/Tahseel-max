@@ -159,9 +159,24 @@ class SecureMobilePaymentService
                 $committedResult = $this->result($operation, $invoice, $collector, false);
                 $operation->forceFill(['response_payload' => $committedResult])->save();
 
+                $clientName = $invoice->client ? (string) $invoice->client->name : 'غير معروف';
+                $paidLabel = $this->formatCents($paidCents + $remainingCents);
+                $collectorName = $collector ? (string) $collector->name : 'غير معروف';
+                // For subscription invoices show the paid month (from due_date, same as
+                // the receipt); for service invoices show the service description instead.
+                if ((string) $invoice->invoice_type === 'service') {
+                    $periodRef = $invoice->notes ?: 'خدمة';
+                    $periodLabel = 'الخدمة: '.$periodRef;
+                } else {
+                    $monthRef = $invoice->due_date
+                        ? date('m / Y', strtotime($invoice->due_date))
+                        : date('m / Y', strtotime($invoice->created_at ?? $now));
+                    $periodLabel = 'الشهر '.$monthRef;
+                }
+
                 AuditLog::query()->create([
                     'action' => 'mobile_invoice_paid',
-                    'description' => 'Mobile payment committed: '.$operation->reference,
+                    'description' => "تم الدفع عبر التطبيق - {$clientName} | الفاتورة #{$invoice->invoice_number} | {$periodLabel} | مبلغ \${$paidLabel} | المحصل: {$collectorName} | مرجع: {$operation->reference}",
                     'old_data' => json_encode([
                         'paid_amount' => $this->formatCents($paidCents),
                         'remaining_amount' => $amount,
