@@ -695,12 +695,26 @@ class InvoiceController extends Controller
                 );
             }
 
-            sendTelegramNotification($notificationMessage, 'invoice_paid');
-
             DB::commit();
-            // WhatsApp receipt notification (non-blocking) — only on actual payment, not price-edit
+            // Telegram + WhatsApp "payment" alerts — only on actual payment, not balance/price edit
             if ($request->paid_amount) {
+                sendTelegramNotification($notificationMessage, 'invoice_paid');
                 app(PaymentReceiptNotifier::class)->notify($invoice);
+            } elseif ($invoice->remaining_amount != ($oldInvoiceData['remaining_amount'] ?? null)) {
+                // Balance/price edited (no money moved) → separate "balance edited" alert
+                $oldRemaining = $oldInvoiceData['remaining_amount'] ?? null;
+                $oldRemaining = is_numeric($oldRemaining) ? number_format((float) $oldRemaining, 2) : '—';
+                $balanceMessage = sprintf(
+                    '✏️ تم تعديل رصيد فاتورة #%s - %s | الرصيد قبل: %s %s | الرصيد بعد: %s %s (تمت العملية بواسطة: %s)',
+                    $invoice->invoice_number,
+                    $invoice->client->name ?? 'غير محدد',
+                    $oldRemaining,
+                    get_app_config_data('currency'),
+                    number_format($invoice->remaining_amount, 2),
+                    get_app_config_data('currency'),
+                    auth()->user()->name
+                );
+                sendTelegramNotification($balanceMessage, 'invoice_balance_edited');
             }
 
             log_helper(
@@ -785,12 +799,26 @@ class InvoiceController extends Controller
                 );
             }
 
-            sendTelegramNotification($notificationMessage, 'invoice_paid');
-
             DB::commit();
-            // WhatsApp receipt notification (non-blocking) — only on actual payment, not price-edit
+            // Telegram + WhatsApp "payment" alerts — only on actual payment, not balance/price edit
             if ($request->paid_amount) {
+                sendTelegramNotification($notificationMessage, 'invoice_paid');
                 app(PaymentReceiptNotifier::class)->notify($invoice);
+            } elseif ($invoice->remaining_amount != ($oldInvoiceData['remaining_amount'] ?? null)) {
+                // Balance/price edited (no money moved) → separate "balance edited" alert
+                $oldRemaining = $oldInvoiceData['remaining_amount'] ?? null;
+                $oldRemaining = is_numeric($oldRemaining) ? number_format((float) $oldRemaining, 2) : '—';
+                $balanceMessage = sprintf(
+                    '✏️ تم تعديل رصيد فاتورة #%s - %s | الرصيد قبل: %s %s | الرصيد بعد: %s %s (تمت العملية بواسطة: %s)',
+                    $invoice->invoice_number,
+                    $invoice->client->name ?? 'غير محدد',
+                    $oldRemaining,
+                    get_app_config_data('currency'),
+                    number_format($invoice->remaining_amount, 2),
+                    get_app_config_data('currency'),
+                    auth()->user()->name
+                );
+                sendTelegramNotification($balanceMessage, 'invoice_balance_edited');
             }
 
             log_helper(

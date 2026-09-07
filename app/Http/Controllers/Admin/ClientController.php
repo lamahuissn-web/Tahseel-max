@@ -395,6 +395,8 @@ class ClientController extends Controller
                 ]
             );
 
+            sendTelegramNotification($notificationMessage, 'client_updated');
+
             toastr()->addSuccess(trans('forms.success'));
             return redirect()->route('admin.clients.index');
         } catch (\Exception $e) {
@@ -421,6 +423,7 @@ class ClientController extends Controller
                     'model' => $client
                 ]
             );
+            sendTelegramNotification($notificationMessage, 'client_deleted');
             toastr()->addSuccess(trans('forms.success'));
             return redirect()->route('admin.clients.index');
         } catch (\Exception $e) {
@@ -713,6 +716,10 @@ class ClientController extends Controller
                 $newStatus = $data['is_active'];
 
                 $this->ClientsRepository->update($id, $data);
+
+                $statusText = $newStatus == '1' ? 'مفعل' : 'موقوف';
+                $statusMessage = "تم تغيير حالة العميل: {$client->name} إلى {$statusText} - بواسطة " . auth()->user()->name;
+                sendTelegramNotification($statusMessage, 'client_status_changed');
                 
                 // إذا كان الطلب AJAX، أعد JSON response
                 if (request()->ajax() || request()->wantsJson()) {

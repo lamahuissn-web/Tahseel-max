@@ -195,6 +195,11 @@ class SecureMobilePaymentService
                     'user_agent' => $this->boundedUserAgent($userAgent),
                 ]);
 
+                sendTelegramNotification(
+                    "💰 دفع عبر التطبيق - {$clientName} | الفاتورة #{$invoice->invoice_number} | {$periodLabel} | مبلغ \${$paidLabel} | المحصل: {$collectorName}",
+                    'mobile_invoice_paid'
+                );
+
                 $operationIdForReceipt = $operation->id;
                 DB::afterCommit(function () use ($operationIdForReceipt): void {
                     try {

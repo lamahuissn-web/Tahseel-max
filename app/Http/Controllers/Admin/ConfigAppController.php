@@ -69,6 +69,37 @@ class ConfigAppController extends Controller
         }
     }
 
+    public function sendBackupToTelegram()
+    {
+        try {
+            $exitCode = \Illuminate\Support\Facades\Artisan::call(
+                'telegram:send-backup',
+                ['--force' => true]
+            );
+
+            $output = \Illuminate\Support\Facades\Artisan::output();
+
+            if ($exitCode === 0) {
+                log_helper(
+                    'telegram_backup_sent',
+                    'تم إرسال نسخة احتياطية لقاعدة البيانات إلى تيليجرام بواسطة ' . auth()->user()->name,
+                    ['model' => auth()->user()]
+                );
+                toastr()->addSuccess('تم إرسال النسخة الاحتياطية إلى تيليجرام بنجاح');
+
+                return redirect()->route('admin.app_config');
+            }
+
+            Log::error("Manual Telegram backup failed: {$output}");
+            toastr()->addError('فشل إرسال النسخة الاحتياطية إلى تيليجرام. تحقق من السجلات.');
+        } catch (\Throwable $e) {
+            Log::error('Manual Telegram backup exception: ' . $e->getMessage());
+            toastr()->addError('حدث خطأ أثناء إرسال النسخة الاحتياطية: ' . $e->getMessage());
+        }
+
+        return redirect()->route('admin.app_config');
+    }
+
     public function downloadDatabaseBackup(): BinaryFileResponse
     {
         $dbConfig = config('database.connections.mysql');

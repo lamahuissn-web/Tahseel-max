@@ -148,6 +148,11 @@
                                             'telegram_notify_expense_added' => '📤 إضافة مصروف',
                                             'telegram_notify_admin_added' => '👤 إضافة مشرف',
                                             'telegram_notify_overdue_reminder' => '⏰ تذكير الفواتير المتأخرة',
+                                            'telegram_notify_client_updated' => '✏️ تعديل عميل',
+                                            'telegram_notify_client_deleted' => '🗑️ حذف عميل',
+                                            'telegram_notify_client_status_changed' => '🔄 تغيير حالة عميل',
+                                            'telegram_notify_mobile_invoice_paid' => '💰 دفع عبر التطبيق',
+                                            'telegram_notify_invoice_balance_edited' => '✏️ تعديل رصيد فاتورة',
                                         ];
                                     @endphp
 
@@ -175,6 +180,21 @@
                                             <button type="button" class="btn btn-primary px-4" id="download_database_backup">
                                                 <i class="fas fa-download ms-1"></i>
                                                 تنزيل نسخة قاعدة البيانات
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="border rounded p-3 mb-3 bg-light" dir="rtl">
+                                    <div class="row align-items-center g-3">
+                                        <div class="col-lg-8">
+                                            <div class="fw-semibold mb-1">إرسال نسخة احتياطية إلى تيليجرام</div>
+                                            <div class="text-muted small">أنشئ وأرسل نسخة كاملة من قاعدة البيانات إلى قناة تيليجرام فوراً في أي وقت.</div>
+                                        </div>
+                                        <div class="col-lg-4 text-lg-start text-center">
+                                            <button type="button" class="btn btn-success px-4" id="send_backup_telegram">
+                                                <i class="fab fa-telegram ms-1"></i>
+                                                إرسال إلى تيليجرام
                                             </button>
                                         </div>
                                     </div>
@@ -253,6 +273,33 @@
             document.body.appendChild(form);
             form.submit();
             form.remove();
+        });
+
+        document.getElementById('send_backup_telegram').addEventListener('click', function () {
+            var btn = this;
+            Swal.fire({
+                title: 'إرسال نسخة احتياطية إلى تيليجرام؟',
+                text: 'سيتم إنشاء نسخة كاملة من قاعدة البيانات وإرسالها إلى قناة تيليجرام الآن.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'نعم، إرسال',
+                cancelButtonText: 'إلغاء',
+                confirmButtonColor: '#1da851'
+            }).then(function (result) {
+                if (!result.isConfirmed) return;
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> جاري الإرسال...';
+                var form = document.createElement('form');
+                form.method = 'POST';
+                form.action = "{{ route('admin.send_app_backup_telegram') }}";
+                var token = document.createElement('input');
+                token.type = 'hidden';
+                token.name = '_token';
+                token.value = "{{ csrf_token() }}";
+                form.appendChild(token);
+                document.body.appendChild(form);
+                form.submit();
+            });
         });
 
         (function () {
