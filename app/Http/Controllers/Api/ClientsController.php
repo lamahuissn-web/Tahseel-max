@@ -54,11 +54,25 @@ class ClientsController extends Controller
                 ->whereNull('deleted_at')
                 ->groupBy('client_id');
 
+            // Feature 018: the collector-facing due date is the EARLIEST due date
+            // among the client's outstanding (unpaid/partial) invoices. Resolved
+            // by one grouped subquery per page — never a query per client row.
+            $nextDueDates = Invoice::query()
+                ->selectRaw('client_id, MIN(due_date) as next_due_date')
+                ->whereIn('status', ['unpaid', 'partial'])
+                ->whereNull('deleted_at')
+                ->whereNotNull('due_date')
+                ->groupBy('client_id');
+
             $query = Clients::query()
                 ->select('tbl_clients.*')
                 ->selectRaw('COALESCE(invoice_balances.invoices_sum_remaining_amount, 0) as invoices_sum_remaining_amount')
+                ->selectRaw('next_due_dates.next_due_date as next_due_date')
                 ->leftJoinSub($invoiceBalances, 'invoice_balances', function ($join) {
                     $join->on('invoice_balances.client_id', '=', 'tbl_clients.id');
+                })
+                ->leftJoinSub($nextDueDates, 'next_due_dates', function ($join) {
+                    $join->on('next_due_dates.client_id', '=', 'tbl_clients.id');
                 })
                 ->with('subscription:id,name')
                 ->where('tbl_clients.is_active', 1);

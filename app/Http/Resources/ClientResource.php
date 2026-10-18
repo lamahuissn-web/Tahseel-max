@@ -24,6 +24,13 @@ class ClientResource extends JsonResource
         // normalized to null. Read as a plain loaded column — no query.
         $sasUsername = trim((string) ($this->sas_username ?? ''));
 
+        // Feature 018: earliest due date among the client's outstanding
+        // (unpaid/partial) invoices, filled by the list query's grouped
+        // subquery. Null when nothing is outstanding — never '' or 'N/A'.
+        $nextDueDate = $attributes['next_due_date'] ?? null;
+        $nextDueDate = is_string($nextDueDate) ? trim($nextDueDate) : $nextDueDate;
+        $nextDueDate = ($nextDueDate === null || $nextDueDate === '') ? null : (string) $nextDueDate;
+
         return [
             'id' => $this->id,
             'name' => $this->name,
@@ -33,6 +40,7 @@ class ClientResource extends JsonResource
             'user' => $this->user,
             'boxSwitch' => $this->box_switch,
             'sasUsername' => $sasUsername !== '' ? $sasUsername : null,
+            'nextDueDate' => $nextDueDate,
             // 'subscriptionDate' => $this->subscription_date,
             'subscriptionDate' => $latestDueDate,
             'startDate' => $this->start_date,
