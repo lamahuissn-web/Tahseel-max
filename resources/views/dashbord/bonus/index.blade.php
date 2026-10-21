@@ -18,6 +18,29 @@
         .bonus-tabs::-webkit-scrollbar { height: 0; }
         .bonus-tabs .nav-link { white-space: nowrap; font-weight: 600; font-size: 13px; padding: .5rem .7rem; }
 
+        /* clickable status cards */
+        .status-card { display: block; text-decoration: none; color: inherit; border: 1px solid #e9ecef; position: relative; }
+        .status-card:hover { text-decoration: none; color: inherit; border-color: #cfd6dd; }
+        .status-card .pct { font-size: 10px; color: #9aa1a9; margin-top: 1px; }
+        .status-card.active { border: 2px solid #4b7bec; background: #eef3ff; }
+        .status-card.sc-excellent { border-left: 4px solid #20c997; }
+        .status-card.sc-compliant { border-left: 4px solid #28a745; }
+        .status-card.sc-recovering { border-left: 4px solid #ffc107; }
+        .status-card.sc-late { border-left: 4px solid #17a2b8; }
+        .status-card.sc-spiral { border-left: 4px solid #dc3545; }
+        .status-card.sc-hard { border-left: 4px solid #343a40; }
+
+        /* small chips */
+        .bonus-chip {
+            display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px; border-radius: 18px;
+            background: #f1f3f5; color: #495057; font-size: 12px; font-weight: 600; text-decoration: none;
+            white-space: nowrap;
+        }
+        .bonus-chip:hover { background: #e6e9ec; color: #212529; text-decoration: none; }
+        .bonus-chip.active { background: #4b7bec; color: #fff; }
+        .bonus-chip.muted { background: #f8f9fa; color: #8a9099; font-weight: 500; }
+        .bonus-headline { font-size: 12.5px; color: #6c757d; }
+
         /* phone customer card */
         .bonus-client-card {
             border: 1px solid #e9ecef; border-radius: 14px; padding: 12px 14px; margin-bottom: 10px;
@@ -54,33 +77,90 @@
                 </div>
 
                 <div class="card-body pt-3 px-2 px-md-4">
-                    <div class="row g-2 mb-3">
-                        <div class="col-6 col-md-3"><div class="bonus-stat"><div class="num">{{ $summary['total'] }}</div><div class="lbl">زبائن الإنترنت</div></div></div>
-                        <div class="col-6 col-md-3"><div class="bonus-stat"><div class="num text-success">{{ $summary['eligible'] }}</div><div class="lbl">مستحق الآن</div></div></div>
-                        <div class="col-6 col-md-3"><div class="bonus-stat"><div class="num text-primary">{{ $summary['near'] }}</div><div class="lbl">قريب من الاستحقاق</div></div></div>
-                        <div class="col-6 col-md-3"><div class="bonus-stat"><div class="num text-danger">{{ $summary['spiral'] }}</div><div class="lbl">دوامة</div></div></div>
+                    @php
+                        $pct = fn ($n) => $summary['total'] > 0 ? round($n / $summary['total'] * 100) : 0;
+                        $statusCards = [
+                            ['key' => 'excellent',  'label' => 'ممتاز',           'emoji' => '💎', 'cls' => 'sc-excellent'],
+                            ['key' => 'compliant',  'label' => 'منتظم',           'emoji' => '🟢', 'cls' => 'sc-compliant'],
+                            ['key' => 'recovering', 'label' => 'عائد للانتظام',   'emoji' => '🟡', 'cls' => 'sc-recovering'],
+                            ['key' => 'late',       'label' => 'متأخر',           'emoji' => '🟠', 'cls' => 'sc-late'],
+                            ['key' => 'spiral',     'label' => 'دوامة',           'emoji' => '🔴', 'cls' => 'sc-spiral'],
+                            ['key' => 'hard_reset', 'label' => 'متعثر',           'emoji' => '⚫', 'cls' => 'sc-hard'],
+                        ];
+                    @endphp
+
+                    {{-- ===== الحالات: كل بطاقة تُرشِّح القائمة ===== --}}
+                    <div class="row g-2 mb-2">
+                        @foreach($statusCards as $card)
+                            <div class="col-4 col-md-2">
+                                <a href="{{ route('admin.bonus.index', ['filter' => $card['key'], 'search' => $search, 'sort' => $sort]) }}"
+                                   class="bonus-stat status-card {{ $card['cls'] }} {{ $filter === $card['key'] ? 'active' : '' }}">
+                                    <div class="num">{{ $summary[$card['key']] }}</div>
+                                    <div class="lbl">{{ $card['emoji'] }} {{ $card['label'] }}</div>
+                                    <div class="pct">{{ $pct($summary[$card['key']]) }}%</div>
+                                </a>
+                            </div>
+                        @endforeach
                     </div>
 
-                    <ul class="nav nav-tabs bonus-tabs mb-3">
-                        <li class="nav-item"><a class="nav-link {{ $filter === 'all' ? 'active' : '' }}" href="{{ route('admin.bonus.index') }}">الكل</a></li>
-                        <li class="nav-item"><a class="nav-link {{ $filter === 'eligible' ? 'active' : '' }}" href="{{ route('admin.bonus.index', ['filter' => 'eligible']) }}">مستحق</a></li>
-                        <li class="nav-item"><a class="nav-link {{ $filter === 'near' ? 'active' : '' }}" href="{{ route('admin.bonus.index', ['filter' => 'near']) }}">قريب</a></li>
-                        <li class="nav-item"><a class="nav-link {{ $filter === 'spiral' ? 'active' : '' }}" href="{{ route('admin.bonus.index', ['filter' => 'spiral']) }}">دوامة</a></li>
-                        <li class="nav-item"><a class="nav-link {{ $filter === 'excellent' ? 'active' : '' }}" href="{{ route('admin.bonus.index', ['filter' => 'excellent']) }}">💎 ممتاز</a></li>
-                        <li class="nav-item"><a class="nav-link {{ $filter === 'catchup' ? 'active' : '' }}" href="{{ route('admin.bonus.index', ['filter' => 'catchup']) }}">🟡 عائد للانتظام</a></li>
-                        <li class="nav-item"><a class="nav-link {{ $filter === 'hard_reset' ? 'active' : '' }}" href="{{ route('admin.bonus.index', ['filter' => 'hard_reset']) }}">متعثر</a></li>
-                        <li class="nav-item"><a class="nav-link {{ $filter === 'open_bonus' ? 'active' : '' }}" href="{{ route('admin.bonus.index', ['filter' => 'open_bonus']) }}">بونص مفتوح</a></li>
-                    </ul>
+                    <div class="bonus-headline mb-3">
+                        بلا ديون: <strong class="text-success">{{ $summary['no_debt'] }}</strong>
+                        ({{ $pct($summary['no_debt']) }}%) ·
+                        عليهم ديون: <strong class="text-danger">{{ $summary['with_debt'] }}</strong>
+                        ({{ $pct($summary['with_debt']) }}%) ·
+                        متوسط التقدّم: <strong>{{ $summary['avg_progress'] }} / {{ $settings['bonus_months_required'] ?? 24 }}</strong>
+                    </div>
 
-                    <form method="GET" action="{{ route('admin.bonus.index') }}" class="row g-2 mb-3">
+                    {{-- ===== شرائح سريعة ===== --}}
+                    <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+                        <a class="bonus-chip {{ $filter === 'all' ? 'active' : '' }}"
+                           href="{{ route('admin.bonus.index', ['search' => $search, 'sort' => $sort]) }}">الكل ({{ $summary['total'] }})</a>
+                        <a class="bonus-chip {{ $filter === 'eligible' ? 'active' : '' }}"
+                           href="{{ route('admin.bonus.index', ['filter' => 'eligible', 'search' => $search, 'sort' => $sort]) }}">🏆 مستحق ({{ $summary['eligible'] }})</a>
+                        <a class="bonus-chip {{ $filter === 'near' ? 'active' : '' }}"
+                           href="{{ route('admin.bonus.index', ['filter' => 'near', 'search' => $search, 'sort' => $sort]) }}">⏳ قريب ({{ $summary['near'] }})</a>
+                        <a class="bonus-chip {{ $filter === 'open_bonus' ? 'active' : '' }}"
+                           href="{{ route('admin.bonus.index', ['filter' => 'open_bonus', 'search' => $search, 'sort' => $sort]) }}">🎁 بونص مفتوح ({{ $summary['open'] }})</a>
+                        <a class="bonus-chip {{ $filter === 'debt' ? 'active' : '' }}"
+                           href="{{ route('admin.bonus.index', ['filter' => 'debt', 'search' => $search, 'sort' => $sort]) }}">⚠️ عليهم ديون ({{ $summary['with_debt'] }})</a>
+                        <span class="bonus-chip muted">⛔ خارج البرنامج: {{ $summary['excluded'] }}</span>
+                    </div>
+
+                    {{-- ===== بحث وترتيب وتصدير ===== --}}
+                    <form method="GET" action="{{ route('admin.bonus.index') }}" class="row g-2 mb-2">
                         <input type="hidden" name="filter" value="{{ $filter }}">
-                        <div class="col-8 col-md-5">
-                            <input type="text" name="search" value="{{ $search }}" class="form-control" placeholder="بحث بالاسم أو الهاتف...">
+                        <div class="col-12 col-md-4">
+                            <input type="text" name="search" value="{{ $search }}" class="form-control form-control-sm"
+                                   placeholder="بحث بالاسم أو الهاتف...">
                         </div>
-                        <div class="col-4 col-md-2">
-                            <button class="btn btn-primary w-100">بحث</button>
+                        <div class="col-6 col-md-3">
+                            <select name="sort" class="form-control form-control-sm" onchange="this.form.submit()">
+                                <option value="progress_desc" {{ $sort === 'progress_desc' ? 'selected' : '' }}>النقاط: الأعلى أولاً</option>
+                                <option value="progress_asc"  {{ $sort === 'progress_asc' ? 'selected' : '' }}>النقاط: الأدنى أولاً</option>
+                                <option value="clean"         {{ $sort === 'clean' ? 'selected' : '' }}>الأشهر النظيفة: الأكثر</option>
+                                <option value="name"          {{ $sort === 'name' ? 'selected' : '' }}>الاسم (أ–ي)</option>
+                            </select>
+                        </div>
+                        <div class="col-3 col-md-2">
+                            <button class="btn btn-primary btn-sm w-100">بحث</button>
+                        </div>
+                        <div class="col-3 col-md-2">
+                            <a href="{{ route('admin.bonus.index', ['filter' => $filter, 'search' => $search, 'sort' => $sort, 'export' => 'csv']) }}"
+                               class="btn btn-light-success btn-sm w-100">⬇ CSV</a>
                         </div>
                     </form>
+
+                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                        <div class="bonus-headline">
+                            عرض <strong>{{ $paginator->total() }}</strong> زبون
+                            @if($search !== '')
+                                · بحث: «{{ $search }}»
+                            @endif
+                        </div>
+                        @if($filter !== 'all' || $search !== '' || $sort !== 'progress_desc')
+                            <a href="{{ route('admin.bonus.index') }}" class="bonus-chip">↺ إعادة تعيين</a>
+                        @endif
+                    </div>
 
                     {{-- ============ phone: cards ============ --}}
                     <div class="d-md-none">

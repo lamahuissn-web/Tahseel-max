@@ -49,6 +49,34 @@ class BonusAccessTest extends TestCase
         parent::tearDown();
     }
 
+    public function test_the_dashboard_counts_every_status(): void
+    {
+        $admin = $this->adminWithRole('Super-Admin');
+
+        $response = $this->actingAs($admin, 'admin')
+            ->get(route('admin.bonus.index'))
+            ->assertOk();
+
+        foreach (['ممتاز', 'منتظم', 'عائد للانتظام', 'متأخر', 'دوامة', 'متعثر', 'بلا ديون', 'عليهم ديون'] as $label) {
+            $response->assertSee($label, false);
+        }
+
+        $response->assertSee('خارج البرنامج', false);
+        $response->assertSee('CSV', false);
+        $response->assertSee('بلا ديون', false);
+    }
+
+    public function test_the_filtered_list_can_be_downloaded_as_csv(): void
+    {
+        $admin = $this->adminWithRole('Super-Admin');
+
+        $response = $this->actingAs($admin, 'admin')
+            ->get(route('admin.bonus.index', ['filter' => 'compliant', 'export' => 'csv']));
+
+        $response->assertOk();
+        $this->assertStringContainsString('text/csv', (string) $response->headers->get('content-type'));
+    }
+
     public function test_super_admin_can_open_the_section(): void
     {
         $admin = $this->adminWithRole('Super-Admin');

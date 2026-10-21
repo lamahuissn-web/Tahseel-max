@@ -87,48 +87,91 @@ class BonusController extends Controller
 
         // Summary numbers are computed before filtering so the cards stay stable.
         $summary = [
-            'total'    => count($rows),
-            'eligible' => 0,
-            'near'     => 0,
-            'spiral'   => 0,
-            'open'     => 0,
+            'total'        => count($rows),
+            'excellent'    => 0,
+            'compliant'    => 0,
+            'recovering'   => 0,
+            'late'         => 0,
+            'spiral'       => 0,
+            'hard_reset'   => 0,
+            'eligible'     => 0,
+            'near'         => 0,
+            'open'         => 0,
+            'no_debt'      => 0,
+            'with_debt'    => 0,
+            'avg_progress' => 0,
         ];
 
+        $progressSum = 0;
+
         foreach ($rows as $row) {
+            /** @var BonusProgress $p */
             $p = $row['progress'];
+            $progressSum += $p->progress;
+
+            if (isset($summary[$p->status])) {
+                $summary[$p->status]++;
+            }
+            if (in_array($p->status, ['excellent', 'compliant'], true)) {
+                $summary['no_debt']++;
+            }
             if ($p->eligible) {
                 $summary['eligible']++;
             }
             if ($p->progress >= max(1, (int) floor($p->required * 0.75))) {
                 $summary['near']++;
             }
-            if ($p->status === 'spiral') {
-                $summary['spiral']++;
-            }
             if ($p->hasOpenBonus) {
                 $summary['open']++;
             }
         }
+
+        $summary['with_debt']    = $summary['total'] - $summary['no_debt'];
+        $summary['avg_progress'] = $summary['total'] > 0 ? (int) round($progressSum / $summary['total']) : 0;
+
+        // Customers outside the program (inactive, satellite, another type).
+        $summary['excluded'] = DB::table('tbl_clients')
+            ->whereNull('deleted_at')
+            ->where(function ($q) {
+                $q->where('is_active', 0)->orWhereNotIn('client_type', BonusSettings::clientTypes());
+            })
+            ->count();
 
         $rows = array_values(array_filter($rows, function ($row) use ($filter) {
             /** @var BonusProgress $p */
             $p = $row['progress'];
 
             return match ($filter) {
+                'excellent', 'compliant', 'recovering', 'late', 'spiral', 'hard_reset'
+                              => $p->status === $filter,
+                'catchup'     => $p->status === 'recovering',      // old link
+                'no_debt'     => in_array($p->status, ['compliant', 'excellent'], true),
+                'debt'        => ! in_array($p->status, ['compliant', 'excellent'], true),
                 'eligible'    => $p->eligible,
                 'near'        => $p->progress >= max(1, (int) floor($p->required * 0.75)) && ! $p->eligible,
-                'spiral'      => $p->status === 'spiral',
-                'hard_reset'  => $p->status === 'hard_reset',
-                
-                'catchup'     => $p->status === 'recovering',
-                'excellent'   => $p->status === 'excellent',
                 'open_bonus'  => $p->hasOpenBonus,
-                'debt'        => ! in_array($p->status, ['compliant', 'excellent'], true),
                 default       => true,
             };
         }));
 
-        usort($rows, fn ($a, $b) => $b['progress']->progress <=> $a['progress']->progress);
+        $sort = (string) $request->input('sort', 'progress_desc');
+        switch ($sort) {
+            case 'progress_asc':
+                usort($rows, fn ($a, $b) => $a['progress']->progress <=> $b['progress']->progress);
+                break;
+            case 'name':
+                usort($rows, fn ($a, $b) => strcmp($a['client']->name, $b['client']->name));
+                break;
+            case 'clean':
+                usort($rows, fn ($a, $b) => $b['progress']->cleanMonths <=> $a['progress']->cleanMonths);
+                break;
+            default:
+                usort($rows, fn ($a, $b) => $b['progress']->progress <=> $a['progress']->progress);
+        }
+
+        if ($request->input('export') === 'csv') {
+            return $this->exportCsv($rows, $filter);
+        }
 
         $page = max(1, (int) $request->input('page', 1));
         $paginator = new LengthAwarePaginator(
@@ -144,9 +187,51 @@ class BonusController extends Controller
             'summary'   => $summary,
             'search'    => $search,
             'filter'    => $filter,
+            'sort'      => $sort,
             'settings'  => BonusSettings::all(),
             'enabled'   => BonusSettings::enabled(),
         ]);
+    }
+
+    /**
+     * Download the filtered list as a CSV that opens in Excel with Arabic text intact.
+     */
+    protected function exportCsv(array $rows, string $filter)
+    {
+        $labels = [
+            'excellent'  => 'ممتاز',
+            'compliant'  => 'منتظم',
+            'recovering' => 'عائد للانتظام',
+            'late'       => 'متأخر',
+            'spiral'     => 'دوامة',
+            'hard_reset' => 'متعثر',
+            'excluded'   => 'غير مشمول',
+        ];
+
+        $fileName = 'bonus-' . ($filter !== '' ? $filter : 'all') . '-' . now()->format('Ymd-His') . '.csv';
+
+        return response()->streamDownload(function () use ($rows, $labels) {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF");   // BOM so Excel reads UTF-8
+            fputcsv($out, ['الاسم', 'الهاتف', 'الحالة', 'النقاط', 'أشهر نظيفة', 'آخر شهر محتسب', 'استدراك مستخدم في', 'عليه ديون']);
+
+            foreach ($rows as $row) {
+                /** @var BonusProgress $p */
+                $p = $row['progress'];
+                fputcsv($out, [
+                    $row['client']->name,
+                    $row['client']->phone,
+                    $labels[$p->status] ?? $p->status,
+                    $p->progress . '/' . $p->required,
+                    $p->cleanMonths,
+                    $p->lastCreditedMonth ?? '-',
+                    $p->lastCatchupMonth ?? '-',
+                    in_array($p->status, ['compliant', 'excellent'], true) ? 'لا' : 'نعم',
+                ]);
+            }
+
+            fclose($out);
+        }, $fileName, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     public function show(int $clientId)
