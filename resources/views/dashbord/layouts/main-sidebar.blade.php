@@ -555,6 +555,20 @@ use Illuminate\Support\Facades\Route; ?>
                 </div>
                 @endcan
 
+                {{-- Feature 021 — البونص والمكافآت (إدارة فقط) --}}
+                @if(auth('admin')->check() && array_intersect(auth('admin')->user()->roles->pluck('id')->map(fn($i) => (int) $i)->all(), [1, 7]) !== [])
+                <hr class="sidebar-section-divider">
+                <div class="menu-item">
+                    <a class="menu-link sidebar-menu-link {{ request()->routeIs('admin.bonus.*') ? 'active' : '' }}"
+                       href="{{ route('admin.bonus.index') }}">
+                        <span class="sidebar-menu-icon">
+                            <i class="bi bi-gift text-muted fs-4"></i>
+                        </span>
+                        <span class="menu-title">البونص والمكافآت</span>
+                    </a>
+                </div>
+                @endif
+
                 {{-- Notifications Management Section --}}
                 @canany(['view_new_clients_notifications', 'view_unpaid_invoices_notifications'])
                 <hr class="sidebar-section-divider">
@@ -577,7 +591,7 @@ use Illuminate\Support\Facades\Route; ?>
                 $defaultNotificationLink = route('admin.new_clients_notifications');
                 } elseif (auth()->user()->can('view_unpaid_invoices_notifications')) {
                 $defaultNotificationLink = route('admin.unpaid_invoices_notifications');
-                } else {
+                } elseif (\Illuminate\Support\Facades\Route::has('admin.invoices_notifications')) {
                 $defaultNotificationLink = route('admin.invoices_notifications');
                 }
                 @endphp

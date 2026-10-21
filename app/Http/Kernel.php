@@ -82,6 +82,8 @@ class Kernel extends HttpKernel
     protected $routeMiddleware = [
 
         'jwt' => \App\Http\Middleware\JwtMiddleware::class,
+
+        'bonus.access' => \App\Http\Middleware\EnsureBonusAccess::class,
     ];
 
 }

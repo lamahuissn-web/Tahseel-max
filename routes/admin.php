@@ -306,6 +306,16 @@ Route::group(
             Route::get('/logs/{id}', [LogController::class, 'show'])->name('logs.show');
             Route::delete('logs/{id}', [LogController::class, 'destroy'])->name('logs.delete');
             Route::post('logs/clear', [LogController::class, 'clearOldLogs'])->name('logs.clear');
+
+            // ================= Feature 021 — البونص والمكافآت =================
+            // Admin staff + management only (Super-Admin 1 / accounting 7).
+            Route::group(['middleware' => ['bonus.access'], 'prefix' => 'bonus', 'as' => 'bonus.'], function () {
+                Route::get('/', [\App\Http\Controllers\Admin\BonusController::class, 'index'])->name('index');
+                Route::get('/spiral', [\App\Http\Controllers\Admin\BonusController::class, 'spiral'])->name('spiral');
+                Route::get('/settings', [\App\Http\Controllers\Admin\BonusController::class, 'settings'])->name('settings');
+                Route::post('/settings', [\App\Http\Controllers\Admin\BonusController::class, 'saveSettings'])->name('settings.save');
+                Route::get('/client/{clientId}', [\App\Http\Controllers\Admin\BonusController::class, 'show'])->name('show');
+            });
         });
     }
 );
