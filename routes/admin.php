@@ -315,6 +315,15 @@ Route::group(
                 Route::get('/settings', [\App\Http\Controllers\Admin\BonusController::class, 'settings'])->name('settings');
                 Route::post('/settings', [\App\Http\Controllers\Admin\BonusController::class, 'saveSettings'])->name('settings.save');
                 Route::get('/client/{clientId}', [\App\Http\Controllers\Admin\BonusController::class, 'show'])->name('show');
+                Route::get('/log', [\App\Http\Controllers\Admin\BonusController::class, 'log'])->name('log');
+
+                // writes
+                Route::post('/client/{clientId}/grant', [\App\Http\Controllers\Admin\BonusController::class, 'grant'])->name('grant');
+                Route::post('/client/{clientId}/points', [\App\Http\Controllers\Admin\BonusController::class, 'points'])->name('points');
+                Route::post('/client/{clientId}/reset', [\App\Http\Controllers\Admin\BonusController::class, 'reset'])->name('reset');
+                Route::post('/entry/{bonusId}/approve', [\App\Http\Controllers\Admin\BonusController::class, 'approve'])->name('approve');
+                Route::post('/entry/{bonusId}/cancel', [\App\Http\Controllers\Admin\BonusController::class, 'cancel'])->name('cancel');
+                Route::post('/entry/{bonusId}/apply', [\App\Http\Controllers\Admin\BonusController::class, 'apply'])->name('apply');
             });
         });
     }

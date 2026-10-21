@@ -96,9 +96,15 @@ class BonusProgressService
             ->orderBy('id')
             ->get(['client_id', 'status', 'earned_at', 'redeemed_at', 'redeemed_invoice_id']);
 
+        $adjustments = DB::table('tbl_client_bonus_adjustments')
+            ->whereIn('client_id', $clientIds)
+            ->orderBy('id')
+            ->get(['client_id', 'type', 'points', 'created_at']);
+
         $bonusInvoiceIds = [];
         $sinceByClient  = [];
         $openBonus      = [];
+        $manualPoints   = [];
 
         foreach ($bonuses as $b) {
             if ($b->redeemed_invoice_id) {
@@ -116,6 +122,26 @@ class BonusProgressService
 
             if (in_array($b->status, [ClientBonus::STATUS_PENDING, ClientBonus::STATUS_APPROVED], true)) {
                 $openBonus[(int) $b->client_id] = true;
+            }
+        }
+
+        // Rows are read in insertion order: a reset moves the cycle origin forward
+        // AND wipes every point granted before it.
+        foreach ($adjustments as $adj) {
+            $clientId = (int) $adj->client_id;
+
+            if ($adj->type === 'reset') {
+                $resetDate = Carbon::parse($adj->created_at)->toDateString();
+                if ($resetDate > ($sinceByClient[$clientId] ?? $globalStart)) {
+                    $sinceByClient[$clientId] = $resetDate;
+                }
+                $manualPoints[$clientId] = 0;
+                continue;
+            }
+
+            $since = $sinceByClient[$clientId] ?? $globalStart;
+            if (Carbon::parse($adj->created_at)->toDateString() >= $since) {
+                $manualPoints[$clientId] = ($manualPoints[$clientId] ?? 0) + (int) $adj->points;
             }
         }
 
@@ -169,7 +195,8 @@ class BonusProgressService
                 $catchupMax,
                 $hardReset,
                 $spiralAfter,
-                $withMonths
+                $withMonths,
+                $manualPoints[$clientId] ?? 0
             );
 
             $progress->hasOpenBonus = $openBonus[$clientId] ?? false;
@@ -194,13 +221,17 @@ class BonusProgressService
         int $catchupMax,
         int $hardReset,
         int $spiralAfter,
-        bool $withMonths = true
+        bool $withMonths = true,
+        int $manualPoints = 0
     ): BonusProgress {
         $progress = $this->emptyProgress($clientId);
         $progress->required = $required;
 
         $count = count($invoices);
         if ($count === 0) {
+            // No invoice in the current cycle yet — admin-granted points still count.
+            $progress->progress = max(0, min($required, $manualPoints));
+
             return $progress;
         }
 
@@ -329,6 +360,9 @@ class BonusProgressService
                 $credits++;
             }
         }
+
+        // Admin-granted points are added to whatever the invoices produced.
+        $credits = max(0, $credits + $manualPoints);
 
         $isHardReset = $hardReset > 0 && $lastBreak > $hardReset;
         $isSpiral    = ! $isHardReset && $maxCarried >= $spiralAfter;

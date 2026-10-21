@@ -17,9 +17,17 @@
     <div class="app-content flex-column-fluid" style="padding-top: 20px">
         <div class="container-fluid">
 
-            <div class="mb-3">
+            <div class="mb-3 d-flex gap-2 flex-wrap">
                 <a href="{{ route('admin.bonus.index') }}" class="btn btn-sm btn-light">&larr; رجوع للقائمة</a>
+                <a href="{{ route('admin.bonus.log') }}" class="btn btn-sm btn-light-primary">سجل البونص</a>
             </div>
+
+            @if(session('success'))
+                <div class="alert alert-success py-2" style="font-size:13px">{{ session('success') }}</div>
+            @endif
+            @if(session('error'))
+                <div class="alert alert-danger py-2" style="font-size:13px">{{ session('error') }}</div>
+            @endif
 
             <div class="card shadow-sm bonus-card">
                 <div class="card-header d-flex justify-content-between align-items-center">
@@ -90,6 +98,84 @@
                         @if(empty($progress->months))
                             <div class="col-12 text-muted">لا توجد فواتير اشتراك بعد تاريخ بدء الاحتساب.</div>
                         @endif
+                    </div>
+
+                    <hr class="my-4">
+
+                    <h4 class="mb-3" style="font-size:15px">إجراءات الإدارة</h4>
+
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        @if($eligible && ! $progress->hasOpenBonus)
+                            <form method="POST" action="{{ route('admin.bonus.grant', $client->id) }}" class="flex-grow-1">
+                                @csrf
+                                <input type="hidden" name="approve" value="1">
+                                <input type="hidden" name="notes" value="استحقاق 24 شهر">
+                                <button class="btn btn-success w-100">🎁 منح الشهر المجاني (اعتماد فوري)</button>
+                            </form>
+                        @endif
+
+                        @foreach($bonuses as $b)
+                            @if($b->status === 'pending')
+                                <form method="POST" action="{{ route('admin.bonus.approve', $b->id) }}" class="flex-grow-1">
+                                    @csrf
+                                    <button class="btn btn-primary w-100">✔ اعتماد البونص #{{ $b->id }}</button>
+                                </form>
+                            @elseif($b->status === 'approved')
+                                <form method="POST" action="{{ route('admin.bonus.apply', $b->id) }}" class="flex-grow-1"
+                                      onsubmit="return confirm('سيتم إنشاء فاتورة 0$ بتاريخ الاستحقاق القادم. متابعة؟')">
+                                    @csrf
+                                    <button class="btn btn-success w-100">🧾 إصدار فاتورة الشهر المجاني #{{ $b->id }}</button>
+                                </form>
+                            @endif
+                        @endforeach
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-12 col-md-6">
+                            <div class="border rounded p-3 h-100">
+                                <div class="fw-bold mb-2" style="font-size:14px">تعديل النقاط يدوياً</div>
+                                <form method="POST" action="{{ route('admin.bonus.points', $client->id) }}" class="row g-2">
+                                    @csrf
+                                    <div class="col-4">
+                                        <input type="number" name="points" class="form-control" value="1" min="-24" max="24" required>
+                                    </div>
+                                    <div class="col-8">
+                                        <input type="text" name="reason" class="form-control" placeholder="السبب">
+                                    </div>
+                                    <div class="col-12">
+                                        <button class="btn btn-outline-primary w-100">تطبيق التعديل</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-md-6">
+                            <div class="border rounded p-3 h-100">
+                                <div class="fw-bold mb-2" style="font-size:14px">إعادة تعيين الدورة</div>
+                                <form method="POST" action="{{ route('admin.bonus.reset', $client->id) }}" class="row g-2"
+                                      onsubmit="return confirm('سيُصفَّر العدّاد ويُلغى أي بونص مفتوح. متابعة؟')">
+                                    @csrf
+                                    <div class="col-12">
+                                        <input type="text" name="reason" class="form-control" placeholder="سبب الإعادة">
+                                    </div>
+                                    <div class="col-12">
+                                        <button class="btn btn-outline-danger w-100">إعادة تعيين إلى 0</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        @foreach($bonuses as $b)
+                            @if(in_array($b->status, ['pending', 'approved'], true))
+                                <div class="col-12">
+                                    <form method="POST" action="{{ route('admin.bonus.cancel', $b->id) }}"
+                                          onsubmit="return confirm('إلغاء البونص #{{ $b->id }}؟')">
+                                        @csrf
+                                        <button class="btn btn-sm btn-light-danger w-100">إلغاء البونص #{{ $b->id }}</button>
+                                    </form>
+                                </div>
+                            @endif
+                        @endforeach
                     </div>
 
                     <hr class="my-4">

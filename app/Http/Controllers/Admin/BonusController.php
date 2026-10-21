@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Services\Bonus\BonusLedger;
 use App\Services\Bonus\BonusProgress;
 use App\Services\Bonus\BonusProgressService;
 use App\Services\Bonus\BonusSettings;
@@ -165,6 +166,7 @@ class BonusController extends Controller
             'client'   => $client,
             'progress' => $progress,
             'bonuses'  => $bonuses,
+            'eligible' => $progress->progress >= $progress->required && ! $progress->hasOpenBonus,
         ]);
     }
 
@@ -182,6 +184,130 @@ class BonusController extends Controller
         return view('dashbord.bonus.settings', [
             'settings' => BonusSettings::all(),
         ]);
+    }
+
+    // ------------------------------------------------------------ actions
+
+    public function grant(Request $request, int $clientId)
+    {
+        $data = $request->validate([
+            'notes'   => 'nullable|string|max:255',
+            'approve' => 'nullable|in:0,1',
+        ]);
+
+        return $this->run(function () use ($request, $clientId, $data) {
+            app(BonusLedger::class)->grant(
+                $clientId,
+                auth('admin')->id(),
+                $data['notes'] ?? null,
+                ($data['approve'] ?? '0') === '1'
+            );
+
+            return 'تم منح البونص';
+        }, $clientId);
+    }
+
+    public function approve(int $bonusId)
+    {
+        return $this->run(function () use ($bonusId) {
+            app(BonusLedger::class)->approve($bonusId, auth('admin')->id());
+
+            return 'تم اعتماد البونص';
+        }, $this->clientOfBonus($bonusId));
+    }
+
+    public function cancel(Request $request, int $bonusId)
+    {
+        $reason = $request->input('reason');
+
+        return $this->run(function () use ($bonusId, $reason) {
+            app(BonusLedger::class)->cancel($bonusId, auth('admin')->id(), $reason);
+
+            return 'تم إلغاء البونص';
+        }, $this->clientOfBonus($bonusId));
+    }
+
+    public function apply(int $bonusId)
+    {
+        return $this->run(function () use ($bonusId) {
+            $result = app(BonusLedger::class)->applyNow($bonusId, auth('admin')->id());
+
+            return "تم إصدار فاتورة الشهر المجاني #{$result['invoice_id']} باستحقاق {$result['due_date']}";
+        }, $this->clientOfBonus($bonusId));
+    }
+
+    public function points(Request $request, int $clientId)
+    {
+        $data = $request->validate([
+            'points' => 'required|integer|between:-24,24|not_in:0',
+            'reason' => 'nullable|string|max:255',
+        ]);
+
+        return $this->run(function () use ($clientId, $data) {
+            app(BonusLedger::class)->addPoints($clientId, (int) $data['points'], auth('admin')->id(), $data['reason'] ?? null);
+
+            return 'تم تعديل نقاط البونص';
+        }, $clientId);
+    }
+
+    public function reset(Request $request, int $clientId)
+    {
+        $reason = $request->input('reason');
+
+        return $this->run(function () use ($clientId, $reason) {
+            app(BonusLedger::class)->resetCycle($clientId, auth('admin')->id(), $reason);
+
+            return 'تم إعادة تعيين الدورة';
+        }, $clientId);
+    }
+
+    public function log()
+    {
+        $bonuses = DB::table('tbl_client_bonuses as b')
+            ->leftJoin('tbl_clients as c', 'c.id', '=', 'b.client_id')
+            ->orderByDesc('b.id')
+            ->limit(300)
+            ->get(['b.*', 'c.name as client_name']);
+
+        $adjustments = DB::table('tbl_client_bonus_adjustments as a')
+            ->leftJoin('tbl_clients as c', 'c.id', '=', 'a.client_id')
+            ->orderByDesc('a.id')
+            ->limit(300)
+            ->get(['a.*', 'c.name as client_name']);
+
+        return view('dashbord.bonus.log', [
+            'bonuses'     => $bonuses,
+            'adjustments' => $adjustments,
+        ]);
+    }
+
+    /** Wrap an action so a rule violation becomes a friendly message, not a 500. */
+    protected function run(callable $action, ?int $clientId = null)
+    {
+        try {
+            $message = $action();
+
+            Cache::flush();
+
+            $redirect = $clientId
+                ? redirect()->route('admin.bonus.show', $clientId)
+                : redirect()->route('admin.bonus.index');
+
+            return $redirect->with('success', $message);
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        } catch (\Throwable $e) {
+            \Log::error('bonus action failed: '.$e->getMessage());
+
+            return back()->with('error', 'تعذّر تنفيذ العملية: '.$e->getMessage());
+        }
+    }
+
+    protected function clientOfBonus(int $bonusId): ?int
+    {
+        $clientId = DB::table('tbl_client_bonuses')->where('id', $bonusId)->value('client_id');
+
+        return $clientId ? (int) $clientId : null;
     }
 
     public function saveSettings(Request $request)

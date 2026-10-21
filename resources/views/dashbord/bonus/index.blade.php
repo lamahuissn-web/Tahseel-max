@@ -48,6 +48,7 @@
                             <span class="badge badge-soft-success">مفعّل</span>
                         @endif
                         <a href="{{ route('admin.bonus.spiral') }}" class="btn btn-sm btn-light-danger">الدوامة</a>
+                        <a href="{{ route('admin.bonus.log') }}" class="btn btn-sm btn-light-secondary">السجل</a>
                         <a href="{{ route('admin.bonus.settings') }}" class="btn btn-sm btn-light-primary">الإعدادات</a>
                     </div>
                 </div>

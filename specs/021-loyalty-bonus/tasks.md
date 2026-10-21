@@ -45,18 +45,22 @@ Phase 2 actions (grant/approve/apply) and Phases 3–4 are still open.
 - [X] RED test: settings screen persists the edited values.
 
 ## Phase 2 — Admin control
-- [ ] RED test: manual grant creates one open bonus, `source = manual`.
-- [ ] RED test: a second open bonus for the same client is rejected.
-- [ ] RED test: approve sets `approved_by` / `approved_at`.
-- [ ] RED test: cancel removes the open bonus without touching payments.
-- [ ] RED test: apply-now blocked while the customer has an outstanding balance.
-- [ ] RED test: apply-now creates exactly one invoice, amount 0, settled, no revenue row,
+- [X] RED test: manual grant creates one open bonus, `source = manual`.
+- [X] RED test: a second open bonus for the same client is rejected.
+- [X] RED test: approve sets `approved_by` / `approved_at` and auto-issues when no debt.
+- [X] RED test: cancel removes the open bonus without touching payments.
+- [X] RED test: apply-now blocked while the customer has an outstanding balance.
+- [X] RED test: apply-now creates exactly one invoice, amount 0, settled, no revenue row,
       `due_date` = next cycle month with the normal day-of-month.
-- [ ] RED test: apply-now cannot run twice on the same bonus.
-- [ ] RED test: reset clears the open bonus and moves the streak origin.
-- [ ] Implement `grant` / `approve` / `cancel` / `apply-now` / `reset` routes.
-- [ ] Implement bonus log screen `bonus/log`.
-- [ ] Audit-log entry + Telegram alert on every action.
+- [X] RED test: apply-now cannot run twice on the same bonus.
+- [X] RED test: reset clears the open bonus, moves the origin and wipes earlier points.
+- [X] RED test: manual points raise progress (also when the cycle has no invoices yet).
+- [X] RED test: satellite customers cannot be granted a bonus.
+- [X] RED test: collector gets 403 on the action routes; admin can grant + approve.
+- [X] Implement `grant` / `approve` / `cancel` / `apply` / `points` / `reset` routes.
+- [X] Implement bonus log screen `bonus/log` (bonuses + adjustments).
+- [X] Audit-log entry + Telegram alert on every action.
+- [X] `tbl_client_bonus_adjustments` ledger for manual points and resets.
 
 ## Phase 3 — Automation
 - [ ] RED test: `bonus:sync` creates a pending row exactly once (idempotent re-run).
