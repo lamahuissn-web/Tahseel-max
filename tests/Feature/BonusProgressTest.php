@@ -444,6 +444,51 @@ class BonusProgressTest extends TestCase
         $this->assertCount(1, $progress->months, 'Future months are not part of the evaluation yet.');
     }
 
+    // ------------------------------------------------------ inactive exclusion
+
+    public function test_inactive_customers_are_outside_the_program(): void
+    {
+        $client = $this->client('زبون موقوف', 'internet', false);
+
+        for ($m = 1; $m <= 6; $m++) {
+            $due = \Carbon\Carbon::today()->startOfMonth()->subMonthsNoOverflow(6 - $m)->day(5)->toDateString();
+            $inv = $this->invoice($client, $due);
+            $this->pay($inv, $client, $due);
+        }
+
+        $progress = $this->service()->forClient($client);
+
+        $this->assertSame('inactive', $progress->status, 'A stopped customer is not part of the program.');
+        $this->assertSame(0, $progress->progress);
+        $this->assertFalse($progress->eligible);
+    }
+
+    public function test_reactivating_a_customer_brings_the_count_back(): void
+    {
+        $client = $this->client('زبون موقوف', 'internet', false);
+        $inv = $this->invoice($client, '2026-01-16');
+        $this->pay($inv, $client, '2026-01-16');
+
+        $this->assertSame(0, $this->service()->forClient($client)->progress);
+
+        DB::table('tbl_clients')->where('id', $client)->update(['is_active' => '1']);
+
+        $this->assertSame(1, $this->service()->forClient($client)->progress);
+    }
+
+    public function test_inactive_customers_never_appear_in_the_spiral_list(): void
+    {
+        $stopped = $this->client('موقوف مدين', 'internet', false);
+        $this->invoice($stopped, '2026-06-16');
+        $this->invoice($stopped, '2026-07-16');
+        $recent = $this->invoice($stopped, '2026-10-16');
+        $this->pay($recent, $stopped, '2026-10-05');
+
+        $rows = collect($this->service()->spiralClients())->pluck('client_id')->all();
+
+        $this->assertNotContains($stopped, $rows);
+    }
+
     // ------------------------------------------------------- satellite exclusion
 
     public function test_satellite_customers_are_excluded_from_the_program(): void
@@ -534,7 +579,7 @@ class BonusProgressTest extends TestCase
         BonusSettings::flush();
     }
 
-    private function client(string $name = 'عميل بونص', string $type = 'internet'): int
+    private function client(string $name = 'عميل بونص', string $type = 'internet', bool $active = true): int
     {
         return DB::table('tbl_clients')->insertGetId([
             'name'            => $name,
@@ -545,7 +590,7 @@ class BonusProgressTest extends TestCase
             'price'           => 15,
             'subscription_date' => '2026-01-01',
             'start_date'      => '2026-01-01',
-            'is_active'       => 1,
+            'is_active'       => $active ? '1' : '0',
             'created_at'      => now(),
             'updated_at'      => now(),
         ]);

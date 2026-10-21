@@ -77,6 +77,14 @@ class BonusActionsTest extends TestCase
         $this->ledger()->grant($client, 1);
     }
 
+    public function test_inactive_customers_cannot_be_granted_a_bonus(): void
+    {
+        $client = $this->client('internet', false);
+
+        $this->expectException(RuntimeException::class);
+        $this->ledger()->grant($client, 1);
+    }
+
     public function test_satellite_customers_cannot_be_granted_a_bonus(): void
     {
         $client = $this->client('satellite');
@@ -312,13 +320,13 @@ class BonusActionsTest extends TestCase
         }
     }
 
-    private function client(string $type = 'internet'): int
+    private function client(string $type = 'internet', bool $active = true): int
     {
         return DB::table('tbl_clients')->insertGetId([
             'name' => 'زبون بونص', 'phone' => '0555'.random_int(100000, 999999), 'address1' => 'x',
             'client_type' => $type, 'subscription_id' => 1, 'price' => 15,
             'subscription_date' => '2026-01-01', 'start_date' => '2026-01-01',
-            'is_active' => 1, 'created_at' => now(), 'updated_at' => now(),
+            'is_active' => $active ? '1' : '0', 'created_at' => now(), 'updated_at' => now(),
         ]);
     }
 

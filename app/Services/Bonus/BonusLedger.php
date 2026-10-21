@@ -290,16 +290,20 @@ class BonusLedger
 
     protected function assertInProgram(int $clientId): void
     {
-        $type = DB::table('tbl_clients')
+        $client = DB::table('tbl_clients')
             ->where('id', $clientId)
             ->whereNull('deleted_at')
-            ->value('client_type');
+            ->first(['client_type', 'is_active']);
 
-        if ($type === null) {
+        if ($client === null) {
             throw new RuntimeException('الزبون غير موجود.');
         }
 
-        if (! in_array($type, BonusSettings::clientTypes(), true)) {
+        if ((int) $client->is_active !== 1) {
+            throw new RuntimeException('هذا الزبون غير نشط — غير مشمول ببرنامج البونص.');
+        }
+
+        if (! in_array($client->client_type, BonusSettings::clientTypes(), true)) {
             throw new RuntimeException('هذا الزبون غير مشمول ببرنامج البونص.');
         }
     }

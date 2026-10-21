@@ -57,24 +57,33 @@ class BonusProgressService
             return $result;
         }
 
-        // Satellite customers are out of the program (owner decision 2026-10-21),
-        // so they are never counted even if a caller forgets to filter them out.
+        // Out of the program (owner decisions, 2026-10-21):
+        //  - satellite customers,
+        //  - and any customer who is not active.
+        // They are never counted even if a caller forgets to filter them out.
         $allowedTypes = BonusSettings::clientTypes();
 
-        $eligibleIds = DB::table('tbl_clients')
+        $rows = DB::table('tbl_clients')
             ->whereIn('id', $clientIds)
-            ->whereIn('client_type', $allowedTypes)
-            ->pluck('id')
-            ->map(fn ($id) => (int) $id)
-            ->all();
+            ->get(['id', 'client_type', 'is_active']);
 
-        $eligibleLookup = array_flip($eligibleIds);
+        $state = [];
+        foreach ($rows as $row) {
+            if ((int) $row->is_active !== 1) {
+                $state[(int) $row->id] = 'inactive';
+            } elseif (! in_array($row->client_type, $allowedTypes, true)) {
+                $state[(int) $row->id] = 'excluded';
+            }
+        }
 
+        $eligibleIds = [];
         foreach ($clientIds as $id) {
-            if (! isset($eligibleLookup[$id])) {
-                $excluded = $this->emptyProgress($id);
-                $excluded->status = 'excluded';
-                $result[$id] = $excluded;
+            if (isset($state[$id])) {
+                $blocked = $this->emptyProgress($id);
+                $blocked->status = $state[$id];
+                $result[$id] = $blocked;
+            } else {
+                $eligibleIds[] = $id;
             }
         }
 

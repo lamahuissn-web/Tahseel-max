@@ -34,6 +34,8 @@ Phase 2 actions (grant/approve/apply) and Phases 3–4 are still open.
 - [X] RED test: satellite customers never appear in the spiral list.
 - [X] RED test: opting satellite back in from settings brings them back.
 - [X] Satellite exclusion + `bonus_client_types` setting (internet only by default).
+- [X] Inactive (`is_active = 0`) customers excluded: status `inactive`, no grant, not listed.
+- [X] A bill that is not due yet never breaks the run (241 future invoices on live data).
 - [X] Spin list refined: 2+ open, oldest ≥ 35 days, last payment after the oldest open bill.
 - [X] Implement `BonusProgressService::forClients()` / `::forClient()` / `::spiralClients()`.
 - [X] `BonusController@index` — customer list, filters, summary cards, pagination.

@@ -8,10 +8,13 @@ approval, redemption) because it is a future-facing program that will be tuned o
 
 ## Rule (locked)
 - A customer earns **1 free month** after **24 on-time paid subscription months**.
-- Scope: **subscription invoices only** and **internet customers only**. Service invoices
-  (`invoice_type = 'service'`) never count, and **satellite customers (`client_type =
-  'satellite`) are not part of the program** (owner decision 2026-10-21) — 366 satellite
-  customers on the live data are excluded. `bonus_client_types` keeps this editable.
+- Scope: **subscription invoices only**, **internet customers only**, and **active
+  customers only**. Service invoices (`invoice_type = 'service'`) never count;
+  **satellite customers** (`client_type = 'satellite'`) and **inactive customers**
+  (`is_active = 0`) are not part of the program (owner decisions, 2026-10-21).
+  Live data: 228 satellite + 426 inactive are excluded, leaving 936 customers in the
+  program. `bonus_client_types` keeps the type list editable; reactivating a customer
+  brings his count straight back because nothing is stored.
 - Counting starts **2026-01-01** (`bonus_count_start_date`). Nothing before that date counts.
 - The earned free month is delivered as an invoice with **amount 0**.
 - The free month **does not count** as a paid month toward the next 24.
@@ -188,6 +191,7 @@ Full history: who created/approved/redeemed, when, the counted cycle, the invoic
 | Spin customer finally clears to zero | exits spin; counting restarts at his next on-time month |
 | Customer pays 2 months in advance | both months count as on-time; only one month per calendar month counts |
 | Customer is a satellite subscriber | not part of the program at all — never counted, never listed, never in the spin tab |
+| Customer is inactive (stopped) | same: status `inactive`, no counting, no grant; his history returns untouched if he is reactivated |
 | Customer stops paying entirely | not a spin case (no payment after the oldest open bill) — he is a defaulter |
 | Customer owes money at cycle time | bonus waits as `approved`; no 0-invoice until clear |
 | 0-invoice itself | excluded from streak counting; never appears as debt; triggers no payment receipt (amount 0) |

@@ -54,6 +54,7 @@
                                         @case('spiral') 🔴 دوامة @break
                                         @case('hard_reset') ⚫ متعثر (العداد صفر) @break
                                         @case('excluded') ⛔ غير مشمول بالبرنامج @break
+                                        @case('inactive') ⛔ غير نشط — خارج البرنامج @break
                                         @default {{ $progress->status }}
                                     @endswitch
                                 </div>
