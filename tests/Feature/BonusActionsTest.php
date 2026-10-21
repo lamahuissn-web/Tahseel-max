@@ -275,6 +275,30 @@ class BonusActionsTest extends TestCase
         $this->assertContains($bonus->fresh()->status, [ClientBonus::STATUS_APPROVED, ClientBonus::STATUS_REDEEMED]);
     }
 
+    public function test_customer_panel_shows_the_payment_time_and_catchup_months(): void
+    {
+        $this->seedRoles();
+        $roleId = DB::table('roles')->where('name', 'Super-Admin')->value('id');
+        $admin = Admin::create(['name' => 'أدمن', 'email' => 'p'.uniqid().'@x.test', 'password' => bcrypt('x')]);
+        DB::table('model_has_roles')->insert(['role_id' => $roleId, 'model_type' => Admin::class, 'model_id' => $admin->id]);
+
+        $client = $this->client();
+        $jul = $this->invoice($client, '2026-07-16');
+        $aug = $this->invoice($client, '2026-08-16');
+        $sep = $this->invoice($client, '2026-09-16');
+
+        $this->pay($jul, $client, '2026-07-16');
+        $this->pay($aug, $client, '2026-09-20');   // broken month, settled late
+        $this->pay($sep, $client, '2026-09-20');
+
+        $this->actingAs($admin->fresh(), 'admin')
+            ->get(route('admin.bonus.show', $client))
+            ->assertOk()
+            ->assertSee('استدراك')
+            ->assertSee('2026-09-20 10:00')
+            ->assertSee('تاريخ ووقت الدفع');
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private function ledger(): BonusLedger
