@@ -277,8 +277,10 @@ class BonusProgressTest extends TestCase
     {
         $client = $this->client();
 
-        $this->invoice($client, '2026-06-16');          // oldest, never paid
-        foreach (['2026-07-16', '2026-08-16', '2026-09-16', '2026-10-16'] as $due) {
+        // Two months left open while he keeps paying the newer ones.
+        $this->invoice($client, '2026-06-16');
+        $this->invoice($client, '2026-07-16');
+        foreach (['2026-08-16', '2026-09-16', '2026-10-16'] as $due) {
             $inv = $this->invoice($client, $due);
             $this->pay($inv, $client, $due);
         }

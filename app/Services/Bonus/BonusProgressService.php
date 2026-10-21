@@ -263,6 +263,7 @@ class BonusProgressService
         $credited    = [];
         $creditedMonths = [];   // Y-m already credited — one credit per month, max
         $settledAt   = [];
+        $windowEnds  = [];
         $catchupsUsed = 0;
         $hardResetAt = -1;          // index of the boundary that wiped the run
         $carriedRun  = 0;
@@ -291,6 +292,8 @@ class BonusProgressService
                 ? $dues[$i + 2]->copy()
                 : $windowEnd->copy();
             $catchupEnd->addDays($graceDays)->endOfDay();
+
+            $windowEnds[$i] = $windowEnd->copy();
 
             // oldest-first: was any older invoice still open at this month's due date?
             $olderOpen = false;
@@ -378,8 +381,7 @@ class BonusProgressService
             }
         }
 
-        $progress->catchupsUsed   = $catchupsUsed;
-        $progress->carriedArrears = $maxCarried;
+        $progress->catchupsUsed = $catchupsUsed;
 
         // Progress = credits earned since the last hard reset.
         $credits = 0;
@@ -395,24 +397,51 @@ class BonusProgressService
         // Admin-granted points are added to whatever the invoices produced.
         $credits = max(0, $credits + $manualPoints);
 
-        $isHardReset = $hardReset > 0 && $lastBreak > $hardReset;
-        $isSpiral    = ! $isHardReset && $maxCarried >= $spiralAfter;
+        // Status describes the customer's position TODAY, never his history, so a
+        // customer who clears his arrears immediately stops being flagged.
+        //   0 open months  -> منتظم (or استدراك if one was used this cycle)
+        //   1 open month   -> متأخر
+        //   2 open months  -> دوامة  (pays one, stays one behind)
+        //   3+ open months -> متعثر  (broke more than two months)
+        // A month is only "overdue" once its window has closed: being unpaid in the
+        // current month is normal, not a violation.
+        $openCount = 0;
+        for ($i = 0; $i < $count; $i++) {
+            if ($settledAt[$i] === null && $windowEnds[$i]->lt(now())) {
+                $openCount++;
+            }
+        }
 
-        if ($isHardReset) {
-            $progress->progress = min($credits, $required);
-            $progress->status   = 'hard_reset';
-        } elseif ($isSpiral) {
+        // Is he still paying *newer* bills while an old one stays open? That is the
+        // «دوامة» pattern, versus a customer who simply stopped paying.
+        $oldestOpenDue = null;
+        $lastPayment   = null;
+        for ($i = 0; $i < $count; $i++) {
+            if ($settledAt[$i] === null) {
+                if ($oldestOpenDue === null && $windowEnds[$i]->lt(now())) {
+                    $oldestOpenDue = $dues[$i];
+                }
+            } elseif ($lastPayment === null || $settledAt[$i]->gt($lastPayment)) {
+                $lastPayment = $settledAt[$i];
+            }
+        }
+
+        $isSpin = $oldestOpenDue !== null
+            && $lastPayment !== null
+            && $lastPayment->gt($oldestOpenDue)
+            && $openCount >= 2;
+
+        $progress->carriedArrears = $openCount;
+
+        if ($openCount > $hardReset) {
             $progress->progress = 0;
-            $progress->status   = 'spiral';
+            $progress->status   = 'hard_reset';
+        } elseif ($openCount >= 1) {
+            $progress->progress = min($credits, $required);
+            $progress->status   = $isSpin ? 'spiral' : 'late';
         } else {
             $progress->progress = min($credits, $required);
-            if ($catchupMax > 0 && $catchupsUsed > 0) {
-                $progress->status = 'catchup_used';
-            } elseif ($lastBreak > 0) {
-                $progress->status = 'late';
-            } else {
-                $progress->status = 'compliant';
-            }
+            $progress->status   = ($catchupMax > 0 && $catchupsUsed > 0) ? 'catchup_used' : 'compliant';
         }
 
         $remaining = max(0, $required - $progress->progress);
