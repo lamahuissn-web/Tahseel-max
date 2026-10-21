@@ -78,9 +78,40 @@
                         </div>
                         <div class="col-6 col-md-3">
                             <div class="border rounded p-2 p-md-3 h-100">
-                                <div class="text-muted" style="font-size:12px">كسر متراكم</div>
+                                <div class="text-muted" style="font-size:12px">أشهر متأخرة (مستحقة)</div>
                                 <div class="fw-bold" style="font-size:13px">{{ $progress->carriedArrears }}</div>
                             </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-warning mb-4" style="font-size:13px">
+                        <div class="fw-bold mb-2">⏳ ما تبقّى قبل تغيّر التصنيف</div>
+                        <div class="d-flex flex-wrap gap-3">
+                            <div>
+                                🔴 ليصبح <strong>دوامة</strong>:
+                                @if($progress->monthsToSpiral > 0)
+                                    <strong>{{ $progress->monthsToSpiral }}</strong> شهر متأخر إضافي
+                                @else
+                                    <strong>هو الآن في حالة دوامة</strong>
+                                @endif
+                            </div>
+                            <div>
+                                ⚫ ليصبح <strong>متعثر</strong> (العدّاد صفر):
+                                @if($progress->monthsToHardReset > 0)
+                                    <strong>{{ $progress->monthsToHardReset }}</strong> شهر متأخر إضافي
+                                @else
+                                    <strong>هو الآن متعثر</strong>
+                                @endif
+                            </div>
+                            @if($progress->nextBoundaryDate)
+                                <div>
+                                    📅 التاريخ الحاسم:
+                                    <strong dir="ltr">{{ $progress->nextBoundaryDate }}</strong>
+                                    @if($progress->daysToNextBoundary !== null)
+                                        (بعد <strong>{{ $progress->daysToNextBoundary }}</strong> يوم)
+                                    @endif
+                                </div>
+                            @endif
                         </div>
                     </div>
 

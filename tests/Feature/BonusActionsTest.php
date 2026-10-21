@@ -296,7 +296,9 @@ class BonusActionsTest extends TestCase
             ->assertOk()
             ->assertSee('استدراك')
             ->assertSee('2026-09-20 10:00')
-            ->assertSee('تاريخ ووقت الدفع');
+            ->assertSee('تاريخ ووقت الدفع')
+            ->assertSee('ما تبقّى قبل تغيّر التصنيف')
+            ->assertSee('التاريخ الحاسم');
     }
 
     // ---------------------------------------------------------------- helpers

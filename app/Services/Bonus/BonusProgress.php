@@ -16,6 +16,12 @@ class BonusProgress
     public ?string $cycleStart = null;
     public ?string $lastCreditedMonth = null;
 
+    /** How many more overdue months until each escalation. */
+    public int $monthsToSpiral = 0;
+    public int $monthsToHardReset = 0;
+    public ?string $nextBoundaryDate = null;
+    public ?int $daysToNextBoundary = null;
+
     /** @var array<int,array{month:string,due:?string,state:string,credited:bool,paid_at:?string}> */
     public array $months = [];
 

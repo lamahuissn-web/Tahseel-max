@@ -433,6 +433,16 @@ class BonusProgressService
 
         $progress->carriedArrears = $openCount;
 
+        // What is left before the next classification, and the date it happens.
+        $progress->monthsToSpiral    = max(0, $spiralAfter - $openCount);
+        $progress->monthsToHardReset = max(0, ($hardReset + 1) - $openCount);
+
+        $boundary = $windowEnds[$count - 1] ?? null;
+        if ($boundary !== null) {
+            $progress->nextBoundaryDate   = $boundary->toDateString();
+            $progress->daysToNextBoundary = max(0, (int) Carbon::today()->diffInDays($boundary->copy()->startOfDay(), false));
+        }
+
         if ($openCount > $hardReset) {
             $progress->progress = 0;
             $progress->status   = 'hard_reset';
