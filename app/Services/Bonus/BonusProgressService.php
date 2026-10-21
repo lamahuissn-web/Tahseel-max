@@ -270,6 +270,20 @@ class BonusProgressService
         $maxCarried  = 0;
         $lastBreak   = 0;
 
+        // The window of a month ends at the NEXT MONTH's bill, never at another invoice
+        // that belongs to the same month (duplicate / split bills share the due date).
+        $nextDistinct = [];
+        for ($i = 0; $i < $count; $i++) {
+            $monthKey = $dues[$i]->format('Y-m');
+            $nextDistinct[$i] = null;
+            for ($j = $i + 1; $j < $count; $j++) {
+                if ($dues[$j]->format('Y-m') !== $monthKey) {
+                    $nextDistinct[$i] = $j;
+                    break;
+                }
+            }
+        }
+
         for ($i = 0; $i < $count; $i++) {
             $due = $dues[$i];
 
@@ -282,14 +296,16 @@ class BonusProgressService
             }
             $settledAt[$i] = $payTime;
 
-            // window end = the next bill's due date (+ grace); last month rolls one month.
-            $windowEnd = $i + 1 < $count
-                ? $dues[$i + 1]->copy()
+            // window end = the NEXT MONTH's due date (+ grace); last month rolls one month.
+            $nd = $nextDistinct[$i];
+            $windowEnd = $nd !== null
+                ? $dues[$nd]->copy()
                 : $due->copy()->addMonthNoOverflow();
             $windowEnd->addDays($graceDays)->endOfDay();
 
-            $catchupEnd = $i + 2 < $count
-                ? $dues[$i + 2]->copy()
+            $nd2 = $nd !== null ? $nextDistinct[$nd] : null;
+            $catchupEnd = $nd2 !== null
+                ? $dues[$nd2]->copy()
                 : $windowEnd->copy();
             $catchupEnd->addDays($graceDays)->endOfDay();
 

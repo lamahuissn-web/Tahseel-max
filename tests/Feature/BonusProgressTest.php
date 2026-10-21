@@ -446,6 +446,26 @@ class BonusProgressTest extends TestCase
         $this->assertCount(1, $progress->months, 'Future months are not part of the evaluation yet.');
     }
 
+    public function test_a_twin_bill_on_the_same_due_date_does_not_cut_the_month_short(): void
+    {
+        // Real case: ابو رامي فاعور — two invoices share 2026-01-05 (a re-issue).
+        // The month's window must close at the February bill, not at the twin.
+        $client = $this->client();
+        $jan    = $this->invoice($client, '2026-01-05');
+        $janTwin = $this->invoice($client, '2026-01-05');
+        $feb    = $this->invoice($client, '2026-02-05');
+
+        $this->pay($jan, $client, '2026-01-06');
+        $this->pay($janTwin, $client, '2026-04-09');
+        $this->pay($feb, $client, '2026-02-06');
+
+        $progress = $this->service()->forClient($client);
+
+        $this->assertSame('on_time', $progress->months[0]['state'], 'A twin bill must not cut the window short.');
+        $this->assertSame(0, $progress->catchupsUsed, 'A twin bill must not consume the catch-up.');
+        $this->assertSame('compliant', $progress->status);
+    }
+
     public function test_two_invoices_in_one_month_earn_only_one_credit(): void
     {
         // Real case: اسامة كساب #630 — the billing day moved from the 1st to the
