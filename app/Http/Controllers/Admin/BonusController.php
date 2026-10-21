@@ -404,6 +404,7 @@ class BonusController extends Controller
             'bonus_months_required'         => 'required|integer|min:1|max:120',
             'bonus_grace_days'              => 'required|integer|min:0|max:31',
             'bonus_catchup_per_cycle'       => 'required|integer|min:0|max:12',
+            'bonus_recovery_months'         => 'required|integer|min:1|max:12',
             'bonus_hard_reset_after_months' => 'required|integer|min:0|max:12',
             'bonus_spiral_after_months'     => 'required|integer|min:1|max:12',
             'bonus_count_start_date'        => 'required|date',

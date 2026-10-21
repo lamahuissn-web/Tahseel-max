@@ -43,6 +43,13 @@
                             </div>
 
                             <div class="col-md-4">
+                                <label class="form-label fw-bold">أشهر نظيفة للعودة إلى «منتظم»</label>
+                                <input type="number" min="1" max="12" name="bonus_recovery_months" class="form-control"
+                                       value="{{ $settings['bonus_recovery_months'] ?? 3 }}">
+                                <div class="form-text">بعد أي كسر: كم شهر دفع منتظم يحتاج ليصبح 🟢 منتظم. (3 = الموصى به)</div>
+                            </div>
+
+                            <div class="col-md-4">
                                 <label class="form-label fw-bold">عدد الاستدراكات في الدورة</label>
                                 <input type="number" min="0" max="12" name="bonus_catchup_per_cycle" class="form-control"
                                        value="{{ $settings['bonus_catchup_per_cycle'] ?? 1 }}">

@@ -129,6 +129,7 @@ class BonusAccessTest extends TestCase
                 'bonus_months_required'         => '24',
                 'bonus_grace_days'              => '5',
                 'bonus_catchup_per_cycle'       => '1',
+                'bonus_recovery_months'         => '4',
                 'bonus_hard_reset_after_months' => '2',
                 'bonus_spiral_after_months'     => '2',
                 'bonus_count_start_date'        => '2026-01-01',
@@ -142,6 +143,7 @@ class BonusAccessTest extends TestCase
         BonusSettings::flush();
 
         $this->assertSame(5, BonusSettings::graceDays(), 'The admin can change the grace period at any time.');
+        $this->assertSame(4, BonusSettings::recoveryMonths(), 'Clean months needed to become منتظم is editable.');
         $this->assertTrue(BonusSettings::enabled());
     }
 
