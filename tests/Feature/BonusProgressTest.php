@@ -444,6 +444,23 @@ class BonusProgressTest extends TestCase
         $this->assertCount(1, $progress->months, 'Future months are not part of the evaluation yet.');
     }
 
+    public function test_two_invoices_in_one_month_earn_only_one_credit(): void
+    {
+        // Real case: اسامة كساب #630 — the billing day moved from the 1st to the
+        // 16th in June, so that month has two invoices.
+        $client = $this->client();
+        $june1  = $this->invoice($client, '2026-06-01');
+        $june16 = $this->invoice($client, '2026-06-16');
+        $this->pay($june1, $client, '2026-06-01');
+        $this->pay($june16, $client, '2026-06-16');
+
+        $progress = $this->service()->forClient($client);
+
+        $this->assertSame(1, $progress->progress, 'A month can earn one point, not two.');
+        $this->assertSame('duplicate', $progress->months[1]['state']);
+        $this->assertFalse($progress->months[1]['credited']);
+    }
+
     // ------------------------------------------------------ inactive exclusion
 
     public function test_inactive_customers_are_outside_the_program(): void

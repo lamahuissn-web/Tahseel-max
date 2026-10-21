@@ -89,6 +89,7 @@
                                     <span class="m">{{ $m['month'] }}</span>
                                     <span class="s">
                                         @if($m['credited']) ✓ محتسب
+                                        @elseif($m['state'] === 'duplicate') ✗ شهر مكرر
                                         @elseif($m['state'] === 'unpaid') — غير مدفوع
                                         @else ✗ غير محتسب
                                         @endif

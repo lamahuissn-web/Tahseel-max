@@ -261,6 +261,7 @@ class BonusProgressService
         }
 
         $credited    = [];
+        $creditedMonths = [];   // Y-m already credited — one credit per month, max
         $settledAt   = [];
         $catchupsUsed = 0;
         $hardResetAt = -1;          // index of the boundary that wiped the run
@@ -345,6 +346,19 @@ class BonusProgressService
                 } else {
                     $state = self::STATE_LATE;
                 }
+            }
+
+            $monthKey = $due->format('Y-m');
+
+            if ($isCredited && isset($creditedMonths[$monthKey])) {
+                // Two invoices in the same calendar month (the billing day changed):
+                // the second one never earns a second point.
+                $isCredited = false;
+                $state = 'duplicate';
+            }
+
+            if ($isCredited) {
+                $creditedMonths[$monthKey] = true;
             }
 
             $credited[$i] = $isCredited;
