@@ -86,6 +86,20 @@
 
                     <div class="alert alert-warning mb-4" style="font-size:13px">
                         <div class="fw-bold mb-2">⏳ ما تبقّى قبل تغيّر التصنيف</div>
+                        @if($progress->catchupsUsed > 0)
+                            <div class="mb-2">
+                                🟡 <strong>الاستدراك</strong>:
+                                @if($progress->lastCatchupMonth)
+                                    استُخدم في <strong dir="ltr">{{ $progress->lastCatchupMonth }}</strong>
+                                @else
+                                    استُخدم
+                                @endif
+                                — لا يوجد رصيد استدراك متبقٍ في هذه الدورة
+                                @if($progress->status !== 'catchup_used')
+                                    <span class="text-muted">(انتهى أثر العلامة، الزبون منتظم حالياً)</span>
+                                @endif
+                            </div>
+                        @endif
                         <div class="d-flex flex-wrap gap-3">
                             <div>
                                 🔴 ليصبح <strong>دوامة</strong>:

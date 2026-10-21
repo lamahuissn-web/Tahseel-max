@@ -265,6 +265,7 @@ class BonusProgressService
         $settledAt   = [];
         $windowEnds  = [];
         $catchupsUsed = 0;
+        $lastCatchupMonth = null;
         $hardResetAt = -1;          // index of the boundary that wiped the run
         $carriedRun  = 0;
         $maxCarried  = 0;
@@ -361,6 +362,7 @@ class BonusProgressService
                     // catch-up: the 1–2 month break was cleared before the following bill
                     $isCredited = true;
                     $catchupsUsed++;
+                    $lastCatchupMonth = $due->format('Y-m');
                     $state = self::STATE_CATCHUP;
                 } else {
                     $state = self::STATE_LATE;
@@ -397,7 +399,8 @@ class BonusProgressService
             }
         }
 
-        $progress->catchupsUsed = $catchupsUsed;
+        $progress->catchupsUsed   = $catchupsUsed;
+        $progress->lastCatchupMonth = $lastCatchupMonth;
 
         // Progress = credits earned since the last hard reset.
         $credits = 0;
@@ -467,7 +470,15 @@ class BonusProgressService
             $progress->status   = $isSpin ? 'spiral' : 'late';
         } else {
             $progress->progress = min($credits, $required);
-            $progress->status   = ($catchupMax > 0 && $catchupsUsed > 0) ? 'catchup_used' : 'compliant';
+            // The label describes TODAY: a catch-up used months ago no longer changes
+            // the status once the customer has been paying on time since.
+            $recentCatchup = false;
+            if ($lastCatchupMonth !== null) {
+                $monthsAgo = Carbon::parse($lastCatchupMonth . '-01')->startOfMonth()
+                    ->diffInMonths(now()->copy()->startOfMonth());
+                $recentCatchup = $monthsAgo <= BonusSettings::catchupVisibleMonths();
+            }
+            $progress->status   = ($catchupMax > 0 && $catchupsUsed > 0 && $recentCatchup) ? 'catchup_used' : 'compliant';
         }
 
         $remaining = max(0, $required - $progress->progress);

@@ -270,7 +270,8 @@ class BonusProgressTest extends TestCase
 
         $this->assertTrue($progress->months[2]['credited'], 'October counts once the arrears are clear.');
         $this->assertTrue($progress->months[3]['credited'], 'November counts too.');
-        $this->assertSame('catchup_used', $progress->status, 'He used his one catch-up this cycle.');
+        $this->assertSame(1, $progress->catchupsUsed, 'He used his one catch-up this cycle.');
+        $this->assertSame('compliant', $progress->status, 'A catch-up four months old must not label him today.');
     }
 
     public function test_carried_arrears_on_two_boundaries_puts_the_customer_in_spin_state(): void
@@ -446,6 +447,48 @@ class BonusProgressTest extends TestCase
         $this->assertCount(1, $progress->months, 'Future months are not part of the evaluation yet.');
     }
 
+    public function test_a_recent_catch_up_keeps_the_catchup_label(): void
+    {
+        // Two months ago he broke a month and cleared it before the following bill:
+        // the label still describes today.
+        $client = $this->client();
+        [$m2, $m1, $now] = $this->threeMonthDues();
+
+        $twoAgo     = $this->invoice($client, $m2);
+        $lastMonth  = $this->invoice($client, $m1);   // the month he breaks
+        $thisMonth  = $this->invoice($client, $now);
+
+        // He skipped the 2-months-ago bill and cleared it in the middle of last month,
+        // i.e. after that month's bill but before this month's bill.
+        $this->pay($lastMonth, $client, $m1);
+        $this->pay($twoAgo, $client, \Carbon\Carbon::parse($m1)->addDays(15)->toDateString());
+
+        $progress = $this->service()->forClient($client);
+
+        $this->assertSame(1, $progress->catchupsUsed, 'Clearing a skipped month late must be a catch-up.');
+        $this->assertTrue($progress->months[0]['credited'], 'The caught-up month still earns its point.');
+        $this->assertSame('catchup_used', $progress->status, 'A fresh catch-up must stay visible.');
+        $this->assertSame($progress->months[0]['month'], $progress->lastCatchupMonth);
+    }
+
+    public function test_the_catchup_label_fades_after_the_configured_months(): void
+    {
+        $client = $this->client();
+        [$m2, $m1, $now] = $this->threeMonthDues();
+        $this->setSetting('bonus_catchup_visible_months', '0');
+
+        $twoAgo    = $this->invoice($client, $m2);
+        $lastMonth = $this->invoice($client, $m1);
+        $thisMonth = $this->invoice($client, $now);
+        $this->pay($lastMonth, $client, $m1);
+        $this->pay($twoAgo, $client, \Carbon\Carbon::parse($m1)->addDays(15)->toDateString());
+
+        $progress = $this->service()->forClient($client);
+
+        $this->assertSame(1, $progress->catchupsUsed, 'The allowance stays consumed.');
+        $this->assertSame('compliant', $progress->status, 'The label fades, the fact does not.');
+    }
+
     public function test_a_twin_bill_on_the_same_due_date_does_not_cut_the_month_short(): void
     {
         // Real case: ابو رامي فاعور — two invoices share 2026-01-05 (a re-issue).
@@ -576,6 +619,20 @@ class BonusProgressTest extends TestCase
     // ---------------------------------------------------------------- helpers
 
     /** @return array<int,string> n monthly due dates ending last month */
+    /**
+     * @return array{0:string,1:string,2:string} the 5th of two months ago, last month, this month
+     */
+    private function threeMonthDues(): array
+    {
+        $today = \Carbon\Carbon::today()->startOfMonth();
+
+        return [
+            $today->copy()->subMonthsNoOverflow(2)->day(5)->toDateString(),
+            $today->copy()->subMonthsNoOverflow(1)->day(5)->toDateString(),
+            $today->copy()->day(5)->toDateString(),
+        ];
+    }
+
     private function pastDueDates(int $n): array
     {
         $dates = [];

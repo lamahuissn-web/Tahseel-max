@@ -16,6 +16,9 @@ class BonusProgress
     public ?string $cycleStart = null;
     public ?string $lastCreditedMonth = null;
 
+    /** Month (Y-m) of the most recent catch-up, null when none was ever used. */
+    public ?string $lastCatchupMonth = null;
+
     /** How many more overdue months until each escalation. */
     public int $monthsToSpiral = 0;
     public int $monthsToHardReset = 0;
