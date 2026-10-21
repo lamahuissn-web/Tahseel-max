@@ -266,6 +266,8 @@ class BonusProgressService
         $windowEnds  = [];
         $catchupsUsed = 0;
         $lastCatchupMonth = null;
+        $states = [];               // state per invoice index
+        $everLateAfterDue = false;
         $hardResetAt = -1;          // index of the boundary that wiped the run
         $carriedRun  = 0;
         $maxCarried  = 0;
@@ -383,6 +385,12 @@ class BonusProgressService
             }
 
             $credited[$i] = $isCredited;
+            $states[$i] = $state;
+
+            // Punctual means paid on or before the invoice's OWN due date.
+            if ($payTime !== null && $payTime->gt($due->copy()->addDays($graceDays)->endOfDay())) {
+                $everLateAfterDue = true;
+            }
 
             if ($isCredited) {
                 $progress->lastCreditedMonth = $due->format('Y-m');
@@ -431,6 +439,32 @@ class BonusProgressService
             }
         }
 
+        // Clean months: how many months, counting backwards from the newest, were paid
+        // inside their own month. A month that is not due yet neither helps nor hurts.
+        $cleanMonths = 0;
+        $hadBreak    = false;
+        for ($i = $count - 1; $i >= 0; $i--) {
+            $state = $states[$i] ?? self::STATE_UNPAID;
+
+            if ($state === self::STATE_ON_TIME) {
+                $cleanMonths++;
+                continue;
+            }
+            if ($state === self::STATE_UNPAID && ! $windowEnds[$i]->lt(now())) {
+                continue;   // the current month is not late yet
+            }
+            $hadBreak = true;
+            break;
+        }
+        if (in_array(self::STATE_CATCHUP, $states, true) || in_array(self::STATE_LATE, $states, true)) {
+            $hadBreak = true;
+        }
+
+        $progress->cleanMonths       = $cleanMonths;
+        $progress->hadBreak          = $hadBreak;
+        $progress->everLateAfterDue  = $everLateAfterDue;
+        $recoveryMonths              = BonusSettings::recoveryMonths();
+
         // Is he still paying *newer* bills while an old one stays open? That is the
         // «دوامة» pattern, versus a customer who simply stopped paying.
         $oldestOpenDue = null;
@@ -470,15 +504,12 @@ class BonusProgressService
             $progress->status   = $isSpin ? 'spiral' : 'late';
         } else {
             $progress->progress = min($credits, $required);
-            // The label describes TODAY: a catch-up used months ago no longer changes
-            // the status once the customer has been paying on time since.
-            $recentCatchup = false;
-            if ($lastCatchupMonth !== null) {
-                $monthsAgo = Carbon::parse($lastCatchupMonth . '-01')->startOfMonth()
-                    ->diffInMonths(now()->copy()->startOfMonth());
-                $recentCatchup = $monthsAgo <= BonusSettings::catchupVisibleMonths();
-            }
-            $progress->status   = ($catchupMax > 0 && $catchupsUsed > 0 && $recentCatchup) ? 'catchup_used' : 'compliant';
+            // The status must describe TODAY, and it must be earned: after any break
+            // the customer is «عائد للانتظام» until he strings together N clean months.
+            // A customer who never broke a month in the cycle gets the highest tier.
+            $progress->status = $hadBreak
+                ? ($cleanMonths >= $recoveryMonths ? 'compliant' : 'recovering')
+                : ($cleanMonths >= $recoveryMonths && ! $everLateAfterDue ? 'excellent' : 'compliant');
         }
 
         $remaining = max(0, $required - $progress->progress);

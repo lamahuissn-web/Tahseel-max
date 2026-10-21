@@ -62,14 +62,21 @@ consecutive month boundaries. Progress freezes at `0` until the arrears are clea
 3+ consecutive unpaid months) makes the customer non-compliant and the streak drops to
 `0`. Catch-up does not apply.
 
-**Customer status** (shown in the admin list)
+**Customer status** (shown in the admin list) — the status describes the position
+**today** and must be **earned back**, never inherited from history:
+
 | status | meaning |
 |---|---|
-| 🟢 منتظم | paying inside the month, no arrears carried |
-| 🟡 استدراك | used his catch-up this cycle, currently compliant |
+| 💎 ممتاز | no arrears **and** never paid after an invoice's own due date (+ grace) in this cycle, with at least `bonus_recovery_months` clean months |
+| 🟢 منتظم | no arrears and `bonus_recovery_months` consecutive clean months (default 3) since the last break |
+| 🟡 عائد للانتظام | no arrears, but fewer than `bonus_recovery_months` clean months since the last break/catch-up |
 | 🟠 متأخر | one month behind, still inside the catch-up window |
 | 🔴 دوامة | pays the newest bill while an older one stays unpaid — earns nothing |
 | ⚫ متعثر | break longer than 2 months — streak is 0 |
+
+A used catch-up therefore stops labelling the customer as soon as he has strung
+together `bonus_recovery_months` clean months; the fact stays visible in his panel.
+A clean month = a month paid inside its own window (before the next bill).
 
 **Streak** — consecutive on-time months after the later of:
 - `bonus_count_start_date`, and
@@ -110,6 +117,7 @@ consecutive month boundaries. Progress freezes at `0` until the arrears are clea
 | `bonus_months_required` | `24` | months needed per free month |
 | `bonus_grace_days` | `0` | extra tolerance in days on top of the month rule; editable at any time |
 | `bonus_catchup_per_cycle` | `1` | catch-up (استدراك) occurrences allowed per cycle; `0` disables |
+| `bonus_recovery_months` | `3` | clean months needed to return to 🟢 منتظم after a break |
 | `bonus_hard_reset_after_months` | `2` | a break longer than this resets the streak to 0 |
 | `bonus_spiral_after_months` | `2` | consecutive month boundaries with carried arrears ⇒ spin state |
 | `bonus_client_types` | `internet` | client types included; satellite excluded by default |
@@ -145,7 +153,7 @@ calculation and from the mobile API without deleting data.
 Columns: customer, subscription, **progress `x / 24`**, **status**, last counted month,
 next eligible month.
 Statuses: `قيد التقدم` / `مستحق` / `معتمد` / `مستبدل` / `متوقف` / `موقوف (عليه دين)`.
-Health column (computed): 🟢 منتظم · 🟡 استدراك · 🟠 متأخر · 🔴 دوامة · ⚫ متعثر
+Health column (computed): 💎 ممتاز · 🟢 منتظم · 🟡 عائد للانتظام · 🟠 متأخر · 🔴 دوامة · ⚫ متعثر
 Filters: مستحق الآن · قريب من الاستحقاق · لديه بونص معتمد · عليه دين · **دوامة** · الكل.
 Export to Excel (existing export pattern).
 

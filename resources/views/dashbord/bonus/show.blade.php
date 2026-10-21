@@ -53,7 +53,8 @@
                                 <div class="fw-bold" style="font-size:13px">
                                     @switch($progress->status)
                                         @case('compliant') 🟢 منتظم @break
-                                        @case('catchup_used') 🟡 استدراك مستخدم @break
+                                        @case('recovering') 🟡 عائد للانتظام @break
+                                        @case('excellent') 💎 ممتاز في الدفع @break
                                         @case('late') 🟠 متأخر @break
                                         @case('spiral') 🔴 دوامة @break
                                         @case('hard_reset') ⚫ متعثر (العداد صفر) @break
@@ -95,9 +96,7 @@
                                     استُخدم
                                 @endif
                                 — لا يوجد رصيد استدراك متبقٍ في هذه الدورة
-                                @if($progress->status !== 'catchup_used')
-                                    <span class="text-muted">(انتهى أثر العلامة، الزبون منتظم حالياً)</span>
-                                @endif
+                                <span class="text-muted">(أشهر نظيفة متتالية: {{ $progress->cleanMonths }} من {{ \App\Services\Bonus\BonusSettings::recoveryMonths() }})</span>
                             </div>
                         @endif
                         <div class="d-flex flex-wrap gap-3">

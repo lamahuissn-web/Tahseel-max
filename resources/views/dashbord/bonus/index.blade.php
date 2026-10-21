@@ -66,7 +66,8 @@
                         <li class="nav-item"><a class="nav-link {{ $filter === 'eligible' ? 'active' : '' }}" href="{{ route('admin.bonus.index', ['filter' => 'eligible']) }}">مستحق</a></li>
                         <li class="nav-item"><a class="nav-link {{ $filter === 'near' ? 'active' : '' }}" href="{{ route('admin.bonus.index', ['filter' => 'near']) }}">قريب</a></li>
                         <li class="nav-item"><a class="nav-link {{ $filter === 'spiral' ? 'active' : '' }}" href="{{ route('admin.bonus.index', ['filter' => 'spiral']) }}">دوامة</a></li>
-                        <li class="nav-item"><a class="nav-link {{ $filter === 'catchup' ? 'active' : '' }}" href="{{ route('admin.bonus.index', ['filter' => 'catchup']) }}">استدراك</a></li>
+                        <li class="nav-item"><a class="nav-link {{ $filter === 'excellent' ? 'active' : '' }}" href="{{ route('admin.bonus.index', ['filter' => 'excellent']) }}">💎 ممتاز</a></li>
+                        <li class="nav-item"><a class="nav-link {{ $filter === 'catchup' ? 'active' : '' }}" href="{{ route('admin.bonus.index', ['filter' => 'catchup']) }}">🟡 عائد للانتظام</a></li>
                         <li class="nav-item"><a class="nav-link {{ $filter === 'hard_reset' ? 'active' : '' }}" href="{{ route('admin.bonus.index', ['filter' => 'hard_reset']) }}">متعثر</a></li>
                         <li class="nav-item"><a class="nav-link {{ $filter === 'open_bonus' ? 'active' : '' }}" href="{{ route('admin.bonus.index', ['filter' => 'open_bonus']) }}">بونص مفتوح</a></li>
                     </ul>
@@ -92,8 +93,10 @@
                                         <div class="phone">{{ $row['client']->phone }}</div>
                                     </div>
                                     @switch($p->status)
+                                        @case('excellent') <span class="state-badge badge-soft-success">💎 ممتاز</span> @break
                                         @case('compliant') <span class="state-badge badge-soft-success">🟢 منتظم</span> @break
-                                        @case('catchup_used') <span class="state-badge badge-soft-warning">🟡 استدراك</span> @break
+                                        @case('recovering') <span class="state-badge badge-soft-warning">🟡 عائد للانتظام</span> @break
+                                        
                                         @case('late') <span class="state-badge badge-soft-info">🟠 متأخر</span> @break
                                         @case('spiral') <span class="state-badge badge-soft-danger">🔴 دوامة</span> @break
                                         @case('hard_reset') <span class="state-badge badge-soft-dark">⚫ متعثر</span> @break
@@ -154,8 +157,10 @@
                                     <td>{{ $p->nextEligibleMonth ?? '—' }}</td>
                                     <td>
                                         @switch($p->status)
+                                            @case('excellent') <span class="badge badge-soft-success">💎 ممتاز</span> @break
                                             @case('compliant') <span class="badge badge-soft-success">🟢 منتظم</span> @break
-                                            @case('catchup_used') <span class="badge badge-soft-warning">🟡 استدراك</span> @break
+                                            @case('recovering') <span class="badge badge-soft-warning">🟡 عائد للانتظام</span> @break
+                                            
                                             @case('late') <span class="badge badge-soft-info">🟠 متأخر</span> @break
                                             @case('spiral') <span class="badge badge-soft-danger">🔴 دوامة</span> @break
                                             @case('hard_reset') <span class="badge badge-soft-dark">⚫ متعثر</span> @break

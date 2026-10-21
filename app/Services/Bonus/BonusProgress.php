@@ -19,6 +19,15 @@ class BonusProgress
     /** Month (Y-m) of the most recent catch-up, null when none was ever used. */
     public ?string $lastCatchupMonth = null;
 
+    /** Consecutive months, newest first, that were paid inside their own month. */
+    public int $cleanMonths = 0;
+
+    /** Did anything break inside this cycle (a late month or a catch-up)? */
+    public bool $hadBreak = false;
+
+    /** Did he ever pay after the invoice's own due date in this cycle? */
+    public bool $everLateAfterDue = false;
+
     /** How many more overdue months until each escalation. */
     public int $monthsToSpiral = 0;
     public int $monthsToHardReset = 0;

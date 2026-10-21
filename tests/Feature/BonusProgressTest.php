@@ -69,7 +69,7 @@ class BonusProgressTest extends TestCase
 
         $this->assertSame(24, $progress->progress);
         $this->assertTrue($progress->eligible, '24 on-time months must make the customer eligible.');
-        $this->assertSame('compliant', $progress->status);
+        $this->assertSame('excellent', $progress->status, 'Never late once: the highest tier.');
     }
 
     public function test_progress_is_capped_at_the_required_months(): void
@@ -467,26 +467,58 @@ class BonusProgressTest extends TestCase
 
         $this->assertSame(1, $progress->catchupsUsed, 'Clearing a skipped month late must be a catch-up.');
         $this->assertTrue($progress->months[0]['credited'], 'The caught-up month still earns its point.');
-        $this->assertSame('catchup_used', $progress->status, 'A fresh catch-up must stay visible.');
+        $this->assertSame('recovering', $progress->status, 'A fresh break cannot read as منتظم yet.');
+        $this->assertSame(1, $progress->cleanMonths, 'Only the months after the break are clean.');
         $this->assertSame($progress->months[0]['month'], $progress->lastCatchupMonth);
     }
 
-    public function test_the_catchup_label_fades_after_the_configured_months(): void
+    public function test_three_clean_months_bring_the_customer_back_to_compliant(): void
     {
         $client = $this->client();
-        [$m2, $m1, $now] = $this->threeMonthDues();
-        $this->setSetting('bonus_catchup_visible_months', '0');
+        $today  = \Carbon\Carbon::today()->startOfMonth();
 
-        $twoAgo    = $this->invoice($client, $m2);
-        $lastMonth = $this->invoice($client, $m1);
-        $thisMonth = $this->invoice($client, $now);
-        $this->pay($lastMonth, $client, $m1);
-        $this->pay($twoAgo, $client, \Carbon\Carbon::parse($m1)->addDays(15)->toDateString());
+        // Break in the oldest month, then exactly three perfectly paid months after it.
+        $dues = [];
+        for ($i = 3; $i >= 0; $i--) {
+            $dues[] = $today->copy()->subMonthsNoOverflow($i)->day(5)->toDateString();
+        }
+
+        $invoices = [];
+        foreach ($dues as $d) {
+            $invoices[] = $this->invoice($client, $d);
+        }
+
+        // The oldest month is cleared as a catch-up, the rest on their own due dates.
+        $this->pay($invoices[0], $client, \Carbon\Carbon::parse($dues[1])->addDays(15)->toDateString());
+        foreach ([1, 2, 3] as $i) {
+            $this->pay($invoices[$i], $client, $dues[$i]);
+        }
 
         $progress = $this->service()->forClient($client);
 
-        $this->assertSame(1, $progress->catchupsUsed, 'The allowance stays consumed.');
-        $this->assertSame('compliant', $progress->status, 'The label fades, the fact does not.');
+        $this->assertSame(1, $progress->catchupsUsed);
+        $this->assertSame(3, $progress->cleanMonths, 'Only the months after the break count.');
+        $this->assertSame('compliant', $progress->status, 'Three clean months restore the regular label.');
+    }
+
+    public function test_the_recovery_threshold_is_read_from_settings(): void
+    {
+        $client = $this->client();
+        $dates  = $this->pastDueDates(3);
+        $this->setSetting('bonus_recovery_months', '1');
+
+        $first  = $this->invoice($client, $dates[0]);
+        $second = $this->invoice($client, $dates[1]);
+        $third  = $this->invoice($client, $dates[2]);
+
+        $this->pay($second, $client, $dates[1]);
+        $this->pay($third, $client, $dates[2]);
+        $this->pay($first, $client, \Carbon\Carbon::parse($dates[1])->addDays(10)->toDateString());
+
+        $progress = $this->service()->forClient($client);
+
+        $this->assertSame(1, $progress->catchupsUsed);
+        $this->assertSame('compliant', $progress->status, 'One clean month is enough when configured.');
     }
 
     public function test_a_twin_bill_on_the_same_due_date_does_not_cut_the_month_short(): void
@@ -505,8 +537,8 @@ class BonusProgressTest extends TestCase
         $progress = $this->service()->forClient($client);
 
         $this->assertSame('on_time', $progress->months[0]['state'], 'A twin bill must not cut the window short.');
+        $this->assertTrue($progress->months[0]['credited'], 'The month is credited once.');
         $this->assertSame(0, $progress->catchupsUsed, 'A twin bill must not consume the catch-up.');
-        $this->assertSame('compliant', $progress->status);
     }
 
     public function test_two_invoices_in_one_month_earn_only_one_credit(): void

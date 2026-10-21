@@ -119,9 +119,11 @@ class BonusController extends Controller
                 'near'        => $p->progress >= max(1, (int) floor($p->required * 0.75)) && ! $p->eligible,
                 'spiral'      => $p->status === 'spiral',
                 'hard_reset'  => $p->status === 'hard_reset',
-                'catchup'     => $p->status === 'catchup_used',
+                
+                'catchup'     => $p->status === 'recovering',
+                'excellent'   => $p->status === 'excellent',
                 'open_bonus'  => $p->hasOpenBonus,
-                'debt'        => $p->status !== 'compliant',
+                'debt'        => ! in_array($p->status, ['compliant', 'excellent'], true),
                 default       => true,
             };
         }));

@@ -99,13 +99,12 @@ class BonusSettings
     }
 
     /**
-     * For how many months a used catch-up keeps the customer labelled «استدراك».
-     * Beyond this the label disappears and the customer reads as منتظم again —
-     * the status must describe today, not the history.
+     * How many clean months (paid inside their own month) a customer needs before
+     * he counts as منتظم again after a break. Before that he is «عائد للانتظام».
      */
-    public static function catchupVisibleMonths(): int
+    public static function recoveryMonths(): int
     {
-        return max(0, self::int('bonus_catchup_visible_months', 2));
+        return max(1, self::int('bonus_recovery_months', 3));
     }
 
     public static function hardResetAfterMonths(): int
