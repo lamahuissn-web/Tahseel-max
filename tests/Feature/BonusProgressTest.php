@@ -57,9 +57,10 @@ class BonusProgressTest extends TestCase
     public function test_twenty_four_on_time_months_earn_one_free_month(): void
     {
         $client = $this->client();
+        $dueDates = $this->pastDueDates(24);
+        $this->setSetting('bonus_count_start_date', $dueDates[0]);
 
-        for ($m = 1; $m <= 24; $m++) {
-            $due = now()->startOfYear()->addMonthsNoOverflow($m - 1)->day(5)->toDateString();
+        foreach ($dueDates as $due) {
             $inv = $this->invoice($client, $due);
             $this->pay($inv, $client, $due);
         }
@@ -74,9 +75,10 @@ class BonusProgressTest extends TestCase
     public function test_progress_is_capped_at_the_required_months(): void
     {
         $client = $this->client();
+        $dueDates = $this->pastDueDates(30);
+        $this->setSetting('bonus_count_start_date', $dueDates[0]);
 
-        for ($m = 1; $m <= 30; $m++) {
-            $due = now()->startOfYear()->addMonthsNoOverflow($m - 1)->day(5)->toDateString();
+        foreach ($dueDates as $due) {
             $inv = $this->invoice($client, $due);
             $this->pay($inv, $client, $due);
         }
@@ -249,17 +251,20 @@ class BonusProgressTest extends TestCase
     public function test_clearing_the_arrears_restores_crediting_from_the_next_month(): void
     {
         $client = $this->client();
+        $dates = $this->pastDueDates(4);
+        $this->setSetting('bonus_count_start_date', $dates[0]);
 
-        $aug = $this->invoice($client, '2026-08-16');
-        $sep = $this->invoice($client, '2026-09-16');
-        $oct = $this->invoice($client, '2026-10-16');
-        $nov = $this->invoice($client, '2026-11-16');
+        $aug = $this->invoice($client, $dates[0]);
+        $sep = $this->invoice($client, $dates[1]);
+        $oct = $this->invoice($client, $dates[2]);
+        $nov = $this->invoice($client, $dates[3]);
 
-        // August + September settled together on 2026-10-10 (arrears cleared).
-        $this->pay($aug, $client, '2026-10-10');
-        $this->pay($sep, $client, '2026-10-10');
-        $this->pay($oct, $client, '2026-10-18');   // inside its own month
-        $this->pay($nov, $client, '2026-11-15');
+        // The two arrears are settled together just before October's bill.
+        $clearAt = \Carbon\Carbon::parse($dates[2])->subDays(6)->toDateString();
+        $this->pay($aug, $client, $clearAt);
+        $this->pay($sep, $client, $clearAt);
+        $this->pay($oct, $client, \Carbon\Carbon::parse($dates[2])->addDays(2)->toDateString());
+        $this->pay($nov, $client, $dates[3]);
 
         $progress = $this->service()->forClient($client);
 
@@ -337,9 +342,10 @@ class BonusProgressTest extends TestCase
     public function test_an_open_bonus_blocks_eligibility(): void
     {
         $client = $this->client();
+        $dueDates = $this->pastDueDates(24);
+        $this->setSetting('bonus_count_start_date', $dueDates[0]);
 
-        for ($m = 1; $m <= 24; $m++) {
-            $due = now()->startOfYear()->addMonthsNoOverflow($m - 1)->day(5)->toDateString();
+        foreach ($dueDates as $due) {
             $inv = $this->invoice($client, $due);
             $this->pay($inv, $client, $due);
         }
@@ -422,6 +428,22 @@ class BonusProgressTest extends TestCase
         $this->assertNotContains($stopped, $rows);
     }
 
+    public function test_a_bill_that_is_not_due_yet_never_breaks_the_run(): void
+    {
+        $client = $this->client();
+        $inv = $this->invoice($client, '2026-01-16');
+        $this->pay($inv, $client, '2026-01-16');
+
+        // Invoice generated a month ahead — it must be ignored, not treated as unpaid.
+        $this->invoice($client, now()->addMonthNoOverflow()->toDateString());
+
+        $progress = $this->service()->forClient($client);
+
+        $this->assertSame(1, $progress->progress);
+        $this->assertSame('compliant', $progress->status);
+        $this->assertCount(1, $progress->months, 'Future months are not part of the evaluation yet.');
+    }
+
     // ------------------------------------------------------- satellite exclusion
 
     public function test_satellite_customers_are_excluded_from_the_program(): void
@@ -468,6 +490,17 @@ class BonusProgressTest extends TestCase
     }
 
     // ---------------------------------------------------------------- helpers
+
+    /** @return array<int,string> n monthly due dates ending last month */
+    private function pastDueDates(int $n): array
+    {
+        $dates = [];
+        for ($i = $n; $i >= 1; $i--) {
+            $dates[] = \Carbon\Carbon::today()->startOfMonth()->subMonthsNoOverflow($i)->day(5)->toDateString();
+        }
+
+        return $dates;
+    }
 
     private function service(): BonusProgressService
     {

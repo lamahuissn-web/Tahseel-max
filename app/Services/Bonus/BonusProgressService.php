@@ -227,6 +227,14 @@ class BonusProgressService
         $progress = $this->emptyProgress($clientId);
         $progress->required = $required;
 
+        // A bill that is not due yet can never break the run: invoices are often
+        // generated a month ahead (241 of them on the live data).
+        $today = Carbon::today();
+        $invoices = array_values(array_filter(
+            $invoices,
+            fn ($inv) => Carbon::parse($inv->due_date)->lte($today)
+        ));
+
         $count = count($invoices);
         if ($count === 0) {
             // No invoice in the current cycle yet — admin-granted points still count.
