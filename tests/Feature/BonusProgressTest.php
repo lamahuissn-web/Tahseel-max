@@ -468,6 +468,27 @@ class BonusProgressTest extends TestCase
         }
     }
 
+    public function test_the_delay_is_written_in_plain_arabic(): void
+    {
+        $progress = new \App\Services\Bonus\BonusProgress();
+
+        $cases = [
+            [null, 'لا سجل دفع بعد'],
+            [0,    'يدفع عادةً في يوم الاستحقاق'],
+            [-3,   'يدفع عادةً قبل الاستحقاق بـ3 أيام'],
+            [-1,   'يدفع عادةً قبل الاستحقاق بيوم واحد'],
+            [1,    'يتأخر عادةً يوم واحد'],
+            [2,    'يتأخر عادةً يومين'],
+            [5,    'يتأخر عادةً 5 أيام'],
+            [13,   'يتأخر عادةً 13 يوماً'],
+        ];
+
+        foreach ($cases as [$lag, $expected]) {
+            $progress->medianLag = $lag;
+            $this->assertSame($expected, $progress->lagLabel(), 'Reading the delay must never need statistics vocabulary.');
+        }
+    }
+
     public function test_a_customer_without_payments_has_no_pattern(): void
     {
         $client = $this->client();

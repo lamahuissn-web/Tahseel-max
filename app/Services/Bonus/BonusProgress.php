@@ -46,6 +46,45 @@ class BonusProgress
     /** @var array<int,array{month:string,due:?string,state:string,credited:bool,paid_at:?string}> */
     public array $months = [];
 
+    /**
+     * The delay in everyday Arabic, so the screen never says «وسيط».
+     *   5  -> «يتأخر عادةً 5 أيام»
+     *   0  -> «يدفع عادةً في يوم الاستحقاق»
+     *  -3  -> «يدفع عادةً قبل الاستحقاق بـ3 أيام»
+     */
+    public function lagLabel(): string
+    {
+        if ($this->medianLag === null) {
+            return 'لا سجل دفع بعد';
+        }
+
+        $n = abs($this->medianLag);
+
+        $days = match (true) {
+            $n === 0 => '',
+            $n === 1 => 'يوم واحد',
+            $n === 2 => 'يومين',
+            $n <= 10 => $n . ' أيام',
+            default  => $n . ' يوماً',
+        };
+
+        if ($this->medianLag === 0) {
+            return 'يدفع عادةً في يوم الاستحقاق';
+        }
+
+        if ($this->medianLag < 0) {
+            $early = match (true) {
+                $n === 1 => 'بيوم واحد',
+                $n === 2 => 'بيومين',
+                default  => 'بـ' . $days,
+            };
+
+            return 'يدفع عادةً قبل الاستحقاق ' . $early;
+        }
+
+        return 'يتأخر عادةً ' . $days;
+    }
+
     public function toArray(): array
     {
         return [

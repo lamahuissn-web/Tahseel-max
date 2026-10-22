@@ -146,9 +146,7 @@
                                 <div class="text-muted mb-1" style="font-size:12px">نمط الدفع (كيف يدفع عادةً)</div>
                                 <div class="d-flex align-items-center gap-2 flex-wrap">
                                     <span class="pat-badge" style="background:{{ $pat[3] }};color:{{ $pat[2] }};font-size:13px;padding:4px 10px">{{ $pat[0] }}</span>
-                                    @if($progress->medianLag !== null)
-                                        <span class="fw-bold">وسيط التأخير: {{ $progress->medianLag }} يوم</span>
-                                    @endif
+                                    <span class="fw-bold">{{ $progress->lagLabel() }}</span>
                                 </div>
                                 <div class="text-muted mt-1" style="font-size:12px">{{ $pat[1] }}</div>
                             </div>

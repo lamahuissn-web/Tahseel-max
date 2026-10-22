@@ -220,9 +220,7 @@
                                     @php($patLabel = ['precise'=>'⚡ دقيق','week'=>'✅ خلال أسبوع','late_habit'=>'🕐 متأخر عادةً','slow'=>'🐢 مماطل','very_slow'=>'⏳ مماطل جداً'][$p->pattern] ?? null)
                                     <span class="pat-badge pat-{{ $p->pattern ?? 'none' }}">{{ $patLabel ?? '— لا سجل' }}</span>
                                     <span class="score-pill {{ $p->score >= 85 ? 'score-hi' : ($p->score >= 60 ? 'score-mid' : 'score-low') }}">درجة {{ $p->score }}</span>
-                                    @if($p->medianLag !== null)
-                                        <span class="text-muted" style="font-size:11px">وسيط التأخير {{ $p->medianLag }} يوم</span>
-                                    @endif
+                                    <span class="text-muted" style="font-size:11px">{{ $p->lagLabel() }}</span>
                                 </div>
 
                                 <div class="d-flex align-items-center gap-2 mb-2">
@@ -279,9 +277,7 @@
                                     <td>
                                         @php($patLabel = ['precise'=>'⚡ دقيق','week'=>'✅ خلال أسبوع','late_habit'=>'🕐 متأخر عادةً','slow'=>'🐢 مماطل','very_slow'=>'⏳ مماطل جداً'][$p->pattern] ?? null)
                                         <span class="pat-badge pat-{{ $p->pattern ?? 'none' }}">{{ $patLabel ?? '—' }}</span>
-                                        @if($p->medianLag !== null)
-                                            <div class="text-muted" style="font-size:11px">وسيط {{ $p->medianLag }} يوم</div>
-                                        @endif
+                                        <div class="text-muted" style="font-size:11px">{{ $p->lagLabel() }}</div>
                                     </td>
                                     <td>
                                         <span class="score-pill {{ $p->score >= 85 ? 'score-hi' : ($p->score >= 60 ? 'score-mid' : 'score-low') }}">{{ $p->score }}</span>

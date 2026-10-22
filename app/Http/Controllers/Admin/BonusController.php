@@ -242,7 +242,7 @@ class BonusController extends Controller
         return response()->streamDownload(function () use ($rows, $labels) {
             $out = fopen('php://output', 'w');
             fwrite($out, "\xEF\xBB\xBF");   // BOM so Excel reads UTF-8
-            fputcsv($out, ['الاسم', 'الهاتف', 'الحالة', 'نمط الدفع', 'درجة الالتزام', 'وسيط التأخير (يوم)', 'النقاط', 'أشهر نظيفة', 'آخر شهر محتسب', 'استدراك مستخدم في', 'عليه ديون']);
+            fputcsv($out, ['الاسم', 'الهاتف', 'الحالة', 'نمط الدفع', 'درجة الالتزام', 'التأخير المعتاد (يوم)', 'النقاط', 'أشهر نظيفة', 'آخر شهر محتسب', 'استدراك مستخدم في', 'عليه ديون']);
 
             foreach ($rows as $row) {
                 /** @var BonusProgress $p */
