@@ -609,6 +609,32 @@ class BonusProgressTest extends TestCase
         $this->assertSame('compliant', $progress->status, 'One clean month is enough when configured.');
     }
 
+    public function test_an_extra_bill_in_a_credited_month_does_not_freeze_the_months_after_it(): void
+    {
+        // Real case: ابو اركان كريم #475 — the generator produced a second January
+        // invoice (due the 10th) that sat unpaid for eight months. The customer paid
+        // every later month days before its due date and still read as 1/24.
+        $client = $this->client();
+        $dates  = array_slice($this->pastDueDates(5), 0, 4);
+
+        $january = $this->invoice($client, $dates[0]);
+        $twin    = $this->invoice($client, \Carbon\Carbon::parse($dates[0])->addDays(9)->toDateString());
+        $this->pay($january, $client, $dates[0]);          // on time
+
+        // The twin stays open for months; the following months are paid on time.
+        foreach ([1, 2, 3] as $i) {
+            $this->pay($this->invoice($client, $dates[$i]), $client, $dates[$i]);
+        }
+        $this->pay($twin, $client, \Carbon\Carbon::today()->subDays(3)->toDateString());
+
+        $progress = $this->service()->forClient($client);
+
+        $this->assertSame('on_time', $progress->months[0]['state'], 'The month was paid on time.');
+        $creditedLater = collect($progress->months)->filter(fn ($m) => $m['month'] !== $progress->months[0]['month'] && $m['credited'])->count();
+        $this->assertGreaterThanOrEqual(3, $creditedLater, 'An open twin bill must not block the following months.');
+        $this->assertGreaterThanOrEqual(4, $progress->progress);
+    }
+
     public function test_a_twin_bill_on_the_same_due_date_does_not_cut_the_month_short(): void
     {
         // Real case: ابو رامي فاعور — two invoices share 2026-01-05 (a re-issue).

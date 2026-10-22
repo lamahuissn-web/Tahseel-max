@@ -323,8 +323,18 @@ class BonusProgressService
             $windowEnds[$i] = $windowEnd->copy();
 
             // oldest-first: was any older invoice still open at this month's due date?
+            // A second invoice of the SAME month (re-issue, split bill, or a bill the
+            // generator created on a different day) is the same obligation, never an
+            // "older" one: it must not freeze a customer who pays every month.
+            $thisMonth = $due->format('Y-m');
             $olderOpen = false;
             for ($j = 0; $j < $i; $j++) {
+                $jm = $dues[$j]->format('Y-m');
+                if ($jm === $thisMonth || isset($creditedMonths[$jm])) {
+                    // same obligation billed twice, or a month that already earned its
+                    // point: neither can freeze the months that follow it.
+                    continue;
+                }
                 if ($settledAt[$j] === null) {
                     $olderOpen = true;
                     break;
@@ -345,9 +355,15 @@ class BonusProgressService
 
             // break length: consecutive preceding months still open at this due date
             $break = 0;
+            $seenMonths = [];
             for ($j = $i - 1; $j >= 0; $j--) {
+                $jm = $dues[$j]->format('Y-m');
+                if ($jm === $thisMonth || isset($seenMonths[$jm]) || isset($creditedMonths[$jm])) {
+                    continue;   // same obligation billed twice, or a month already credited
+                }
                 if ($settledAt[$j] === null || $settledAt[$j]->gt($due)) {
                     $break++;
+                    $seenMonths[$jm] = true;
                 } else {
                     break;
                 }
