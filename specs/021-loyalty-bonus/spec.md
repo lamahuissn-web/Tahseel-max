@@ -78,6 +78,26 @@ A used catch-up therefore stops labelling the customer as soon as he has strung
 together `bonus_recovery_months` clean months; the fact stays visible in his panel.
 A clean month = a month paid inside its own window (before the next bill).
 
+**Payment-habit axis** (small badge, independent from the status) — measured on the
+median delay between each invoice's own due date and its payment:
+
+| band | median delay | meaning |
+|---|---|---|
+| ⚡ دقيق | ≤ 0 days | pays on or before the due date |
+| ✅ خلال أسبوع | 1–7 days | pays within the first week |
+| 🕐 متأخر عادةً | 8–15 days | habitually late |
+| 🐢 مماطل | 16–30 days | pays late every month |
+| ⏳ مماطل جداً | 31+ days | rarely pays before the next bill |
+
+Five bands is the most the data supports: splitting each customer's history in
+halves keeps 91% of them within one band and the split-half correlation is r = 0.64.
+The band is deliberately separate from the status, so a customer who pays 12 days
+late but owes nothing reads «🟢 منتظم · 🕐 متأخر عادةً» instead of losing a tier.
+
+**Commitment score** (0–100) = `45%` position today + `35%` share of months actually
+credited + `20%` punctuality (`1 − median delay / 30`). No payment history ⇒ 0.
+A two-day delay nudges the score, it never drops a whole tier.
+
 **Streak** — consecutive on-time months after the later of:
 - `bonus_count_start_date`, and
 - the redemption date of the customer's last redeemed bonus.

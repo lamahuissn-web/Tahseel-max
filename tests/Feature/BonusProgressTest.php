@@ -447,6 +447,73 @@ class BonusProgressTest extends TestCase
         $this->assertCount(1, $progress->months, 'Future months are not part of the evaluation yet.');
     }
 
+    public function test_the_pattern_band_follows_the_median_delay(): void
+    {
+        // One customer per band: the habit must be read from the median delay,
+        // never from where the customer stands today.
+        foreach ([[0, 'precise'], [3, 'week'], [10, 'late_habit'], [20, 'slow'], [40, 'very_slow']] as [$offset, $expected]) {
+            $client = $this->client();
+            $dates  = array_slice($this->pastDueDates(6), 0, 4);   // far enough back for big offsets
+            $this->setSetting('bonus_count_start_date', $dates[0]);
+
+            foreach ($dates as $d) {
+                $invoice = $this->invoice($client, $d);
+                $this->pay($invoice, $client, \Carbon\Carbon::parse($d)->addDays($offset)->toDateString());
+            }
+
+            $progress = $this->service()->forClient($client);
+
+            $this->assertSame($expected, $progress->pattern, "A +{$offset} day habit must read as {$expected}.");
+            $this->assertSame($offset, $progress->medianLag, 'The median delay is reported as-is.');
+        }
+    }
+
+    public function test_a_customer_without_payments_has_no_pattern(): void
+    {
+        $client = $this->client();
+        $this->invoice($client, '2026-09-05');   // issued, never paid
+
+        $progress = $this->service()->forClient($client);
+
+        $this->assertNull($progress->pattern);
+        $this->assertNull($progress->medianLag);
+        $this->assertSame(0, $progress->score, 'No payment history means no score to show.');
+    }
+
+    public function test_the_score_separates_the_punctual_from_the_late_and_the_indebted(): void
+    {
+        $dates = array_slice($this->pastDueDates(6), 0, 4);
+        $this->setSetting('bonus_count_start_date', $dates[0]);
+
+        // punctual: paid on the due date every month
+        $punctual = $this->client();
+        foreach ($dates as $d) {
+            $this->pay($this->invoice($punctual, $d), $punctual, $d);
+        }
+
+        // late but current: every month paid 12 days after the due date
+        $late = $this->client();
+        foreach ($dates as $d) {
+            $this->pay($this->invoice($late, $d), $late, \Carbon\Carbon::parse($d)->addDays(12)->toDateString());
+        }
+
+        // indebted: never paid
+        $indebted = $this->client();
+        foreach ($dates as $d) {
+            $this->invoice($indebted, $d);
+        }
+
+        $a = $this->service()->forClient($punctual);
+        $b = $this->service()->forClient($late);
+        $c = $this->service()->forClient($indebted);
+
+        $this->assertGreaterThanOrEqual(90, $a->score, 'A punctual, current customer scores high.');
+        $this->assertLessThan($a->score, $b->score, 'Paying 12 days late costs score but he stays regular.');
+        $this->assertLessThan($b->score, $c->score, 'Arrears cost more than a late habit.');
+        $this->assertLessThanOrEqual(100, $a->score);
+        $this->assertGreaterThanOrEqual(0, $c->score);
+    }
+
     public function test_a_recent_catch_up_keeps_the_catchup_label(): void
     {
         // Two months ago he broke a month and cleared it before the following bill:

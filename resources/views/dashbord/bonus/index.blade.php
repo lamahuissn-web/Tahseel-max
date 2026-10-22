@@ -41,6 +41,20 @@
         .bonus-chip.muted { background: #f8f9fa; color: #8a9099; font-weight: 500; }
         .bonus-headline { font-size: 12.5px; color: #6c757d; }
 
+        /* payment-habit badge + score */
+        .pat-badge { font-size:11px; padding:2px 7px; border-radius:14px; white-space:nowrap; display:inline-block; }
+        .pat-precise    { background:#d8f5ea; color:#0c6a4a; }
+        .pat-week       { background:#dff3e3; color:#1c6b33; }
+        .pat-late_habit { background:#fff2d1; color:#8a6200; }
+        .pat-slow       { background:#ffe6cc; color:#8a4b00; }
+        .pat-very_slow  { background:#fde0e0; color:#a31919; }
+        .pat-none       { background:#eef0f2; color:#7a838c; }
+        .score-pill { font-size:11px; padding:2px 8px; border-radius:14px; font-weight:700; background:#eef3ff; color:#2f5bd0; }
+        .score-hi { background:#dff3e3; color:#1c6b33; }
+        .score-mid { background:#fff2d1; color:#8a6200; }
+        .score-low { background:#fde0e0; color:#a31919; }
+        .pat-chips { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+
         /* phone customer card */
         .bonus-client-card {
             border: 1px solid #e9ecef; border-radius: 14px; padding: 12px 14px; margin-bottom: 10px;
@@ -108,7 +122,23 @@
                         ({{ $pct($summary['no_debt']) }}%) ·
                         عليهم ديون: <strong class="text-danger">{{ $summary['with_debt'] }}</strong>
                         ({{ $pct($summary['with_debt']) }}%) ·
-                        متوسط التقدّم: <strong>{{ $summary['avg_progress'] }} / {{ $settings['bonus_months_required'] ?? 24 }}</strong>
+                        متوسط التقدّم: <strong>{{ $summary['avg_progress'] }} / {{ $settings['bonus_months_required'] ?? 24 }}</strong> ·
+                        متوسط درجة الالتزام: <strong>{{ $summary['avg_score'] }}</strong>
+                    </div>
+
+                    {{-- ===== شرائح أنماط الدفع ===== --}}
+                    <div class="pat-chips">
+                        <span class="bonus-headline" style="align-self:center">نمط الدفع:</span>
+                        <a class="pat-badge pat-precise {{ $filter === 'precise' ? 'fw-bold' : '' }}"
+                           href="{{ route('admin.bonus.index', ['filter' => 'precise', 'search' => $search, 'sort' => $sort]) }}">⚡ دقيق {{ $summary['precise'] }}</a>
+                        <a class="pat-badge pat-week {{ $filter === 'week' ? 'fw-bold' : '' }}"
+                           href="{{ route('admin.bonus.index', ['filter' => 'week', 'search' => $search, 'sort' => $sort]) }}">✅ خلال أسبوع {{ $summary['week'] }}</a>
+                        <a class="pat-badge pat-late_habit {{ $filter === 'late_habit' ? 'fw-bold' : '' }}"
+                           href="{{ route('admin.bonus.index', ['filter' => 'late_habit', 'search' => $search, 'sort' => $sort]) }}">🕐 متأخر عادةً {{ $summary['late_habit'] }}</a>
+                        <a class="pat-badge pat-slow {{ $filter === 'slow' ? 'fw-bold' : '' }}"
+                           href="{{ route('admin.bonus.index', ['filter' => 'slow', 'search' => $search, 'sort' => $sort]) }}">🐢 مماطل {{ $summary['slow'] }}</a>
+                        <a class="pat-badge pat-very_slow {{ $filter === 'very_slow' ? 'fw-bold' : '' }}"
+                           href="{{ route('admin.bonus.index', ['filter' => 'very_slow', 'search' => $search, 'sort' => $sort]) }}">⏳ مماطل جداً {{ $summary['very_slow'] }}</a>
                     </div>
 
                     {{-- ===== شرائح سريعة ===== --}}
@@ -138,6 +168,8 @@
                                 <option value="progress_desc" {{ $sort === 'progress_desc' ? 'selected' : '' }}>النقاط: الأعلى أولاً</option>
                                 <option value="progress_asc"  {{ $sort === 'progress_asc' ? 'selected' : '' }}>النقاط: الأدنى أولاً</option>
                                 <option value="clean"         {{ $sort === 'clean' ? 'selected' : '' }}>الأشهر النظيفة: الأكثر</option>
+                                <option value="score_desc"    {{ $sort === 'score_desc' ? 'selected' : '' }}>درجة الالتزام: الأعلى</option>
+                                <option value="score_asc"     {{ $sort === 'score_asc' ? 'selected' : '' }}>درجة الالتزام: الأدنى</option>
                                 <option value="name"          {{ $sort === 'name' ? 'selected' : '' }}>الاسم (أ–ي)</option>
                             </select>
                         </div>
@@ -184,6 +216,15 @@
                                     @endswitch
                                 </div>
 
+                                <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+                                    @php($patLabel = ['precise'=>'⚡ دقيق','week'=>'✅ خلال أسبوع','late_habit'=>'🕐 متأخر عادةً','slow'=>'🐢 مماطل','very_slow'=>'⏳ مماطل جداً'][$p->pattern] ?? null)
+                                    <span class="pat-badge pat-{{ $p->pattern ?? 'none' }}">{{ $patLabel ?? '— لا سجل' }}</span>
+                                    <span class="score-pill {{ $p->score >= 85 ? 'score-hi' : ($p->score >= 60 ? 'score-mid' : 'score-low') }}">درجة {{ $p->score }}</span>
+                                    @if($p->medianLag !== null)
+                                        <span class="text-muted" style="font-size:11px">وسيط التأخير {{ $p->medianLag }} يوم</span>
+                                    @endif
+                                </div>
+
                                 <div class="d-flex align-items-center gap-2 mb-2">
                                     <div class="progress flex-grow-1">
                                         <div class="progress-bar bg-success" style="width: {{ min(100, ($p->progress / max(1, $p->required)) * 100) }}%"></div>
@@ -211,6 +252,8 @@
                                 <tr>
                                     <th>الزبون</th>
                                     <th style="width:190px">التقدّم</th>
+                                    <th>النمط</th>
+                                    <th>الدرجة</th>
                                     <th>آخر شهر محتسب</th>
                                     <th>الشهر المتوقع</th>
                                     <th>الحالة</th>
@@ -232,6 +275,16 @@
                                             </div>
                                             <span class="fw-bold">{{ $p->progress }}/{{ $p->required }}</span>
                                         </div>
+                                    </td>
+                                    <td>
+                                        @php($patLabel = ['precise'=>'⚡ دقيق','week'=>'✅ خلال أسبوع','late_habit'=>'🕐 متأخر عادةً','slow'=>'🐢 مماطل','very_slow'=>'⏳ مماطل جداً'][$p->pattern] ?? null)
+                                        <span class="pat-badge pat-{{ $p->pattern ?? 'none' }}">{{ $patLabel ?? '—' }}</span>
+                                        @if($p->medianLag !== null)
+                                            <div class="text-muted" style="font-size:11px">وسيط {{ $p->medianLag }} يوم</div>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        <span class="score-pill {{ $p->score >= 85 ? 'score-hi' : ($p->score >= 60 ? 'score-mid' : 'score-low') }}">{{ $p->score }}</span>
                                     </td>
                                     <td>{{ $p->lastCreditedMonth ?? '—' }}</td>
                                     <td>{{ $p->nextEligibleMonth ?? '—' }}</td>
@@ -255,7 +308,7 @@
                                     </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="6" class="text-center text-muted py-4">لا يوجد زبائن مطابقون</td></tr>
+                                <tr><td colspan="8" class="text-center text-muted py-4">لا يوجد زبائن مطابقون</td></tr>
                             @endforelse
                             </tbody>
                         </table>

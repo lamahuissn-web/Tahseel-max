@@ -31,6 +31,13 @@ class BonusProgressService
     public const STATE_LATE    = 'late';
     public const STATE_UNPAID  = 'unpaid';
 
+    // Payment-habit bands, in days of delay after the invoice's own due date.
+    // Chosen from the live distribution (2026-10-22): per-customer medians are
+    // p25 = 2, p50 = 5, p75 = 14, p90 = 29 — five bands is the most the data supports.
+    public const PATTERN_WEEK       = 7;
+    public const PATTERN_LATE_HABIT = 15;
+    public const PATTERN_SLOW       = 30;
+
     public function forClient(int $clientId, bool $withMonths = true): BonusProgress
     {
         $map = $this->forClients([$clientId], $withMonths);
@@ -267,6 +274,7 @@ class BonusProgressService
         $catchupsUsed = 0;
         $lastCatchupMonth = null;
         $states = [];               // state per invoice index
+        $lags   = [];               // delay in days for every settled invoice
         $everLateAfterDue = false;
         $hardResetAt = -1;          // index of the boundary that wiped the run
         $carriedRun  = 0;
@@ -387,6 +395,12 @@ class BonusProgressService
             $credited[$i] = $isCredited;
             $states[$i] = $state;
 
+            if ($payTime !== null) {
+                $lags[] = (int) floor(
+                    ($payTime->copy()->startOfDay()->timestamp - $due->copy()->startOfDay()->timestamp) / 86400
+                );
+            }
+
             // Punctual means paid on or before the invoice's OWN due date.
             if ($payTime !== null && $payTime->gt($due->copy()->addDays($graceDays)->endOfDay())) {
                 $everLateAfterDue = true;
@@ -420,6 +434,30 @@ class BonusProgressService
                 $credits++;
             }
         }
+
+        // ---------------------------------------------------------------- habit
+        // The median delay describes HOW this customer pays; it is deliberately
+        // independent from where he stands today, so a late payer who is current
+        // is never confused with the person who pays on the due date.
+        $medianLag = null;
+        if ($lags !== []) {
+            sort($lags);
+            $mid = intdiv(count($lags), 2);
+            $medianLag = count($lags) % 2 === 1
+                ? $lags[$mid]
+                : (int) round(($lags[$mid - 1] + $lags[$mid]) / 2);
+        }
+
+        $pattern = null;
+        if ($medianLag !== null) {
+            $pattern = $medianLag <= 0 ? 'precise'
+                : ($medianLag <= self::PATTERN_WEEK ? 'week'
+                : ($medianLag <= self::PATTERN_LATE_HABIT ? 'late_habit'
+                : ($medianLag <= self::PATTERN_SLOW ? 'slow' : 'very_slow')));
+        }
+
+        $progress->medianLag = $medianLag;
+        $progress->pattern   = $pattern;
 
         // Admin-granted points are added to whatever the invoices produced.
         $credits = max(0, $credits + $manualPoints);
@@ -510,6 +548,25 @@ class BonusProgressService
             $progress->status = $hadBreak
                 ? ($cleanMonths >= $recoveryMonths ? 'compliant' : 'recovering')
                 : ($cleanMonths >= $recoveryMonths && ! $everLateAfterDue ? 'excellent' : 'compliant');
+
+        }
+
+        // Commitment score 0..100 — a smooth rank instead of another badge.
+        //   45% where he stands today, 35% how many months he actually settled,
+        //   20% how punctual he is. A two-day delay nudges the score, it never
+        //   drops a customer a whole tier.
+        $monthsConsidered = count(array_unique(array_map(fn ($d) => $d->format('Y-m'), $dues)));
+        $cleanShare  = $monthsConsidered > 0 ? min(1.0, $credits / $monthsConsidered) : 0.0;
+        if ($medianLag === null) {
+            // Nothing has ever been paid: there is no behaviour to score yet.
+            $progress->score = 0;
+        } else {
+            $punctuality = max(0.0, 1 - max(0, $medianLag) / 30);
+            $progress->score = (int) round(
+                45 * (1 - min(1, $openCount / 3))
+                + 35 * $cleanShare
+                + 20 * $punctuality
+            );
         }
 
         $remaining = max(0, $required - $progress->progress);

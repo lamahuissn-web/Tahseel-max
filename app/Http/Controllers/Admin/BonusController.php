@@ -100,14 +100,26 @@ class BonusController extends Controller
             'no_debt'      => 0,
             'with_debt'    => 0,
             'avg_progress' => 0,
+            'avg_score'    => 0,
+            'precise'      => 0,
+            'week'         => 0,
+            'late_habit'   => 0,
+            'slow'         => 0,
+            'very_slow'    => 0,
         ];
 
         $progressSum = 0;
+        $scoreSum    = 0;
 
         foreach ($rows as $row) {
             /** @var BonusProgress $p */
             $p = $row['progress'];
             $progressSum += $p->progress;
+            $scoreSum    += $p->score;
+
+            if ($p->pattern !== null && isset($summary[$p->pattern])) {
+                $summary[$p->pattern]++;
+            }
 
             if (isset($summary[$p->status])) {
                 $summary[$p->status]++;
@@ -128,6 +140,7 @@ class BonusController extends Controller
 
         $summary['with_debt']    = $summary['total'] - $summary['no_debt'];
         $summary['avg_progress'] = $summary['total'] > 0 ? (int) round($progressSum / $summary['total']) : 0;
+        $summary['avg_score']    = $summary['total'] > 0 ? (int) round($scoreSum / $summary['total']) : 0;
 
         // Customers outside the program (inactive, satellite, another type).
         $summary['excluded'] = DB::table('tbl_clients')
@@ -145,6 +158,8 @@ class BonusController extends Controller
                 'excellent', 'compliant', 'recovering', 'late', 'spiral', 'hard_reset'
                               => $p->status === $filter,
                 'catchup'     => $p->status === 'recovering',      // old link
+                'precise', 'week', 'late_habit', 'slow', 'very_slow'
+                              => $p->pattern === $filter,
                 'no_debt'     => in_array($p->status, ['compliant', 'excellent'], true),
                 'debt'        => ! in_array($p->status, ['compliant', 'excellent'], true),
                 'eligible'    => $p->eligible,
@@ -164,6 +179,12 @@ class BonusController extends Controller
                 break;
             case 'clean':
                 usort($rows, fn ($a, $b) => $b['progress']->cleanMonths <=> $a['progress']->cleanMonths);
+                break;
+            case 'score_asc':
+                usort($rows, fn ($a, $b) => $a['progress']->score <=> $b['progress']->score);
+                break;
+            case 'score_desc':
+                usort($rows, fn ($a, $b) => $b['progress']->score <=> $a['progress']->score);
                 break;
             default:
                 usort($rows, fn ($a, $b) => $b['progress']->progress <=> $a['progress']->progress);
@@ -208,12 +229,20 @@ class BonusController extends Controller
             'excluded'   => 'غير مشمول',
         ];
 
+        $patterns = [
+            'precise'    => 'دقيق',
+            'week'       => 'خلال أسبوع',
+            'late_habit' => 'متأخر عادةً',
+            'slow'       => 'مماطل',
+            'very_slow'  => 'مماطل جداً',
+        ];
+
         $fileName = 'bonus-' . ($filter !== '' ? $filter : 'all') . '-' . now()->format('Ymd-His') . '.csv';
 
         return response()->streamDownload(function () use ($rows, $labels) {
             $out = fopen('php://output', 'w');
             fwrite($out, "\xEF\xBB\xBF");   // BOM so Excel reads UTF-8
-            fputcsv($out, ['الاسم', 'الهاتف', 'الحالة', 'النقاط', 'أشهر نظيفة', 'آخر شهر محتسب', 'استدراك مستخدم في', 'عليه ديون']);
+            fputcsv($out, ['الاسم', 'الهاتف', 'الحالة', 'نمط الدفع', 'درجة الالتزام', 'وسيط التأخير (يوم)', 'النقاط', 'أشهر نظيفة', 'آخر شهر محتسب', 'استدراك مستخدم في', 'عليه ديون']);
 
             foreach ($rows as $row) {
                 /** @var BonusProgress $p */
@@ -222,6 +251,9 @@ class BonusController extends Controller
                     $row['client']->name,
                     $row['client']->phone,
                     $labels[$p->status] ?? $p->status,
+                    $patterns[$p->pattern] ?? '-',
+                    $p->score,
+                    $p->medianLag ?? '-',
                     $p->progress . '/' . $p->required,
                     $p->cleanMonths,
                     $p->lastCreditedMonth ?? '-',

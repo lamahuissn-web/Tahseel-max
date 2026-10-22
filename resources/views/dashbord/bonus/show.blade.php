@@ -128,6 +128,49 @@
                         </div>
                     </div>
 
+                    {{-- ===== نمط الدفع ودرجة الالتزام ===== --}}
+                    @php
+                        $patMap = [
+                            'precise'    => ['⚡ دقيق', 'يدفع قبل أو في تاريخ الاستحقاق', '#0c6a4a', '#d8f5ea'],
+                            'week'       => ['✅ خلال أسبوع', 'يدفع خلال الأيام السبعة الأولى', '#1c6b33', '#dff3e3'],
+                            'late_habit' => ['🕐 متأخر عادةً', 'يدفع عادةً بعد 8–15 يوماً', '#8a6200', '#fff2d1'],
+                            'slow'       => ['🐢 مماطل', 'يدفع عادةً بعد 16–30 يوماً', '#8a4b00', '#ffe6cc'],
+                            'very_slow'  => ['⏳ مماطل جداً', 'يدفع عادةً بعد أكثر من 30 يوماً', '#a31919', '#fde0e0'],
+                        ];
+                        $pat = $patMap[$progress->pattern] ?? ['— لا سجل كافٍ', 'لا توجد دفعات كافية بعد', '#7a838c', '#eef0f2'];
+                        $scoreColor = $progress->score >= 85 ? '#1c6b33' : ($progress->score >= 60 ? '#8a6200' : '#a31919');
+                    @endphp
+                    <div class="row g-2 mb-3">
+                        <div class="col-12 col-md-6">
+                            <div style="border:1px solid #e9ecef;border-radius:12px;padding:12px">
+                                <div class="text-muted mb-1" style="font-size:12px">نمط الدفع (كيف يدفع عادةً)</div>
+                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                    <span class="pat-badge" style="background:{{ $pat[3] }};color:{{ $pat[2] }};font-size:13px;padding:4px 10px">{{ $pat[0] }}</span>
+                                    @if($progress->medianLag !== null)
+                                        <span class="fw-bold">وسيط التأخير: {{ $progress->medianLag }} يوم</span>
+                                    @endif
+                                </div>
+                                <div class="text-muted mt-1" style="font-size:12px">{{ $pat[1] }}</div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <div style="border:1px solid #e9ecef;border-radius:12px;padding:12px">
+                                <div class="text-muted mb-1" style="font-size:12px">درجة الالتزام (0–100)</div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="fw-bold" style="font-size:26px;color:{{ $scoreColor }}" dir="ltr">{{ $progress->score }}</span>
+                                    <div class="flex-grow-1">
+                                        <div class="progress" style="height:10px">
+                                            <div class="progress-bar" style="width:{{ $progress->score }}%;background:{{ $scoreColor }}"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="text-muted mt-1" style="font-size:11.5px">
+                                    45% الموقف المالي · 35% الأشهر المحتسبة · 20% الانتظام
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <h4 class="mb-2" style="font-size:15px">سجل الأشهر</h4>
                     <div class="row g-2 mb-3">
                         @foreach($progress->months as $m)

@@ -28,6 +28,15 @@ class BonusProgress
     /** Did he ever pay after the invoice's own due date in this cycle? */
     public bool $everLateAfterDue = false;
 
+    /** Median delay, in days, between the due date and the payment (null = no payment yet). */
+    public ?int $medianLag = null;
+
+    /** Payment habit band: precise | week | late_habit | slow | very_slow. */
+    public ?string $pattern = null;
+
+    /** Commitment score 0..100 (45% position + 35% clean months + 20% punctuality). */
+    public int $score = 0;
+
     /** How many more overdue months until each escalation. */
     public int $monthsToSpiral = 0;
     public int $monthsToHardReset = 0;
