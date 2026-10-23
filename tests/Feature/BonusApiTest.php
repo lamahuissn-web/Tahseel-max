@@ -184,25 +184,35 @@ class BonusApiTest extends TestCase
         $this->assertSame(0, $data['balance']);
     }
 
-    public function test_the_section_reports_the_program_as_off_when_the_switch_is_off(): void
+    public function test_the_section_still_shows_the_numbers_when_the_program_is_off(): void
     {
-        $this->clientWithMonths(24);
+        $client = $this->clientWithMonths(24);
         AppConfig::query()->updateOrCreate(['key' => 'bonus_enabled'], ['value' => '0']);
         BonusSettings::flush();
         Cache::flush();
 
         $admin = $this->adminWithRole('Super-Admin');
 
+        // the owner wants the section visible even with the switch off:
+        // `enabled` is informational, the data must still be there
         $this->withToken($this->tokenFor($admin))
             ->getJson('/api/v1/bonus/summary')
             ->assertOk()
-            ->assertJsonPath('data.enabled', false);
+            ->assertJsonPath('data.enabled', false)
+            ->assertJsonPath('data.total', 1);
 
         $this->withToken($this->tokenFor($admin))
             ->getJson('/api/v1/bonus/clients')
             ->assertOk()
             ->assertJsonPath('data.enabled', false)
-            ->assertJsonPath('data.rows', []);
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonPath('data.rows.0.id', $client);
+
+        $this->withToken($this->tokenFor($admin))
+            ->getJson('/api/v1/bonus/client/'.$client)
+            ->assertOk()
+            ->assertJsonPath('data.enabled', false)
+            ->assertJsonPath('data.progress', 24);
     }
 
     public function test_the_list_never_issues_or_changes_anything(): void

@@ -42,10 +42,8 @@ class BonusController extends Controller
 
     public function summary()
     {
-        if (! BonusSettings::enabled()) {
-            return $this->wrap(['enabled' => false]);
-        }
-
+        // The owner wants the section visible even while the program is switched off:
+        // the numbers are informational, nothing is issued from the phone either way.
         $counts = Cache::remember('bonus_api_summary', now()->addMinutes(10), function () {
             $map = $this->allProgress();
             $out = array_fill_keys(array_keys(self::STATUS_LABELS), 0);
@@ -73,7 +71,7 @@ class BonusController extends Controller
             return $out;
         });
 
-        return $this->wrap(['enabled' => true] + $counts);
+        return $this->wrap(['enabled' => BonusSettings::enabled()] + $counts);
     }
 
     public function clients(Request $request)
@@ -88,10 +86,6 @@ class BonusController extends Controller
 
         if ($validator->fails()) {
             return $this->fail($validator->errors()->first(), 422);
-        }
-
-        if (! BonusSettings::enabled()) {
-            return $this->wrap(['enabled' => false, 'rows' => [], 'meta' => ['total' => 0]]);
         }
 
         $search   = trim((string) $request->input('search', ''));
@@ -159,7 +153,7 @@ class BonusController extends Controller
         }
 
         return $this->wrap([
-            'enabled' => true,
+            'enabled' => BonusSettings::enabled(),
             'rows'    => $data,
             'meta'    => [
                 'total'     => $total,
@@ -172,10 +166,6 @@ class BonusController extends Controller
 
     public function client(int $id)
     {
-        if (! BonusSettings::enabled()) {
-            return $this->wrap(['enabled' => false]);
-        }
-
         $client = DB::table('tbl_clients')->where('id', $id)->whereNull('deleted_at')->first();
 
         if (! $client) {
@@ -208,7 +198,7 @@ class BonusController extends Controller
             ->sum('remaining_amount');
 
         return $this->wrap([
-            'enabled'      => true,
+            'enabled'      => BonusSettings::enabled(),
             'client'       => [
                 'id'    => (int) $client->id,
                 'name'  => $client->name,
