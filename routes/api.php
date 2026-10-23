@@ -37,6 +37,13 @@ Route::group(['middleware' => 'api', 'prefix' => 'v1'], function ($router) {
 
 
         Route::get('/clients', [ClientsController::class, 'index']);
+
+        // Feature 021 Phase 4 — bonus section in the mobile app (read-only, admin only).
+        Route::group(['middleware' => ['bonus.api'], 'prefix' => 'bonus'], function () {
+            Route::get('summary', [\App\Http\Controllers\Api\BonusController::class, 'summary']);
+            Route::get('clients', [\App\Http\Controllers\Api\BonusController::class, 'clients']);
+            Route::get('client/{id}', [\App\Http\Controllers\Api\BonusController::class, 'client'])->whereNumber('id');
+        });
         // Feature 009: batch SAS status — registered BEFORE parameterized
         // client routes so the literal segment is never captured by {id}.
         Route::post('/clients/sas-status', [ClientSasStatusController::class, 'check']);

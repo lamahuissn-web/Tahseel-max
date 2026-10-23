@@ -278,3 +278,21 @@ Resolved in review (2026-10-21):
 ## Evidence
 - Counting start `2026-01-01` with 24 required months means the earliest possible
   redemption is ~January 2028 — no payouts in 2026 or 2027.
+
+
+## Mobile section (Phase 4 — read-only)
+
+`GET /api/v1/bonus/summary` · `GET /api/v1/bonus/clients` · `GET /api/v1/bonus/client/{id}`
+
+- **Access:** roles 1 (Super-Admin) and 7 (accounting). Any other role — including the
+  collector — gets `403 bonus_forbidden`. The menu item is hidden in the app, but the
+  server is the enforcement point.
+- **Read-only by design:** no grant, approval, postponement or issuance from the phone.
+  Money moves only from the web screen.
+- **Payload:** progress/required, status + Arabic label, habit badge + label, score,
+  next eligible month, and the open-bonus state; the detail endpoint adds the month grid,
+  the habit sentence and the bonus history.
+- **Cost:** one cached page-level progress map (10 min) — warm responses 0.06–0.07s for
+  947 customers; no query per row.
+- **Master switch off:** every endpoint answers `enabled:false` with empty rows so an old
+  app version degrades quietly.

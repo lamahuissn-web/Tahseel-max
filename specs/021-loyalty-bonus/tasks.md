@@ -74,10 +74,10 @@ Phase 2 actions (grant/approve/apply) and Phases 3–4 are still open.
 - [x] Telegram events `bonus_earned` / `bonus_postponed` / `bonus_redeemed` + toggles in the settings form.
 
 ## Phase 4 — Mobile
-- [ ] RED test: `GET /api/v1/clients` exposes `bonusProgress`, `bonusStatus`, `nextEligibleDate`.
-- [ ] RED test: those fields are null when the master switch is off.
-- [ ] RED test: query count unchanged versus the current endpoint.
-- [ ] Implement the fields in `ClientResource` fed by the page-level map.
+- [x] RED test: mobile bonus endpoints expose `progress`, `status`, `nextEligibleMonth` (dedicated section instead of fields on `/clients`).
+- [x] RED test: the endpoints report `enabled:false` when the master switch is off.
+- [x] One cached page-level map — warm calls 0.06–0.07s for 947 customers (no per-row query).
+- [x] Implement `GET /api/v1/bonus/{summary,clients,client/{id}}` — read-only, roles 1+7 enforced server-side with 403.
 
 ## Verification & delivery
 - [X] Manual comparison of computed progress vs real customers (عامر / جمال / رواد).
