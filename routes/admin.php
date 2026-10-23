@@ -323,6 +323,7 @@ Route::group(
                 Route::post('/client/{clientId}/reset', [\App\Http\Controllers\Admin\BonusController::class, 'reset'])->name('reset');
                 Route::post('/entry/{bonusId}/approve', [\App\Http\Controllers\Admin\BonusController::class, 'approve'])->name('approve');
                 Route::post('/entry/{bonusId}/cancel', [\App\Http\Controllers\Admin\BonusController::class, 'cancel'])->name('cancel');
+                Route::post('/entry/{bonusId}/delete', [\App\Http\Controllers\Admin\BonusController::class, 'destroy'])->name('delete');
                 Route::post('/entry/{bonusId}/apply', [\App\Http\Controllers\Admin\BonusController::class, 'apply'])->name('apply');
             });
         });

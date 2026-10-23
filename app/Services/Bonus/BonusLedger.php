@@ -337,6 +337,34 @@ class BonusLedger
         return $last ? ((int) $last + 1) : 1;
     }
 
+    /**
+     * Delete a pending bonus that was granted by mistake.
+     * Only pending entries can be deleted: they never produced a balance or an invoice.
+     */
+    public function deletePending(int $bonusId, ?int $adminId, ?string $reason = null): void
+    {
+        DB::transaction(function () use ($bonusId, $adminId, $reason) {
+            $bonus = ClientBonus::query()->lockForUpdate()->findOrFail($bonusId);
+
+            if ($bonus->status !== ClientBonus::STATUS_PENDING) {
+                throw new RuntimeException('يمكن حذف البونص المعلّق فقط — استخدم «إلغاء» للبونص المعتمد.');
+            }
+
+            // keep the audit trail before the row disappears
+            $this->log('bonus_deleted', sprintf(
+                'حذف بونص معلّق #%d - الزبون #%d%s (بواسطة #%s)',
+                $bonus->id, $bonus->client_id, $reason ? ' | '.$reason : '', $adminId ?? '-'
+            ), $bonus);
+
+            $bonus->delete();
+
+            sendTelegramNotification(
+                sprintf('🗑 حذف بونص معلّق - الزبون #%d%s', $bonus->client_id, $reason ? ' | '.$reason : ''),
+                'bonus_deleted'
+            );
+        });
+    }
+
     protected function log(string $action, string $description, ?ClientBonus $bonus = null): void
     {
         try {

@@ -259,7 +259,7 @@
                                     <div class="text-muted">⏳ التقدّم {{ $progress->progress }}/{{ $progress->required }} — يتبقّى <strong>{{ $remainingToEarn }}</strong> شهراً</div>
                                 @endif
                                 @if($progress->hasOpenBonus)
-                                    <div class="text-warning">🎁 يوجد بونص مفتوح — لا يمكن منح آخر قبل إغلاقه</div>
+                                    <div class="text-warning">🎁 يوجد بونص مفتوح — لا يمكن منح آخر قبل إغلاقه (يمكن حذفه إن كان بالخطأ)</div>
                                 @else
                                     <div class="text-muted">🎁 لا يوجد بونص مفتوح</div>
                                 @endif
@@ -329,6 +329,25 @@
                                           data-confirm="نعم، اعتمد">
                                         @csrf
                                         <button class="btn btn-primary w-100 btn-sm">اعتماد البونص #{{ $openBonus->id }}</button>
+                                    </form>
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <div class="border rounded p-3 h-100 d-flex flex-column" style="border-color:#f5c2c7!important">
+                                    <div class="fw-bold mb-1" style="font-size:13.5px">🗑 حذف البونص المعلّق</div>
+                                    <div class="text-muted mb-2" style="font-size:11.5px">
+                                        للضغط الخاطئ: يُحذف السجل نهائياً ولا يترك أثراً على الفواتير أو الرصيد.
+                                    </div>
+                                    <form method="POST" action="{{ route('admin.bonus.delete', $openBonus->id) }}" class="mt-auto js-confirm"
+                                          data-title="حذف البونص #{{ $openBonus->id }} نهائياً؟"
+                                          data-text="سيُحذف السجل من القائمة. لا يمكن التراجع."
+                                          data-confirm="نعم، احذف"
+                                          data-typed="حذف"
+                                          data-danger="1">
+                                        @csrf
+                                        <input type="text" name="reason" class="form-control form-control-sm mb-2" placeholder="سبب الحذف (اختياري)" maxlength="255">
+                                        <button class="btn btn-light-danger border border-danger w-100 btn-sm fw-bold">حذف نهائي</button>
                                     </form>
                                 </div>
                             </div>

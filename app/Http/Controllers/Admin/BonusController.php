@@ -355,6 +355,18 @@ class BonusController extends Controller
         }, $this->clientOfBonus($bonusId));
     }
 
+    public function destroy(Request $request, int $bonusId)
+    {
+        $reason = $request->input('reason');
+        $clientId = $this->clientOfBonus($bonusId);
+
+        return $this->run(function () use ($bonusId, $reason) {
+            app(BonusLedger::class)->deletePending($bonusId, auth('admin')->id(), $reason);
+
+            return 'تم حذف البونص المعلّق';
+        }, $clientId);
+    }
+
     public function cancel(Request $request, int $bonusId)
     {
         $reason = $request->input('reason');

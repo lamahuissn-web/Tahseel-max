@@ -367,6 +367,56 @@ class BonusActionsTest extends TestCase
         $response->assertSee('Swal.fire', false);
     }
 
+    public function test_a_pending_bonus_granted_by_mistake_can_be_deleted(): void
+    {
+        $admin  = $this->bonusAdmin();
+        $client = $this->client();
+
+        $bonus = app(BonusLedger::class)->grant($client, $admin->id, 'ضغط خاطئ');
+
+        $this->actingAs($admin, 'admin')
+            ->post(route('admin.bonus.delete', $bonus->id), ['reason' => 'ضغطت الزر بالخطأ'])
+            ->assertRedirect(route('admin.bonus.show', $client));
+
+        $this->assertSame(0, ClientBonus::where('client_id', $client)->count());
+        $this->assertSame(0, ClientBonus::where('client_id', $client)->open()->count());
+    }
+
+    public function test_an_approved_bonus_cannot_be_deleted(): void
+    {
+        $admin  = $this->bonusAdmin();
+        $client = $this->client();
+
+        $bonus = app(BonusLedger::class)->grant($client, $admin->id, 'استحقاق');
+        app(BonusLedger::class)->approve($bonus->id, $admin->id);
+
+        $this->from(route('admin.bonus.show', $client))
+            ->actingAs($admin, 'admin')
+            ->post(route('admin.bonus.delete', $bonus->id))
+            ->assertRedirect(route('admin.bonus.show', $client));
+
+        // the row survives, and the ledger refuses with a clear Arabic message
+        $this->assertSame(1, ClientBonus::where('client_id', $client)->count());
+
+        $this->expectExceptionMessage('يمكن حذف البونص المعلّق فقط');
+        app(BonusLedger::class)->deletePending($bonus->id, $admin->id);
+    }
+
+    public function test_deleting_a_pending_bonus_does_not_touch_invoices_or_balance(): void
+    {
+        $admin  = $this->bonusAdmin();
+        $client = $this->client();
+        $this->invoice($client, '2026-04-05');
+
+        $before = DB::table('tbl_invoices')->where('client_id', $client)->count();
+        $bonus  = app(BonusLedger::class)->grant($client, $admin->id, 'ضغط خاطئ');
+
+        $this->actingAs($admin, 'admin')->post(route('admin.bonus.delete', $bonus->id));
+
+        $this->assertSame($before, DB::table('tbl_invoices')->where('client_id', $client)->count());
+        $this->assertSame(0, DB::table('tbl_revenues')->where('client_id', $client)->count());
+    }
+
     /** An admin that passes the bonus-access middleware (Super-Admin). */
     private function bonusAdmin(): Admin
     {
