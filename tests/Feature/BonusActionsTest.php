@@ -313,6 +313,79 @@ class BonusActionsTest extends TestCase
         return app(BonusProgressService::class);
     }
 
+    // ------------------------------------------------------------ admin panel UX
+
+    public function test_the_panel_states_the_bonus_position_in_arabic(): void
+    {
+        $admin  = $this->bonusAdmin();
+        $client = $this->client();
+        $this->invoice($client, '2026-03-05');
+
+        $response = $this->actingAs($admin, 'admin')
+            ->get(route('admin.bonus.show', $client))
+            ->assertOk();
+
+        $response->assertSee('حالة البونص الآن', false);
+        $response->assertSee('التقدّم', false);
+        $response->assertSee('لا يوجد بونص مفتوح', false);
+        $response->assertSee('إجراءات الإدارة', false);
+        $response->assertSee('تعديل النقاط يدوياً', false);
+        // the old stale sentence must never come back
+        $response->assertDontSee('سيُضاف في المرحلة القادمة', false);
+    }
+
+    public function test_issuing_the_invoice_is_disabled_while_the_customer_owes_money(): void
+    {
+        $admin  = $this->bonusAdmin();
+        $client = $this->client();
+
+        // approved bonus + one open invoice
+        $bonus = app(BonusLedger::class)->grant($client, $admin->id, 'test', true);
+        DB::table('tbl_invoices')->insert([
+            'client_id' => $client, 'subscription_id' => 1, 'amount' => 25, 'remaining_amount' => 25,
+            'invoice_number' => 'INV-'.uniqid(),
+            'paid_amount' => 0, 'enshaa_date' => '2026-09-05', 'due_date' => '2026-09-05',
+            'status' => 'unpaid', 'invoice_type' => 'subscription', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $html = $this->actingAs($admin, 'admin')->get(route('admin.bonus.show', $client))->getContent();
+
+        $this->assertStringContainsString('يجب تصفيته قبل إصدار الفاتورة', $html);
+        $this->assertMatchesRegularExpression('/disabled/', $html, 'The apply button must be disabled with a balance.');
+    }
+
+    public function test_dangerous_actions_ask_for_a_typed_confirmation(): void
+    {
+        $admin  = $this->bonusAdmin();
+        $client = $this->client();
+        $this->invoice($client, '2026-03-05');
+
+        $response = $this->actingAs($admin, 'admin')->get(route('admin.bonus.show', $client));
+
+        $response->assertSee('data-typed="تصفير"', false);
+        $response->assertSee('js-confirm', false);
+        $response->assertSee('Swal.fire', false);
+    }
+
+    /** An admin that passes the bonus-access middleware (Super-Admin). */
+    private function bonusAdmin(): Admin
+    {
+        DB::table('roles')->updateOrInsert(
+            ['id' => 1],
+            ['name' => 'Super-Admin', 'guard_name' => 'admin', 'created_at' => now(), 'updated_at' => now()]
+        );
+
+        $admin = Admin::create([
+            'name' => 'أدمن بونص', 'email' => 'ba'.uniqid().'@x.test', 'password' => bcrypt('x'),
+        ]);
+
+        DB::table('model_has_roles')->insert([
+            'role_id' => 1, 'model_type' => Admin::class, 'model_id' => $admin->id,
+        ]);
+
+        return $admin->fresh();
+    }
+
     private function seedSettings(): void
     {
         $defaults = [

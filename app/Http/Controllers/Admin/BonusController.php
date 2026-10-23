@@ -276,16 +276,36 @@ class BonusController extends Controller
 
         $progress = $this->progress->forClient($clientId);
 
-        $bonuses = DB::table('tbl_client_bonuses')
+        $bonuses = DB::table('tbl_client_bonuses as b')
+            ->leftJoin('admins as a', 'a.id', '=', 'b.approved_by')
+            ->where('b.client_id', $clientId)
+            ->orderByDesc('b.id')
+            ->get(['b.*', 'a.name as approved_by_name']);
+
+        // What the admin needs to know before pressing anything.
+        $balance = (float) DB::table('tbl_invoices')
             ->where('client_id', $clientId)
-            ->orderByDesc('id')
-            ->get();
+            ->whereNull('deleted_at')
+            ->sum('remaining_amount');
+
+        $adjustments = DB::table('tbl_client_bonus_adjustments as adj')
+            ->leftJoin('admins as a', 'a.id', '=', 'adj.created_by')
+            ->where('adj.client_id', $clientId)
+            ->orderByDesc('adj.id')
+            ->limit(5)
+            ->get(['adj.*', 'a.name as created_by_name']);
+
+        $openBonus = $bonuses->first(fn ($b) => in_array($b->status, ['pending', 'approved'], true));
 
         return view('dashbord.bonus.show', [
-            'client'   => $client,
-            'progress' => $progress,
-            'bonuses'  => $bonuses,
-            'eligible' => $progress->progress >= $progress->required && ! $progress->hasOpenBonus,
+            'client'      => $client,
+            'progress'    => $progress,
+            'bonuses'     => $bonuses,
+            'adjustments' => $adjustments,
+            'balance'     => $balance,
+            'openBonus'   => $openBonus,
+            'eligible'    => $progress->progress >= $progress->required && ! $progress->hasOpenBonus,
+            'remainingToEarn' => max(0, $progress->required - $progress->progress),
         ]);
     }
 
