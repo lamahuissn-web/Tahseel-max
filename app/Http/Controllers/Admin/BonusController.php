@@ -97,6 +97,7 @@ class BonusController extends Controller
             'eligible'     => 0,
             'near'         => 0,
             'open'         => 0,
+            'postponed'    => 0,
             'no_debt'      => 0,
             'with_debt'    => 0,
             'avg_progress' => 0,
@@ -138,6 +139,10 @@ class BonusController extends Controller
             }
         }
 
+        // Bonus rows waiting for a decision (postponed ones have their own counter).
+        $summary['open']      = DB::table('tbl_client_bonuses')->whereIn('status', ['pending', 'approved'])->count();
+        $summary['postponed'] = DB::table('tbl_client_bonuses')->where('status', 'postponed')->count();
+
         $summary['with_debt']    = $summary['total'] - $summary['no_debt'];
         $summary['avg_progress'] = $summary['total'] > 0 ? (int) round($progressSum / $summary['total']) : 0;
         $summary['avg_score']    = $summary['total'] > 0 ? (int) round($scoreSum / $summary['total']) : 0;
@@ -150,7 +155,19 @@ class BonusController extends Controller
             })
             ->count();
 
-        $rows = array_values(array_filter($rows, function ($row) use ($filter) {
+        $pendingClients = DB::table('tbl_client_bonuses')
+            ->whereIn('status', ['pending', 'approved'])
+            ->pluck('client_id')
+            ->flip()
+            ->all();
+
+        $postponedClients = DB::table('tbl_client_bonuses')
+            ->where('status', 'postponed')
+            ->pluck('client_id')
+            ->flip()
+            ->all();
+
+        $rows = array_values(array_filter($rows, function ($row) use ($filter, $postponedClients, $pendingClients) {
             /** @var BonusProgress $p */
             $p = $row['progress'];
 
@@ -165,6 +182,8 @@ class BonusController extends Controller
                 'eligible'    => $p->eligible,
                 'near'        => $p->progress >= max(1, (int) floor($p->required * 0.75)) && ! $p->eligible,
                 'open_bonus'  => $p->hasOpenBonus,
+                'postponed'   => isset($postponedClients[(int) $row['client']->id]),
+                'pending_bonus' => isset($pendingClients[(int) $row['client']->id]),
                 default       => true,
             };
         }));
@@ -295,7 +314,7 @@ class BonusController extends Controller
             ->limit(5)
             ->get(['adj.*', 'a.name as created_by_name']);
 
-        $openBonus = $bonuses->first(fn ($b) => in_array($b->status, ['pending', 'approved'], true));
+        $openBonus = $bonuses->first(fn ($b) => in_array($b->status, ['pending', 'approved', 'postponed'], true));
 
         return view('dashbord.bonus.show', [
             'client'      => $client,
@@ -353,6 +372,29 @@ class BonusController extends Controller
 
             return 'تم اعتماد البونص';
         }, $this->clientOfBonus($bonusId));
+    }
+
+    public function postpone(Request $request, int $bonusId)
+    {
+        $data = $request->validate([
+            'reason'       => 'required|string|max:255',
+            'target_month' => 'nullable|regex:/^\d{4}-(0[1-9]|1[0-2])$/',
+        ], [
+            'reason.required' => 'سبب التأجيل مطلوب.',
+        ]);
+
+        $clientId = $this->clientOfBonus($bonusId);
+
+        return $this->run(function () use ($bonusId, $data) {
+            app(BonusLedger::class)->postpone(
+                $bonusId,
+                auth('admin')->id(),
+                $data['reason'],
+                $data['target_month'] ?? null
+            );
+
+            return 'تم تأجيل الشهر المجاني';
+        }, $clientId);
     }
 
     public function destroy(Request $request, int $bonusId)
@@ -473,7 +515,6 @@ class BonusController extends Controller
             'bonus_spiral_after_months'     => 'required|integer|min:1|max:12',
             'bonus_count_start_date'        => 'required|date',
             'bonus_require_zero_balance'    => 'nullable|in:0,1',
-            'bonus_auto_apply_on_approve'   => 'nullable|in:0,1',
             'bonus_invoice_notes'           => 'nullable|string|max:255',
             'bonus_client_types'            => 'required|in:internet,both',
         ]);
@@ -485,7 +526,6 @@ class BonusController extends Controller
 
         $validated['bonus_enabled']               = $request->input('bonus_enabled', '0');
         $validated['bonus_require_zero_balance']  = $request->input('bonus_require_zero_balance', '0');
-        $validated['bonus_auto_apply_on_approve'] = $request->input('bonus_auto_apply_on_approve', '0');
 
         foreach ($validated as $key => $value) {
             BonusSettings::set($key, $value);

@@ -70,8 +70,8 @@ Phase 2 actions (grant/approve/apply) and Phases 3–4 are still open.
 - [ ] RED test: `bonus:sync` respects the master switch.
 - [ ] Implement `bonus:sync` command (chunked, page-level maps).
 - [ ] Register the command in the scheduler (daily, off-peak).
-- [ ] Auto-apply hook on monthly invoice generation for approved bonuses.
-- [ ] Telegram events `bonus_earned` / `bonus_redeemed` + toggles in the settings form.
+- [x] ~~Auto-apply hook~~ **cancelled by the owner (2026-10-23): issuance is admin-only, never automatic.**
+- [ ] Telegram events `bonus_earned` / `bonus_postponed` / `bonus_redeemed` + toggles in the settings form.
 
 ## Phase 4 — Mobile
 - [ ] RED test: `GET /api/v1/clients` exposes `bonusProgress`, `bonusStatus`, `nextEligibleDate`.

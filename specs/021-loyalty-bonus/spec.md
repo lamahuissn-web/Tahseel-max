@@ -143,7 +143,6 @@ A two-day delay nudges the score, it never drops a whole tier.
 | `bonus_client_types` | `internet` | client types included; satellite excluded by default |
 | `bonus_count_start_date` | `2026-01-01` | nothing before this date counts |
 | `bonus_require_zero_balance` | `1` | block redemption while the customer owes |
-| `bonus_auto_apply_on_approve` | `1` | apply the 0-invoice on the next cycle |
 | `bonus_invoice_notes` | `شهر مجاني - بونص` | text stored on the 0-invoice |
 
 ## Calculation
@@ -187,25 +186,38 @@ payments**, sorted by how long the oldest has been open.
 ### 3. صفحة العميل
 - 24-month grid: ✓ on-time · ✗ late · — unpaid
 - Current progress and next eligible date
-- Actions: `اعتماد` · `إلغاء` · `إضافة بونص يدوياً` · `إنشاء فاتورة 0 الآن` · `إعادة تعيين الدورة`
+- Actions: `منح يدوي` · `اعتماد` · `تأجيل` · `إصدار الفاتورة` · `إلغاء` · `حذف المعلّق` · `إعادة تعيين الدورة`
 - Every action writes an audit log entry and sends a Telegram alert
   (new event `bonus_granted` / `bonus_redeemed`).
 
 ### 4. سجل البونص
-Full history: who created/approved/redeemed, when, the counted cycle, the invoice id.
+Full history: who created/approved/postponed/redeemed, when, the counted cycle, the invoice id.
+Bonus row statuses: `pending` (بانتظار القرار) · `approved` (معتمد، لم يُصدر) ·
+`postponed` (مؤجّل) · `redeemed` (مُصدر) · `cancelled` (ملغى).
 
-## Redemption flow (Option A)
-1. Daily command `bonus:sync` scans active clients, computes progress, and creates a
-   `pending` bonus row when progress reaches the threshold. Idempotent: one
-   non-redeemed bonus per customer at a time.
-2. Admin reviews and clicks **اعتماد** → `approved`, `approved_by`/`approved_at` set.
-3. On the customer's next monthly invoice generation, if an `approved` bonus exists
-   **and** (`bonus_require_zero_balance` is off or the customer owes nothing):
-   - create that month's invoice with `amount = 0`, already settled (remaining 0)
-   - set `redeemed_at`, `redeemed_invoice_id`, status `redeemed`
-   - streak resets automatically because `since` moves forward
-4. If the customer still owes, the bonus stays `approved` and waits — no 0-invoice is
-   created until the account is clear.
+## Redemption flow (administration decides — nothing is automatic)
+1. Daily command `bonus:sync` (Phase 3) scans active clients, computes progress, and
+   creates a `pending` row when progress reaches the threshold. Idempotent: **one open
+   bonus per customer** at a time, whatever its open status.
+2. Administration decides, per customer:
+   - **اعتماد** → `approved`: the right is acknowledged, still **no invoice**.
+   - **تأجيل** → `postponed`: the right is kept, the decision waits for the company's
+     situation. Requires a reason; an optional target month (`YYYY-MM`) is recorded,
+     plus `postponed_at` / `postponed_by`.
+   - **إصدار الفاتورة** → only an explicit admin click creates the 0-invoice
+     (`redeemed`, `redeemed_invoice_id`, `redeemed_at`), due on the next cycle's
+     normal day-of-month. Allowed for `approved` **and** `postponed` bonuses.
+   - **إلغاء** → `cancelled` (no invoice ever existed).
+   - **حذف** → hard delete, `pending` only (a mistaken click).
+3. The system never issues on its own: the auto-apply switch was removed
+   (`bonus_auto_apply_on_approve` deleted from `app_config`), and monthly invoice
+   generation (`app:add-new-invoices`) is untouched — a free month is only created by
+   a human decision.
+4. `bonus_require_zero_balance` still applies at issue time: with an unpaid balance the
+   issue button is disabled with the reason shown, and the bonus stays open.
+5. A postponed bonus never expires: the right is carried until administration issues or
+   cancels it. Postponed rows are counted on the dashboard (⏸ مؤجّل) so they are not
+   forgotten.
 
 ## Edge cases
 | case | behaviour |

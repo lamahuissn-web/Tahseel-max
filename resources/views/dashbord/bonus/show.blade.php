@@ -243,7 +243,7 @@
                     <h4 class="mb-3" style="font-size:15px">إجراءات الإدارة</h4>
 
                     @php
-                        $statusLabels = ['pending' => 'معلّق', 'approved' => 'معتمد', 'redeemed' => 'مُستبدل', 'cancelled' => 'ملغى'];
+                        $statusLabels = ['pending' => 'بانتظار القرار', 'approved' => 'معتمد (لم يُصدر)', 'postponed' => 'مؤجّل', 'redeemed' => 'مُصدر', 'cancelled' => 'ملغى'];
                         $sourceLabels = ['auto' => 'تلقائي (24 شهر)', 'manual' => 'يدوي'];
                         $canApply = $openBonus && $openBonus->status === 'approved' && $balance <= 0;
                     @endphp
@@ -259,7 +259,12 @@
                                     <div class="text-muted">⏳ التقدّم {{ $progress->progress }}/{{ $progress->required }} — يتبقّى <strong>{{ $remainingToEarn }}</strong> شهراً</div>
                                 @endif
                                 @if($progress->hasOpenBonus)
-                                    <div class="text-warning">🎁 يوجد بونص مفتوح — لا يمكن منح آخر قبل إغلاقه (يمكن حذفه إن كان بالخطأ)</div>
+                                    <div class="text-warning">
+                                        🎁 يوجد بونص مفتوح — لا يمكن منح آخر قبل إغلاقه
+                                        @if($openBonus && $openBonus->status === 'pending')
+                                            (يمكن حذفه إن كان بالخطأ)
+                                        @endif
+                                    </div>
                                 @else
                                     <div class="text-muted">🎁 لا يوجد بونص مفتوح</div>
                                 @endif
@@ -274,6 +279,15 @@
                                     <div class="text-muted">
                                         📄 بونص #{{ $openBonus->id }} — {{ $statusLabels[$openBonus->status] ?? $openBonus->status }}
                                     </div>
+                                    @if($openBonus->status === 'postponed')
+                                        <div class="text-warning">
+                                            ⏸ مؤجّل: {{ $openBonus->postpone_reason }}
+                                            @if($openBonus->postpone_target_month)
+                                                — الشهر المستهدف
+                                                <span style="white-space:nowrap">{{ \Carbon\Carbon::createFromFormat('Y-m', $openBonus->postpone_target_month)->translatedFormat('F Y') }}</span>
+                                            @endif
+                                        </div>
+                                    @endif
                                 @endif
                             </div>
                         </div>
@@ -301,17 +315,6 @@
                                         <input type="hidden" name="notes" value="منح يدوي من شاشة البونص">
                                         <button class="btn btn-light-success border border-success w-100 btn-sm fw-bold">تسجيل البونص (معلّق)</button>
                                     </form>
-                                    @if($eligible)
-                                        <form method="POST" action="{{ route('admin.bonus.grant', $client->id) }}" class="mt-2 js-confirm"
-                                              data-title="منح واعتماد فوري؟"
-                                              data-text="البونص سيُعتمد مباشرة، ويُصدر الشهر المجاني تلقائياً إذا كان الرصيد صفراً."
-                                              data-confirm="نعم، اعتمد فوراً">
-                                            @csrf
-                                            <input type="hidden" name="approve" value="1">
-                                            <input type="hidden" name="notes" value="استحقاق 24 شهر — اعتماد فوري">
-                                            <button class="btn btn-success w-100 btn-sm">منح + اعتماد فوري</button>
-                                        </form>
-                                    @endif
                                 </div>
                             </div>
                         @endif
@@ -325,7 +328,7 @@
                                     </div>
                                     <form method="POST" action="{{ route('admin.bonus.approve', $openBonus->id) }}" class="mt-auto js-confirm"
                                           data-title="اعتماد البونص؟"
-                                          data-text="سيصبح البونص معتمداً، ويُصدر الشهر المجاني تلقائياً إذا كان الرصيد صفراً."
+                                          data-text="سيُسجَّل اعتماد الإدارة. لا تُنشأ أي فاتورة — الإصدار زر منفصل."
                                           data-confirm="نعم، اعتمد">
                                         @csrf
                                         <button class="btn btn-primary w-100 btn-sm">اعتماد البونص #{{ $openBonus->id }}</button>
@@ -352,7 +355,30 @@
                             </div>
                         @endif
 
-                        @if($openBonus && $openBonus->status === 'approved')
+                        @if($openBonus && in_array($openBonus->status, ['pending', 'approved', 'postponed'], true))
+                            <div class="col-12 col-md-6">
+                                <div class="border rounded p-3 h-100 d-flex flex-column">
+                                    <div class="fw-bold mb-1" style="font-size:13.5px">⏸ تأجيل الشهر المجاني</div>
+                                    <div class="text-muted mb-2" style="font-size:11.5px">
+                                        يبقى الحق محفوظاً ولا تُنشأ أي فاتورة. استخدمه عندما يسمح وضع الشركة.
+                                    </div>
+                                    <form method="POST" action="{{ route('admin.bonus.postpone', $openBonus->id) }}" class="mt-auto js-confirm"
+                                          data-title="تأجيل الشهر المجاني؟"
+                                          data-text="سيبقى الحق محفوظاً لهذا الزبون، ولن تُنشأ أي فاتورة الآن."
+                                          data-confirm="نعم، أجّل">
+                                        @csrf
+                                        <input type="text" name="reason" class="form-control form-control-sm mb-2"
+                                               placeholder="سبب التأجيل (مطلوب)" maxlength="255" required
+                                               value="{{ $openBonus->status === 'postponed' ? $openBonus->postpone_reason : '' }}">
+                                        <input type="month" name="target_month" class="form-control form-control-sm mb-2"
+                                               value="{{ $openBonus->postpone_target_month }}" title="الشهر المستهدف (اختياري)">
+                                        <button class="btn btn-light-warning border border-warning w-100 btn-sm fw-bold">{{ $openBonus->status === 'postponed' ? 'تحديث التأجيل' : 'تأجيل' }}</button>
+                                    </form>
+                                </div>
+                            </div>
+                        @endif
+
+                        @if($openBonus && in_array($openBonus->status, ['approved', 'postponed'], true))
                             <div class="col-12 col-md-6">
                                 <div class="border rounded p-3 h-100 d-flex flex-column">
                                     <div class="fw-bold mb-1" style="font-size:13.5px">🧾 إصدار فاتورة الشهر المجاني</div>

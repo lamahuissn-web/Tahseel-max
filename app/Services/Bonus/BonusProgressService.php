@@ -136,7 +136,7 @@ class BonusProgressService
             }
             $sinceByClient[(int) $b->client_id] = $since;
 
-            if (in_array($b->status, [ClientBonus::STATUS_PENDING, ClientBonus::STATUS_APPROVED], true)) {
+            if (in_array($b->status, [ClientBonus::STATUS_PENDING, ClientBonus::STATUS_APPROVED, ClientBonus::STATUS_POSTPONED], true)) {
                 $openBonus[(int) $b->client_id] = true;
             }
         }

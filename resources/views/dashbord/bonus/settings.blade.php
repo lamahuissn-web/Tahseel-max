@@ -98,11 +98,9 @@
                             </div>
 
                             <div class="col-md-4">
-                                <label class="form-label fw-bold">إصدار الفاتورة تلقائياً بعد الاعتماد</label>
-                                <select name="bonus_auto_apply_on_approve" class="form-select">
-                                    <option value="1" {{ ($settings['bonus_auto_apply_on_approve'] ?? '1') === '1' ? 'selected' : '' }}>نعم</option>
-                                    <option value="0" {{ ($settings['bonus_auto_apply_on_approve'] ?? '1') !== '1' ? 'selected' : '' }}>لا (يدوي)</option>
-                                </select>
+                                <label class="form-label fw-bold">إصدار الفاتورة</label>
+                                <div class="form-control bg-light" style="font-size:12.5px">يدوي دائماً — بقرار الإدارة</div>
+                                <div class="text-muted mt-1" style="font-size:11px">لا يصدر النظام أي فاتورة شهر مجاني تلقائياً.</div>
                             </div>
 
                             <div class="col-md-12">

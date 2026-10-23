@@ -129,10 +129,6 @@ class BonusSettings
         return self::bool('bonus_require_zero_balance', true);
     }
 
-    public static function autoApplyOnApprove(): bool
-    {
-        return self::bool('bonus_auto_apply_on_approve', true);
-    }
 
     public static function invoiceValue(): float
     {

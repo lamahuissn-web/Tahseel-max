@@ -418,6 +418,81 @@ class BonusActionsTest extends TestCase
         $this->assertSame(0, DB::table('tbl_revenues')->where('client_id', $client)->count());
     }
 
+    // ------------------------------------------- administration decides, never the system
+
+    public function test_approving_a_bonus_never_creates_an_invoice(): void
+    {
+        $admin  = $this->bonusAdmin();
+        $client = $this->client();
+
+        $bonus = app(BonusLedger::class)->grant($client, $admin->id, 'استحقاق');
+        app(BonusLedger::class)->approve($bonus->id, $admin->id);
+
+        $this->assertSame(ClientBonus::STATUS_APPROVED, $bonus->fresh()->status);
+        $this->assertSame(0, DB::table('tbl_invoices')->where('client_id', $client)->count(), 'الاعتماد لا يصدر أي فاتورة');
+        $this->assertSame(0, DB::table('tbl_revenues')->where('client_id', $client)->count());
+    }
+
+    public function test_a_postponed_bonus_keeps_its_right_and_blocks_a_second_one(): void
+    {
+        $admin  = $this->bonusAdmin();
+        $client = $this->client();
+
+        $bonus = app(BonusLedger::class)->grant($client, $admin->id, 'استحقاق');
+        app(BonusLedger::class)->postpone($bonus->id, $admin->id, 'وضع الشركة', '2027-03');
+
+        $fresh = $bonus->fresh();
+        $this->assertSame(ClientBonus::STATUS_POSTPONED, $fresh->status);
+        $this->assertSame('وضع الشركة', $fresh->postpone_reason);
+        $this->assertSame('2027-03', $fresh->postpone_target_month);
+        $this->assertSame($admin->id, (int) $fresh->postponed_by);
+
+        // the right is still open: no second bonus, no invoice
+        $this->assertSame(1, ClientBonus::where('client_id', $client)->open()->count());
+        $this->assertSame(0, DB::table('tbl_invoices')->where('client_id', $client)->count());
+
+        $this->expectExceptionMessage('يوجد بونص مفتوح');
+        app(BonusLedger::class)->grant($client, $admin->id, 'محاولة ثانية');
+    }
+
+    public function test_a_postponed_bonus_can_be_issued_later(): void
+    {
+        $admin  = $this->bonusAdmin();
+        $client = $this->client();
+
+        $bonus = app(BonusLedger::class)->grant($client, $admin->id, 'استحقاق');
+        app(BonusLedger::class)->postpone($bonus->id, $admin->id, 'تأجيل');
+
+        $result = app(BonusLedger::class)->applyNow($bonus->id, $admin->id);
+
+        $this->assertSame(ClientBonus::STATUS_REDEEMED, $result['bonus']->status);
+        $this->assertSame(1, DB::table('tbl_invoices')->where('client_id', $client)->where('amount', 0)->count());
+        $this->assertNull($result['bonus']->postpone_reason);
+    }
+
+    public function test_postponing_requires_a_reason(): void
+    {
+        $admin  = $this->bonusAdmin();
+        $client = $this->client();
+        $bonus  = app(BonusLedger::class)->grant($client, $admin->id, 'استحقاق');
+
+        $this->expectExceptionMessage('سبب التأجيل مطلوب');
+        app(BonusLedger::class)->postpone($bonus->id, $admin->id, '   ');
+    }
+
+    public function test_the_dashboard_counts_postponed_bonuses(): void
+    {
+        $admin  = $this->bonusAdmin();
+        $client = $this->client();
+        $bonus  = app(BonusLedger::class)->grant($client, $admin->id, 'استحقاق');
+        app(BonusLedger::class)->postpone($bonus->id, $admin->id, 'تأجيل');
+
+        $this->actingAs($admin, 'admin')
+            ->get(route('admin.bonus.index'))
+            ->assertOk()
+            ->assertSee('مؤجّل', false);
+    }
+
     /** An admin that passes the bonus-access middleware (Super-Admin). */
     private function bonusAdmin(): Admin
     {

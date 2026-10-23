@@ -93,16 +93,8 @@ class BonusLedger
                 'bonus_approved'
             );
 
-            // The owner's option A: once approved, the system issues the 0-invoice
-            // itself. If the customer still owes money it waits as `approved`.
-            if (BonusSettings::autoApplyOnApprove() && $this->outstanding((int) $bonus->client_id) <= 0) {
-                try {
-                    $this->applyNow($bonus->id, $adminId);
-                } catch (\Throwable $e) {
-                    \Illuminate\Support\Facades\Log::warning('bonus auto-apply skipped: '.$e->getMessage());
-                }
-            }
-
+            // Approval is a decision about the customer's right, never an issue.
+            // The free-month invoice is only created when an admin presses issue.
             return $bonus->fresh();
         });
     }
@@ -150,7 +142,7 @@ class BonusLedger
                 throw new RuntimeException('تم إصدار هذا البونص مسبقاً.');
             }
 
-            if ($bonus->status !== ClientBonus::STATUS_APPROVED) {
+            if (! in_array($bonus->status, [ClientBonus::STATUS_APPROVED, ClientBonus::STATUS_POSTPONED], true)) {
                 throw new RuntimeException('يجب اعتماد البونص قبل الإصدار.');
             }
 
@@ -197,6 +189,8 @@ class BonusLedger
                 'status'              => ClientBonus::STATUS_REDEEMED,
                 'redeemed_at'         => now(),
                 'redeemed_invoice_id' => $invoiceId,
+                'postpone_reason'     => null,
+                'postpone_target_month' => null,
             ]);
 
             $this->log('bonus_redeemed', sprintf(
@@ -362,6 +356,54 @@ class BonusLedger
                 sprintf('🗑 حذف بونص معلّق - الزبون #%d%s', $bonus->client_id, $reason ? ' | '.$reason : ''),
                 'bonus_deleted'
             );
+        });
+    }
+
+    /**
+     * Postpone the free month: the right stays open, the money decision waits.
+     * Administration only — used when the company's situation asks for it.
+     */
+    public function postpone(int $bonusId, ?int $adminId, string $reason, ?string $targetMonth = null): ClientBonus
+    {
+        $reason = trim($reason);
+
+        if ($reason === '') {
+            throw new RuntimeException('سبب التأجيل مطلوب.');
+        }
+
+        if ($targetMonth !== null && ! preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $targetMonth)) {
+            throw new RuntimeException('الشهر المستهدف غير صحيح.');
+        }
+
+        return DB::transaction(function () use ($bonusId, $adminId, $reason, $targetMonth) {
+            $bonus = ClientBonus::query()->lockForUpdate()->findOrFail($bonusId);
+
+            if (! in_array($bonus->status, [ClientBonus::STATUS_PENDING, ClientBonus::STATUS_APPROVED, ClientBonus::STATUS_POSTPONED], true)) {
+                throw new RuntimeException('لا يمكن تأجيل هذا البونص في حالته الحالية.');
+            }
+
+            $bonus->update([
+                'status'                => ClientBonus::STATUS_POSTPONED,
+                'postponed_at'          => now(),
+                'postponed_by'          => $adminId,
+                'postpone_reason'       => $reason,
+                'postpone_target_month' => $targetMonth,
+            ]);
+
+            $this->log('bonus_postponed', sprintf(
+                'تأجيل بونص #%d - الزبون #%d | %s%s',
+                $bonus->id,
+                $bonus->client_id,
+                $reason,
+                $targetMonth ? ' | الشهر المستهدف: '.$targetMonth : ''
+            ), $bonus);
+
+            sendTelegramNotification(
+                sprintf('⏸ تأجيل شهر مجاني - الزبون #%d | %s', $bonus->client_id, $reason),
+                'bonus_postponed'
+            );
+
+            return $bonus->fresh();
         });
     }
 

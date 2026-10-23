@@ -147,10 +147,12 @@
                            href="{{ route('admin.bonus.index', ['search' => $search, 'sort' => $sort]) }}">الكل ({{ $summary['total'] }})</a>
                         <a class="bonus-chip {{ $filter === 'eligible' ? 'active' : '' }}"
                            href="{{ route('admin.bonus.index', ['filter' => 'eligible', 'search' => $search, 'sort' => $sort]) }}">🏆 مستحق ({{ $summary['eligible'] }})</a>
+                        <a class="bonus-chip {{ $filter === 'pending_bonus' ? 'active' : '' }}"
+                           href="{{ route('admin.bonus.index', ['filter' => 'pending_bonus', 'search' => $search, 'sort' => $sort]) }}">🎁 بونص بانتظار القرار ({{ $summary['open'] }})</a>
+                        <a class="bonus-chip {{ $filter === 'postponed' ? 'active' : '' }}"
+                           href="{{ route('admin.bonus.index', ['filter' => 'postponed', 'search' => $search, 'sort' => $sort]) }}">⏸ مؤجّل ({{ $summary['postponed'] }})</a>
                         <a class="bonus-chip {{ $filter === 'near' ? 'active' : '' }}"
                            href="{{ route('admin.bonus.index', ['filter' => 'near', 'search' => $search, 'sort' => $sort]) }}">⏳ قريب ({{ $summary['near'] }})</a>
-                        <a class="bonus-chip {{ $filter === 'open_bonus' ? 'active' : '' }}"
-                           href="{{ route('admin.bonus.index', ['filter' => 'open_bonus', 'search' => $search, 'sort' => $sort]) }}">🎁 بونص مفتوح ({{ $summary['open'] }})</a>
                         <a class="bonus-chip {{ $filter === 'debt' ? 'active' : '' }}"
                            href="{{ route('admin.bonus.index', ['filter' => 'debt', 'search' => $search, 'sort' => $sort]) }}">⚠️ عليهم ديون ({{ $summary['with_debt'] }})</a>
                         <span class="bonus-chip muted">⛔ خارج البرنامج: {{ $summary['excluded'] }}</span>
