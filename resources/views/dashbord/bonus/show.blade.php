@@ -343,7 +343,6 @@
                                           data-title="حذف البونص #{{ $openBonus->id }} نهائياً؟"
                                           data-text="سيُحذف السجل من القائمة. لا يمكن التراجع."
                                           data-confirm="نعم، احذف"
-                                          data-typed="حذف"
                                           data-danger="1">
                                         @csrf
                                         <input type="text" name="reason" class="form-control form-control-sm mb-2" placeholder="سبب الحذف (اختياري)" maxlength="255">
@@ -448,9 +447,8 @@
                                 </div>
                                 <form method="POST" action="{{ route('admin.bonus.reset', $client->id) }}" class="js-confirm"
                                       data-title="إعادة تعيين الدورة؟"
-                                      data-text="هذا الإجراء لا يمكن التراجع عنه. اكتب «تصفير» للتأكيد."
+                                      data-text="هذا الإجراء لا يمكن التراجع عنه."
                                       data-confirm="نعم، صفّر"
-                                      data-typed="تصفير"
                                       data-danger="1">
                                     @csrf
                                     <input type="text" name="reason" class="form-control form-control-sm mb-2" placeholder="سبب الإعادة" maxlength="255">
@@ -534,7 +532,6 @@
                                 var title = form.dataset.title || 'تأكيد';
                                 var text  = form.dataset.text || '';
                                 var okTxt = form.dataset.confirm || 'نعم';
-                                var typed = form.dataset.typed || null;
                                 var danger = form.dataset.danger === '1';
 
                                 if (typeof Swal === 'undefined') {
@@ -544,21 +541,12 @@
 
                                 Swal.fire({
                                     title: title,
-                                    html: text + (typed ? '<br><br><small>اكتب <b>' + typed + '</b> للمتابعة</small>' : ''),
+                                    text: text,
                                     icon: danger ? 'warning' : 'question',
-                                    input: typed ? 'text' : undefined,
-                                    inputPlaceholder: typed ? typed : undefined,
                                     showCancelButton: true,
                                     confirmButtonText: okTxt,
                                     cancelButtonText: 'إلغاء',
-                                    confirmButtonColor: danger ? '#f1416c' : '#3e97ff',
-                                    preConfirm: function (value) {
-                                        if (typed && (value || '').trim() !== typed) {
-                                            Swal.showValidationMessage('النص غير مطابق');
-                                            return false;
-                                        }
-                                        return true;
-                                    }
+                                    confirmButtonColor: danger ? '#f1416c' : '#3e97ff'
                                 }).then(function (res) {
                                     if (res.isConfirmed) { form.dataset.confirmed = '1'; form.submit(); }
                                 });

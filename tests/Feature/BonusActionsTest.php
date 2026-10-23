@@ -354,7 +354,7 @@ class BonusActionsTest extends TestCase
         $this->assertMatchesRegularExpression('/disabled/', $html, 'The apply button must be disabled with a balance.');
     }
 
-    public function test_dangerous_actions_ask_for_a_typed_confirmation(): void
+    public function test_dangerous_actions_ask_for_a_simple_confirmation_without_typing(): void
     {
         $admin  = $this->bonusAdmin();
         $client = $this->client();
@@ -362,9 +362,10 @@ class BonusActionsTest extends TestCase
 
         $response = $this->actingAs($admin, 'admin')->get(route('admin.bonus.show', $client));
 
-        $response->assertSee('data-typed="تصفير"', false);
         $response->assertSee('js-confirm', false);
         $response->assertSee('Swal.fire', false);
+        // typed confirmations were dropped: a plain yes/no dialog is enough
+        $response->assertDontSee('data-typed', false);
     }
 
     public function test_a_pending_bonus_granted_by_mistake_can_be_deleted(): void
