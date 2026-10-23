@@ -32,6 +32,10 @@ class Kernel extends ConsoleKernel
 
         $schedule->command('telegram:send-backup')->everyMinute();
         $schedule->command(SendOverdueReminders::class)->dailyAt('08:00');
+
+        // Feature 021 — يكتشف المستحقين للشهر المجاني ويسجّلهم «بانتظار القرار».
+        // لا يصدر أي فاتورة: الإصدار قرار إداري فقط.
+        $schedule->command('bonus:sync')->dailyAt('02:20')->withoutOverlapping();
         $schedule->command('payments:reconcile-receipts --limit=100')
             ->everyMinute()
             ->withoutOverlapping();

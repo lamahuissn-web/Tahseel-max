@@ -341,6 +341,11 @@ class BonusController extends Controller
     {
         return view('dashbord.bonus.settings', [
             'settings' => BonusSettings::all(),
+            'notify'   => [
+                'earned'    => \App\Services\TelegramConfig::get('telegram_notify_bonus_earned', '1') !== '0',
+                'postponed' => \App\Services\TelegramConfig::get('telegram_notify_bonus_postponed', '1') !== '0',
+                'redeemed'  => \App\Services\TelegramConfig::get('telegram_notify_bonus_redeemed', '1') !== '0',
+            ],
         ]);
     }
 
@@ -530,6 +535,15 @@ class BonusController extends Controller
         foreach ($validated as $key => $value) {
             BonusSettings::set($key, $value);
         }
+
+        // Telegram toggles for the three bonus events.
+        foreach (['earned', 'postponed', 'redeemed'] as $event) {
+            \App\Models\AppConfig::query()->updateOrCreate(
+                ['key' => 'telegram_notify_bonus_'.$event],
+                ['value' => $request->input('notify_'.$event, '0') === '1' ? '1' : '0']
+            );
+        }
+        \App\Services\TelegramConfig::clearCache();
 
         return redirect()
             ->route('admin.bonus.settings')

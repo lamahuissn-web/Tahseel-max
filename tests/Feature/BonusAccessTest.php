@@ -134,9 +134,11 @@ class BonusAccessTest extends TestCase
                 'bonus_spiral_after_months'     => '2',
                 'bonus_count_start_date'        => '2026-01-01',
                 'bonus_require_zero_balance'    => '1',
-                'bonus_auto_apply_on_approve'   => '1',
                 'bonus_invoice_notes'           => 'شهر مجاني',
                 'bonus_client_types'            => 'internet',
+                'notify_earned'                 => '1',
+                'notify_postponed'              => '0',
+                'notify_redeemed'               => '1',
             ])
             ->assertRedirect(route('admin.bonus.settings'));
 
@@ -145,6 +147,13 @@ class BonusAccessTest extends TestCase
         $this->assertSame(5, BonusSettings::graceDays(), 'The admin can change the grace period at any time.');
         $this->assertSame(4, BonusSettings::recoveryMonths(), 'Clean months needed to become منتظم is editable.');
         $this->assertTrue(BonusSettings::enabled());
+
+        // the three bonus Telegram events keep their own switches
+        \App\Services\TelegramConfig::clearCache();
+        $this->assertSame('1', \App\Services\TelegramConfig::get('telegram_notify_bonus_earned'));
+        $this->assertSame('0', \App\Services\TelegramConfig::get('telegram_notify_bonus_postponed'));
+        $this->assertTrue(\App\Services\TelegramConfig::eventEnabled('bonus_earned'));
+        $this->assertFalse(\App\Services\TelegramConfig::eventEnabled('bonus_postponed'));
     }
 
     public function test_customer_panel_shows_the_computed_progress(): void

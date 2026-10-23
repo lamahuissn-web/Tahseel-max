@@ -196,9 +196,11 @@ Bonus row statuses: `pending` (بانتظار القرار) · `approved` (مع�
 `postponed` (مؤجّل) · `redeemed` (مُصدر) · `cancelled` (ملغى).
 
 ## Redemption flow (administration decides — nothing is automatic)
-1. Daily command `bonus:sync` (Phase 3) scans active clients, computes progress, and
-   creates a `pending` row when progress reaches the threshold. Idempotent: **one open
-   bonus per customer** at a time, whatever its open status.
+1. Daily command `bonus:sync` (scheduled 02:20, chunked by 200, `--dry-run` available)
+   scans active in-scope clients, computes progress, and creates a `pending` row when the
+   threshold is reached. Idempotent: **one open bonus per customer** at a time, whatever
+   its open status; it respects `bonus_enabled` and writes nothing financial. A single
+   Telegram summary lists the customers it recorded.
 2. Administration decides, per customer:
    - **اعتماد** → `approved`: the right is acknowledged, still **no invoice**.
    - **تأجيل** → `postponed`: the right is kept, the decision waits for the company's

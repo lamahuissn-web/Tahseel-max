@@ -65,13 +65,13 @@ Phase 2 actions (grant/approve/apply) and Phases 3–4 are still open.
 - [X] `tbl_client_bonus_adjustments` ledger for manual points and resets.
 
 ## Phase 3 — Automation
-- [ ] RED test: `bonus:sync` creates a pending row exactly once (idempotent re-run).
-- [ ] RED test: `bonus:sync` skips inactive clients.
-- [ ] RED test: `bonus:sync` respects the master switch.
-- [ ] Implement `bonus:sync` command (chunked, page-level maps).
-- [ ] Register the command in the scheduler (daily, off-peak).
+- [x] RED test: `bonus:sync` creates a pending row exactly once (idempotent re-run).
+- [x] RED test: `bonus:sync` skips inactive clients.
+- [x] RED test: `bonus:sync` respects the master switch.
+- [x] Implement `bonus:sync` command (chunked, page-level maps, `--dry-run`).
+- [x] Register the command in the scheduler (daily 02:20, `withoutOverlapping`).
 - [x] ~~Auto-apply hook~~ **cancelled by the owner (2026-10-23): issuance is admin-only, never automatic.**
-- [ ] Telegram events `bonus_earned` / `bonus_postponed` / `bonus_redeemed` + toggles in the settings form.
+- [x] Telegram events `bonus_earned` / `bonus_postponed` / `bonus_redeemed` + toggles in the settings form.
 
 ## Phase 4 — Mobile
 - [ ] RED test: `GET /api/v1/clients` exposes `bonusProgress`, `bonusStatus`, `nextEligibleDate`.

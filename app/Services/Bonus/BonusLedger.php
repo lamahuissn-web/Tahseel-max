@@ -71,6 +71,44 @@ class BonusLedger
 
     // ----------------------------------------------------------- approve
 
+    /**
+     * Record an earned entitlement found by `bonus:sync`.
+     * Nothing financial happens here — the row waits for an admin decision.
+     */
+    public function earn(int $clientId): ClientBonus
+    {
+        $this->assertInProgram($clientId);
+
+        return DB::transaction(function () use ($clientId) {
+            $open = ClientBonus::query()
+                ->where('client_id', $clientId)
+                ->open()
+                ->lockForUpdate()
+                ->first();
+
+            if ($open) {
+                throw new RuntimeException('يوجد بونص مفتوح لهذا الزبون بالفعل.');
+            }
+
+            $bonus = ClientBonus::create([
+                'client_id'    => $clientId,
+                'earned_at'    => now()->toDateString(),
+                'status'       => ClientBonus::STATUS_PENDING,
+                'source'       => 'auto',
+                'cycle_months' => BonusSettings::monthsRequired(),
+                'cycle_start'  => BonusSettings::countStartDate(),
+            ]);
+
+            $this->log('bonus_earned', sprintf(
+                'استحقاق تلقائي (%d شهر) - الزبون #%d',
+                BonusSettings::monthsRequired(),
+                $clientId
+            ), $bonus);
+
+            return $bonus;
+        });
+    }
+
     public function approve(int $bonusId, ?int $adminId): ClientBonus
     {
         return DB::transaction(function () use ($bonusId, $adminId) {
