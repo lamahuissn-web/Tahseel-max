@@ -153,6 +153,9 @@
                                             'telegram_notify_client_status_changed' => '🔄 تغيير حالة عميل',
                                             'telegram_notify_mobile_invoice_paid' => '💰 دفع عبر التطبيق',
                                             'telegram_notify_invoice_balance_edited' => '✏️ تعديل رصيد فاتورة',
+                                            'telegram_notify_bonus_earned' => '🏆 استحقاق شهر مجاني',
+                                            'telegram_notify_bonus_postponed' => '⏸ تأجيل شهر مجاني',
+                                            'telegram_notify_bonus_redeemed' => '🎉 إصدار شهر مجاني',
                                         ];
                                     @endphp
 

@@ -110,29 +110,6 @@
                             </div>
                         </div>
 
-                        <hr class="my-4">
-
-                        <div class="fw-bold mb-2" style="font-size:13.5px">إشعارات تلغرام</div>
-                        <div class="text-muted mb-3" style="font-size:11.5px">
-                            الإشعارات تصل عند تسجيل الاستحقاق أو التأجيل أو الإصدار — لا تُصدر أي فاتورة.
-                        </div>
-                        <div class="row g-3">
-                            @foreach([
-                                'earned'    => ['🏆 استحقاق شهر مجاني', 'عندما يُسجَّل زبون مستحق بانتظار القرار'],
-                                'postponed' => ['⏸ تأجيل شهر مجاني', 'عند تأجيل الحق بقرار الإدارة'],
-                                'redeemed'  => ['🎉 إصدار شهر مجاني', 'عند إصدار فاتورة 0$ بضغطة الإدارة'],
-                            ] as $key => $meta)
-                                <div class="col-md-4">
-                                    <label class="form-label fw-bold">{{ $meta[0] }}</label>
-                                    <select name="notify_{{ $key }}" class="form-select">
-                                        <option value="1" {{ ($notify[$key] ?? true) ? 'selected' : '' }}>مفعّل</option>
-                                        <option value="0" {{ ($notify[$key] ?? true) ? '' : 'selected' }}>متوقف</option>
-                                    </select>
-                                    <div class="text-muted mt-1" style="font-size:11px">{{ $meta[1] }}</div>
-                                </div>
-                            @endforeach
-                        </div>
-
                         <div class="mt-4">
                             <button class="btn btn-primary w-100" style="max-width:420px">حفظ الإعدادات</button>
                         </div>

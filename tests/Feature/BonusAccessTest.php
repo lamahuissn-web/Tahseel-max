@@ -136,9 +136,6 @@ class BonusAccessTest extends TestCase
                 'bonus_require_zero_balance'    => '1',
                 'bonus_invoice_notes'           => 'شهر مجاني',
                 'bonus_client_types'            => 'internet',
-                'notify_earned'                 => '1',
-                'notify_postponed'              => '0',
-                'notify_redeemed'               => '1',
             ])
             ->assertRedirect(route('admin.bonus.settings'));
 
@@ -147,13 +144,26 @@ class BonusAccessTest extends TestCase
         $this->assertSame(5, BonusSettings::graceDays(), 'The admin can change the grace period at any time.');
         $this->assertSame(4, BonusSettings::recoveryMonths(), 'Clean months needed to become منتظم is editable.');
         $this->assertTrue(BonusSettings::enabled());
+    }
 
-        // the three bonus Telegram events keep their own switches
-        \App\Services\TelegramConfig::clearCache();
-        $this->assertSame('1', \App\Services\TelegramConfig::get('telegram_notify_bonus_earned'));
-        $this->assertSame('0', \App\Services\TelegramConfig::get('telegram_notify_bonus_postponed'));
-        $this->assertTrue(\App\Services\TelegramConfig::eventEnabled('bonus_earned'));
-        $this->assertFalse(\App\Services\TelegramConfig::eventEnabled('bonus_postponed'));
+    public function test_the_bonus_telegram_switches_live_on_the_telegram_settings_page(): void
+    {
+        $admin = $this->adminWithRole('Super-Admin');
+
+        // listed with the other Telegram events
+        $this->actingAs($admin, 'admin')
+            ->get(route('admin.app_config'))
+            ->assertOk()
+            ->assertSee('telegram_notify_bonus_earned', false)
+            ->assertSee('🏆 استحقاق شهر مجاني', false)
+            ->assertSee('⏸ تأجيل شهر مجاني', false)
+            ->assertSee('🎉 إصدار شهر مجاني', false);
+
+        // and not duplicated on the bonus settings screen
+        $this->actingAs($admin, 'admin')
+            ->get(route('admin.bonus.settings'))
+            ->assertOk()
+            ->assertDontSee('telegram_notify_bonus_earned', false);
     }
 
     public function test_customer_panel_shows_the_computed_progress(): void
