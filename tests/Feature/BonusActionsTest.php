@@ -470,6 +470,18 @@ class BonusActionsTest extends TestCase
         $this->assertNull($result['bonus']->postpone_reason);
     }
 
+    public function test_the_target_month_is_optional(): void
+    {
+        $admin  = $this->bonusAdmin();
+        $client = $this->client();
+        $bonus  = app(BonusLedger::class)->grant($client, $admin->id, 'استحقاق');
+
+        $postponed = app(BonusLedger::class)->postpone($bonus->id, $admin->id, 'وضع الشركة');
+
+        $this->assertSame(ClientBonus::STATUS_POSTPONED, $postponed->status);
+        $this->assertNull($postponed->postpone_target_month);
+    }
+
     public function test_postponing_requires_a_reason(): void
     {
         $admin  = $this->bonusAdmin();
