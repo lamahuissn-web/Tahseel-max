@@ -26,15 +26,15 @@ class SimpleBonusController extends Controller
 
     public function index()
     {
-        $eligible = $this->withClientNames($this->progress->eligibleClients(300));
-
-        $verge = $this->withClientNames($this->progress->vergeClients(2, 300));
+        $lists = $this->progress->lists();
 
         return view('dashbord.bonus.eligible', [
-            'eligible'      => $eligible,
-            'verge'         => $verge,
-            'eligibleCost'  => $this->progress->costOf(array_column($eligible, 'clientId')),
-            'vergeCost'     => $this->progress->costOf(array_column($verge, 'clientId')),
+            'eligible'      => $this->withClientNames($lists['eligible']),
+            'verge'         => $this->withClientNames($lists['verge']),
+            'eligibleCost'  => $lists['eligibleCost'],
+            'vergeCost'     => $lists['vergeCost'],
+            'clean'         => $lists['clean'],
+            'late'          => $lists['late'],
             'required'      => BonusSettings::monthsRequired(),
             'graceDays'     => BonusSettings::graceDays(),
             'enabled'       => BonusSettings::enabled(),
