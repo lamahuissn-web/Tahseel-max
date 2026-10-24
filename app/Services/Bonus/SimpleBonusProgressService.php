@@ -318,8 +318,8 @@ class SimpleBonusProgressService
             : (int) round(($deltas[$count / 2 - 1] + $deltas[$count / 2]) / 2);
 
         $label = match (true) {
-            $median <= -1 => 'يدفع قبل الاستحقاق بـ '.abs($median).' '.($this->daysWord(abs($median))),
-            $median >= 1  => 'يتأخر عادةً '.$median.' '.$this->daysWord($median),
+            $median <= -1 => 'يدفع قبل الاستحقاق '.$this->daysPhrase(abs($median), 'بـ'),
+            $median >= 1  => 'يتأخر عادةً '.$this->daysPhrase($median, ''),
             default       => 'يدفع في يوم الاستحقاق تقريباً',
         };
 
@@ -331,13 +331,14 @@ class SimpleBonusProgressService
         ];
     }
 
-    private function daysWord(int $days): string
+    /** Arabic reads badly as "بـ 2 يومين" — small numbers need their own words. */
+    private function daysPhrase(int $days, string $prefix): string
     {
         return match (true) {
-            $days === 1  => 'يوم',
-            $days === 2  => 'يومين',
-            $days <= 10  => 'أيام',
-            default      => 'يوماً',
+            $days === 1  => $prefix === '' ? 'يوماً واحداً' : 'بيوم واحد',
+            $days === 2  => $prefix === '' ? 'يومين' : 'بيومين',
+            $days <= 10  => $prefix.($prefix === '' ? '' : ' ').$days.' أيام',
+            default      => $prefix.($prefix === '' ? '' : ' ').$days.' يوماً',
         };
     }
 

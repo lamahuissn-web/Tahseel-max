@@ -500,4 +500,39 @@ class SimpleBonusTest extends TestCase
         // earning months is not the same as being handed a free month while money is owed
         $this->assertFalse($progress->eligible);
     }
+
+    public function test_the_habit_sentence_reads_like_arabic(): void
+    {
+        foreach ([
+            'bonus_enabled'          => '1',
+            'bonus_months_required'  => '3',
+            'bonus_grace_days'       => '5',
+            'bonus_count_start_date' => Carbon::now()->startOfMonth()->subMonthsNoOverflow(6)->toDateString(),
+        ] as $key => $value) {
+            BonusSettings::set($key, $value);
+        }
+        BonusSettings::flush();
+
+        $cases = [
+            'one day late'   => [1, 'يتأخر عادةً يوماً واحداً'],
+            'two days late'  => [2, 'يتأخر عادةً يومين'],
+            'seven late'     => [7, 'يتأخر عادةً 7 أيام'],
+            'two days early' => [-2, 'يدفع قبل الاستحقاق بيومين'],
+            'one day early'  => [-1, 'يدفع قبل الاستحقاق بيوم واحد'],
+        ];
+
+        foreach ($cases as $label => [$delta, $expected]) {
+            $id = $this->client('زبون '.$label);
+            for ($i = 3; $i >= 1; $i--) {
+                $due = Carbon::now()->startOfMonth()->subMonthsNoOverflow($i)->day(10)->toDateString();
+                $paid = Carbon::parse($due)->addDays($delta)->toDateString();
+                $this->pay($this->invoice($id, $due), $id, $paid);
+            }
+
+            $progress = $this->service()->forClient($id, true);
+            $row = collect($this->service()->followUp()['rows'])->firstWhere('clientId', $id);
+
+            $this->assertSame($expected, $row['habitLabel'], $label);
+        }
+    }
 }
