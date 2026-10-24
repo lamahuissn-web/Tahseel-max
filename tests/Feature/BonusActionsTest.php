@@ -27,22 +27,15 @@ use Tests\TestCase;
  */
 class BonusActionsTest extends TestCase
 {
+    use \Tests\Support\BonusDatabase;
+
     private static bool $migrated = false;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        if (! str_contains((string) config('database.connections.'.config('database.default').'.database'), '_test')) {
-            throw new \RuntimeException('Refusing migrate:fresh outside a dedicated test database.');
-        }
-
-        if (! self::$migrated) {
-            Artisan::call('migrate:fresh', ['--force' => true]);
-            self::$migrated = true;
-        }
-
-        DB::beginTransaction();
+        $this->bootstrapBonusDatabase();
         $this->seedSettings();
         config(['app.key' => 'base64:'.base64_encode(str_repeat('k', 32))]);
         $this->app->forgetInstance('encrypter');
@@ -50,7 +43,7 @@ class BonusActionsTest extends TestCase
 
     protected function tearDown(): void
     {
-        DB::rollBack();
+        $this->teardownBonusDatabase();
         BonusSettings::flush();
         parent::tearDown();
     }

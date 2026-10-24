@@ -27,28 +27,21 @@ use Tests\TestCase;
  */
 class BonusProgressTest extends TestCase
 {
+    use \Tests\Support\BonusDatabase;
+
     private static bool $migrated = false;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        if (! str_contains((string) config('database.connections.'.config('database.default').'.database'), '_test')) {
-            throw new \RuntimeException('Refusing migrate:fresh outside a dedicated test database.');
-        }
-
-        if (! self::$migrated) {
-            Artisan::call('migrate:fresh', ['--force' => true]);
-            self::$migrated = true;
-        }
-
-        DB::beginTransaction();
+        $this->bootstrapBonusDatabase();
         $this->seedSettings();
     }
 
     protected function tearDown(): void
     {
-        DB::rollBack();
+        $this->teardownBonusDatabase();
         BonusSettings::flush();
         parent::tearDown();
     }
@@ -466,6 +459,65 @@ class BonusProgressTest extends TestCase
 
             $this->assertSame($expected, $progress->pattern, "A +{$offset} day habit must read as {$expected}.");
             $this->assertSame($offset, $progress->medianLag, 'The median delay is reported as-is.');
+        }
+    }
+
+    public function test_the_badge_bands_switch_exactly_at_the_documented_limits(): void
+    {
+        // The bands are 7 / 15 / 30 days. Every customer sits one day away from a
+        // tier, so both sides of each limit are pinned here: an off-by-one in a
+        // comparison moves hundreds of customers to another badge without any
+        // test noticing (the mid-band cases below never touch a boundary).
+        $cases = [
+            -1 => 'precise',   // paying early is still "precise"
+            0  => 'precise',
+            1  => 'week',
+            7  => 'week',      // the limit belongs to the lower band
+            8  => 'late_habit',
+            15 => 'late_habit',
+            16 => 'slow',
+            30 => 'slow',
+            31 => 'very_slow',
+        ];
+
+        foreach ($cases as $offset => $expected) {
+            $client = $this->client();
+            $dates  = array_slice($this->pastDueDates(6), 0, 3);   // room for 31-day lags
+            $this->setSetting('bonus_count_start_date', $dates[0]);
+
+            foreach ($dates as $d) {
+                $invoice = $this->invoice($client, $d);
+                $this->pay($invoice, $client, \Carbon\Carbon::parse($d)->addDays($offset)->toDateString());
+            }
+
+            $progress = $this->service()->forClient($client);
+
+            $this->assertSame($expected, $progress->pattern, "A {$offset}-day habit must read as {$expected}.");
+            $this->assertSame($offset, $progress->medianLag, 'The median delay is reported as-is.');
+        }
+    }
+
+    public function test_the_commitment_score_uses_the_documented_weights(): void
+    {
+        // 45% position + 35% settled months + 20% punctuality. Asserting the exact
+        // total pins all three weights: a refactor that rebalances them (or drops
+        // one) changes these numbers even when the badge order looks right.
+        //   lag 15 -> punctuality 0.5 -> 45 + 35 + 10 = 90
+        //   lag 30 -> punctuality 0.0 -> 45 + 35 +  0 = 80
+        foreach ([15 => 90, 30 => 80] as $offset => $expected) {
+            $client = $this->client();
+            $dates  = array_slice($this->pastDueDates(6), 0, 4);
+            $this->setSetting('bonus_count_start_date', $dates[0]);
+
+            foreach ($dates as $d) {
+                $invoice = $this->invoice($client, $d);
+                $this->pay($invoice, $client, \Carbon\Carbon::parse($d)->addDays($offset)->toDateString());
+            }
+
+            $progress = $this->service()->forClient($client);
+
+            $this->assertSame($offset, $progress->medianLag, 'Precondition: the median lag is the offset.');
+            $this->assertSame($expected, $progress->score, "A customer {$offset} days late, all months settled, must score {$expected}.");
         }
     }
 
