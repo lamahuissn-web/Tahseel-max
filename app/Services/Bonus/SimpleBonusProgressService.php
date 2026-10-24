@@ -36,11 +36,15 @@ class SimpleBonusProgressService
     private int $graceDays;
     private Carbon $startDate;
 
-    public function __construct()
+    /**
+     * The overrides exist for ONE reason: the settings screen must preview a rule
+     * before it is saved. Everything else reads the stored settings.
+     */
+    public function __construct(?int $required = null, ?int $graceDays = null, ?string $startDate = null)
     {
-        $this->required  = BonusSettings::monthsRequired();
-        $this->graceDays = BonusSettings::graceDays();
-        $this->startDate = Carbon::parse(BonusSettings::countStartDate())->startOfDay();
+        $this->required  = $required ?? BonusSettings::monthsRequired();
+        $this->graceDays = $graceDays ?? BonusSettings::graceDays();
+        $this->startDate = Carbon::parse($startDate ?? BonusSettings::countStartDate())->startOfDay();
     }
 
     /**
@@ -161,6 +165,21 @@ class SimpleBonusProgressService
      *
      * @return array{count:int,cost:float}
      */
+    public function previewWith(int $monthsRequired, int $graceDays, string $startDate): array
+    {
+        $whatIf = new self($monthsRequired, $graceDays, $startDate);
+
+        $ids = [];
+
+        foreach ($whatIf->forClients($whatIf->inScopeClientIds(), false) as $progress) {
+            if ($progress->eligible) {
+                $ids[] = $progress->clientId;
+            }
+        }
+
+        return ['count' => count($ids), 'cost' => $this->costOf($ids)];
+    }
+
     public function preview(int $monthsRequired): array
     {
         $ids = [];

@@ -310,10 +310,10 @@ Route::group(
             // ================= Feature 021 — البونص والمكافآت =================
             // Admin staff + management only (Super-Admin 1 / accounting 7).
             Route::group(['middleware' => ['bonus.access'], 'prefix' => 'bonus', 'as' => 'bonus.'], function () {
-                Route::get('/', [\App\Http\Controllers\Admin\BonusController::class, 'index'])->name('index');
-                Route::get('/spiral', [\App\Http\Controllers\Admin\BonusController::class, 'spiral'])->name('spiral');
-                Route::get('/settings', [\App\Http\Controllers\Admin\BonusController::class, 'settings'])->name('settings');
-                Route::post('/settings', [\App\Http\Controllers\Admin\BonusController::class, 'saveSettings'])->name('settings.save');
+                // Feature 022 — three screens: the ranked list, its forecast, the settings.
+                Route::get('/', [\App\Http\Controllers\Admin\SimpleBonusController::class, 'index'])->name('index');
+                Route::get('/settings', [\App\Http\Controllers\Admin\SimpleBonusController::class, 'settings'])->name('settings');
+                Route::post('/settings', [\App\Http\Controllers\Admin\SimpleBonusController::class, 'saveSettings'])->name('settings.save');
                 Route::get('/client/{clientId}', [\App\Http\Controllers\Admin\BonusController::class, 'show'])->name('show');
                 Route::get('/log', [\App\Http\Controllers\Admin\BonusController::class, 'log'])->name('log');
 

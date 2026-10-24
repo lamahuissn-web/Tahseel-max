@@ -545,7 +545,7 @@ class BonusActionsTest extends TestCase
         app(BonusLedger::class)->postpone($bonus->id, $admin->id, '   ');
     }
 
-    public function test_the_dashboard_counts_postponed_bonuses(): void
+    public function test_the_customer_panel_shows_a_postponed_bonus(): void
     {
         $admin  = $this->bonusAdmin();
         $client = $this->client();
@@ -553,7 +553,7 @@ class BonusActionsTest extends TestCase
         app(BonusLedger::class)->postpone($bonus->id, $admin->id, 'تأجيل');
 
         $this->actingAs($admin, 'admin')
-            ->get(route('admin.bonus.index'))
+            ->get(route('admin.bonus.show', $client))
             ->assertOk()
             ->assertSee('مؤجّل', false);
     }

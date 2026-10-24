@@ -42,32 +42,15 @@ class BonusAccessTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_the_dashboard_counts_every_status(): void
+    public function test_the_list_screen_opens_and_states_the_rule(): void
     {
         $admin = $this->adminWithRole('Super-Admin');
 
-        $response = $this->actingAs($admin, 'admin')
+        $this->actingAs($admin, 'admin')
             ->get(route('admin.bonus.index'))
-            ->assertOk();
-
-        foreach (['ممتاز', 'منتظم', 'عائد للانتظام', 'متأخر', 'دوامة', 'متعثر', 'بلا ديون', 'عليهم ديون'] as $label) {
-            $response->assertSee($label, false);
-        }
-
-        $response->assertSee('خارج البرنامج', false);
-        $response->assertSee('CSV', false);
-        $response->assertSee('بلا ديون', false);
-    }
-
-    public function test_the_filtered_list_can_be_downloaded_as_csv(): void
-    {
-        $admin = $this->adminWithRole('Super-Admin');
-
-        $response = $this->actingAs($admin, 'admin')
-            ->get(route('admin.bonus.index', ['filter' => 'compliant', 'export' => 'csv']));
-
-        $response->assertOk();
-        $this->assertStringContainsString('text/csv', (string) $response->headers->get('content-type'));
+            ->assertOk()
+            ->assertSee('قائمة المستحقين', false)
+            ->assertSee('مستحق الآن', false);
     }
 
     public function test_super_admin_can_open_the_section(): void
@@ -77,7 +60,7 @@ class BonusAccessTest extends TestCase
         $this->actingAs($admin, 'admin')
             ->get(route('admin.bonus.index'))
             ->assertOk()
-            ->assertSee('البونص والمكافآت');
+            ->assertSee('قائمة المستحقين', false);
     }
 
     public function test_accounting_can_open_the_section(): void
@@ -93,7 +76,7 @@ class BonusAccessTest extends TestCase
     {
         $admin = $this->adminWithRole('collector');
 
-        foreach ([route('admin.bonus.index'), route('admin.bonus.spiral'), route('admin.bonus.settings')] as $url) {
+        foreach ([route('admin.bonus.index'), route('admin.bonus.settings')] as $url) {
             $this->actingAs($admin, 'admin')->get($url)->assertForbidden();
         }
     }
@@ -118,24 +101,18 @@ class BonusAccessTest extends TestCase
 
         $this->actingAs($admin, 'admin')
             ->post(route('admin.bonus.settings.save'), [
-                'bonus_enabled'                 => '1',
-                'bonus_months_required'         => '24',
-                'bonus_grace_days'              => '5',
-                'bonus_catchup_per_cycle'       => '1',
-                'bonus_recovery_months'         => '4',
-                'bonus_hard_reset_after_months' => '2',
-                'bonus_spiral_after_months'     => '2',
-                'bonus_count_start_date'        => '2026-01-01',
-                'bonus_require_zero_balance'    => '1',
-                'bonus_invoice_notes'           => 'شهر مجاني',
-                'bonus_client_types'            => 'internet',
+                'confirmed'              => '1',
+                'bonus_enabled'          => '1',
+                'bonus_months_required'  => '24',
+                'bonus_grace_days'       => '5',
+                'bonus_count_start_date' => '2026-01-01',
             ])
             ->assertRedirect(route('admin.bonus.settings'));
 
         BonusSettings::flush();
 
+        $this->assertSame(24, BonusSettings::monthsRequired(), 'The owner sets the threshold.');
         $this->assertSame(5, BonusSettings::graceDays(), 'The admin can change the grace period at any time.');
-        $this->assertSame(4, BonusSettings::recoveryMonths(), 'Clean months needed to become منتظم is editable.');
         $this->assertTrue(BonusSettings::enabled());
     }
 
@@ -206,7 +183,7 @@ class BonusAccessTest extends TestCase
             }
         }
 
-        $this->assertGreaterThanOrEqual(13, count($admin), 'The admin bonus surface unexpectedly shrank.');
+        $this->assertGreaterThanOrEqual(12, count($admin), 'The admin bonus surface unexpectedly shrank.');
         $this->assertGreaterThanOrEqual(3, count($api), 'The bonus API surface unexpectedly shrank.');
 
         foreach ($admin as $uri => $middleware) {
@@ -264,7 +241,7 @@ class BonusAccessTest extends TestCase
             $checked++;
         }
 
-        $this->assertGreaterThanOrEqual(13, $checked, 'Every admin bonus route must be exercised.');
+        $this->assertGreaterThanOrEqual(12, $checked, 'Every admin bonus route must be exercised.');
     }
 
     /**
