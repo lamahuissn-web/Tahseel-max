@@ -146,6 +146,10 @@ class BonusAccessTest extends TestCase
             'start_date' => '2026-01-01', 'is_active' => 1, 'created_at' => now(), 'updated_at' => now(),
         ]);
 
+        BonusSettings::set('bonus_count_start_date', '2026-01-01');
+        BonusSettings::set('bonus_months_required', 24);
+        BonusSettings::flush();
+
         DB::table('tbl_invoices')->insert([
             'invoice_number' => 'ACC-1', 'client_id' => $clientId, 'subscription_id' => 1,
             'amount' => '15.00', 'paid_amount' => '15.00', 'remaining_amount' => '0.00',
@@ -183,7 +187,7 @@ class BonusAccessTest extends TestCase
             }
         }
 
-        $this->assertGreaterThanOrEqual(12, count($admin), 'The admin bonus surface unexpectedly shrank.');
+        $this->assertGreaterThanOrEqual(10, count($admin), 'The admin bonus surface unexpectedly shrank.');
         $this->assertGreaterThanOrEqual(3, count($api), 'The bonus API surface unexpectedly shrank.');
 
         foreach ($admin as $uri => $middleware) {
@@ -241,7 +245,7 @@ class BonusAccessTest extends TestCase
             $checked++;
         }
 
-        $this->assertGreaterThanOrEqual(12, $checked, 'Every admin bonus route must be exercised.');
+        $this->assertGreaterThanOrEqual(10, $checked, 'Every admin bonus route must be exercised.');
     }
 
     /**

@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Services\Bonus\BonusLedger;
-use App\Services\Bonus\BonusProgressService;
+use App\Services\Bonus\SimpleBonusProgressService;
 use App\Services\Bonus\BonusSettings;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -44,8 +44,8 @@ class BonusSync extends Command
             ->select('id', 'name')
             ->orderBy('id')
             ->chunkById($chunk, function ($clients) use ($ledger, $dryRun, &$recorded, &$skipped) {
-                /** @var BonusProgressService $service */
-                $service  = app(BonusProgressService::class);
+                /** @var SimpleBonusProgressService $service */
+                $service  = app(SimpleBonusProgressService::class);
                 $progress = $service->forClients($clients->pluck('id')->all());
 
                 foreach ($clients as $client) {

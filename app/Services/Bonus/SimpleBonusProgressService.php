@@ -320,11 +320,21 @@ class SimpleBonusProgressService
             }
 
             $paid = 0.0;
+            $hasFlows = false;
+
             foreach ($flows[$invoice->id] ?? [] as [$timestamp, $amount]) {
+                $hasFlows = true;
                 if ($timestamp > $limit) {
                     break;
                 }
                 $paid += $amount;
+            }
+
+            // Some invoices carry their settlement in the record itself (imports, and
+            // rows written before revenues were logged). Trust it when there is no
+            // revenue row at all, otherwise the customer reads as indebted forever.
+            if (! $hasFlows && $invoice->paid_date !== null && (float) $invoice->remaining_amount <= self::EPSILON) {
+                $paid = Carbon::parse($invoice->paid_date)->timestamp <= $limit ? (float) $invoice->amount : 0.0;
             }
 
             $total += max(0.0, (float) $invoice->amount - $paid);
@@ -367,7 +377,7 @@ class SimpleBonusProgressService
             ->where('amount', '>', 0)
             ->orderBy('due_date')
             ->orderBy('id')
-            ->get(['id', 'client_id', 'due_date', 'enshaa_date', 'amount', 'remaining_amount', 'invoice_type']);
+            ->get(['id', 'client_id', 'due_date', 'enshaa_date', 'amount', 'remaining_amount', 'invoice_type', 'paid_date']);
 
         $byClient = [];
         foreach ($rows as $row) {

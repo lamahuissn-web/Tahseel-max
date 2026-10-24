@@ -4,8 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Services\Bonus\BonusLedger;
-use App\Services\Bonus\BonusProgress;
-use App\Services\Bonus\BonusProgressService;
+use App\Services\Bonus\SimpleBonusProgressService;
 use App\Services\Bonus\BonusSettings;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -20,269 +19,11 @@ use Illuminate\Support\Facades\DB;
  */
 class BonusController extends Controller
 {
-    protected BonusProgressService $progress;
+    protected SimpleBonusProgressService $progress;
 
-    public function __construct(BonusProgressService $progress)
+    public function __construct(SimpleBonusProgressService $progress)
     {
         $this->progress = $progress;
-    }
-
-    public function index(Request $request)
-    {
-        $search  = trim((string) $request->input('search', ''));
-        $filter  = (string) $request->input('filter', 'all');
-        $perPage = 25;
-
-        $query = DB::table('tbl_clients')
-            ->whereNull('deleted_at')
-            ->where('is_active', 1)
-            ->whereIn('client_type', BonusSettings::clientTypes())
-            ->select(['id', 'name', 'phone', 'subscription_id']);
-
-        if ($search !== '') {
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('phone', 'like', "%{$search}%");
-            });
-        }
-
-        $clients = $query->orderBy('name')->get();
-
-        // Progress is pure derivation, so it is cached under a data fingerprint:
-        // any payment, invoice edit or bonus change produces a new key immediately
-        // (no staleness), while repeat page loads stay instant on a phone.
-        $fingerprint = md5(implode('|', [
-            (string) DB::table('tbl_invoices')->max('updated_at'),
-            (string) DB::table('tbl_invoices')->count(),
-            (string) DB::table('tbl_revenues')->count(),
-            (string) DB::table('tbl_client_bonuses')->max('updated_at'),
-            md5(json_encode(BonusSettings::all())),
-        ]));
-
-        $cacheKey = 'bonus.progress.map.'.$fingerprint;
-
-        $progressMap = Cache::remember($cacheKey, now()->addMinutes(30), function () use ($clients) {
-            $map = [];
-
-            foreach ($clients->pluck('id')->chunk(400) as $chunk) {
-                $map += $this->progress->forClients($chunk->all(), false);
-            }
-
-            return $map;
-        });
-
-        $rows = [];
-        foreach ($clients as $client) {
-            /** @var BonusProgress $p */
-            $p = $progressMap[$client->id] ?? null;
-            if (! $p) {
-                continue;
-            }
-
-            $rows[] = [
-                'client'   => $client,
-                'progress' => $p,
-            ];
-        }
-
-        // Summary numbers are computed before filtering so the cards stay stable.
-        $summary = [
-            'total'        => count($rows),
-            'excellent'    => 0,
-            'compliant'    => 0,
-            'recovering'   => 0,
-            'late'         => 0,
-            'spiral'       => 0,
-            'hard_reset'   => 0,
-            'eligible'     => 0,
-            'near'         => 0,
-            'open'         => 0,
-            'postponed'    => 0,
-            'no_debt'      => 0,
-            'with_debt'    => 0,
-            'avg_progress' => 0,
-            'avg_score'    => 0,
-            'precise'      => 0,
-            'week'         => 0,
-            'late_habit'   => 0,
-            'slow'         => 0,
-            'very_slow'    => 0,
-        ];
-
-        $progressSum = 0;
-        $scoreSum    = 0;
-
-        foreach ($rows as $row) {
-            /** @var BonusProgress $p */
-            $p = $row['progress'];
-            $progressSum += $p->progress;
-            $scoreSum    += $p->score;
-
-            if ($p->pattern !== null && isset($summary[$p->pattern])) {
-                $summary[$p->pattern]++;
-            }
-
-            if (isset($summary[$p->status])) {
-                $summary[$p->status]++;
-            }
-            if (in_array($p->status, ['excellent', 'compliant'], true)) {
-                $summary['no_debt']++;
-            }
-            if ($p->eligible) {
-                $summary['eligible']++;
-            }
-            if ($p->progress >= max(1, (int) floor($p->required * 0.75))) {
-                $summary['near']++;
-            }
-            if ($p->hasOpenBonus) {
-                $summary['open']++;
-            }
-        }
-
-        // Bonus rows waiting for a decision (postponed ones have their own counter).
-        $summary['open']      = DB::table('tbl_client_bonuses')->whereIn('status', ['pending', 'approved'])->count();
-        $summary['postponed'] = DB::table('tbl_client_bonuses')->where('status', 'postponed')->count();
-
-        $summary['with_debt']    = $summary['total'] - $summary['no_debt'];
-        $summary['avg_progress'] = $summary['total'] > 0 ? (int) round($progressSum / $summary['total']) : 0;
-        $summary['avg_score']    = $summary['total'] > 0 ? (int) round($scoreSum / $summary['total']) : 0;
-
-        // Customers outside the program (inactive, satellite, another type).
-        $summary['excluded'] = DB::table('tbl_clients')
-            ->whereNull('deleted_at')
-            ->where(function ($q) {
-                $q->where('is_active', 0)->orWhereNotIn('client_type', BonusSettings::clientTypes());
-            })
-            ->count();
-
-        $pendingClients = DB::table('tbl_client_bonuses')
-            ->whereIn('status', ['pending', 'approved'])
-            ->pluck('client_id')
-            ->flip()
-            ->all();
-
-        $postponedClients = DB::table('tbl_client_bonuses')
-            ->where('status', 'postponed')
-            ->pluck('client_id')
-            ->flip()
-            ->all();
-
-        $rows = array_values(array_filter($rows, function ($row) use ($filter, $postponedClients, $pendingClients) {
-            /** @var BonusProgress $p */
-            $p = $row['progress'];
-
-            return match ($filter) {
-                'excellent', 'compliant', 'recovering', 'late', 'spiral', 'hard_reset'
-                              => $p->status === $filter,
-                'catchup'     => $p->status === 'recovering',      // old link
-                'precise', 'week', 'late_habit', 'slow', 'very_slow'
-                              => $p->pattern === $filter,
-                'no_debt'     => in_array($p->status, ['compliant', 'excellent'], true),
-                'debt'        => ! in_array($p->status, ['compliant', 'excellent'], true),
-                'eligible'    => $p->eligible,
-                'near'        => $p->progress >= max(1, (int) floor($p->required * 0.75)) && ! $p->eligible,
-                'open_bonus'  => $p->hasOpenBonus,
-                'postponed'   => isset($postponedClients[(int) $row['client']->id]),
-                'pending_bonus' => isset($pendingClients[(int) $row['client']->id]),
-                default       => true,
-            };
-        }));
-
-        $sort = (string) $request->input('sort', 'progress_desc');
-        switch ($sort) {
-            case 'progress_asc':
-                usort($rows, fn ($a, $b) => $a['progress']->progress <=> $b['progress']->progress);
-                break;
-            case 'name':
-                usort($rows, fn ($a, $b) => strcmp($a['client']->name, $b['client']->name));
-                break;
-            case 'clean':
-                usort($rows, fn ($a, $b) => $b['progress']->cleanMonths <=> $a['progress']->cleanMonths);
-                break;
-            case 'score_asc':
-                usort($rows, fn ($a, $b) => $a['progress']->score <=> $b['progress']->score);
-                break;
-            case 'score_desc':
-                usort($rows, fn ($a, $b) => $b['progress']->score <=> $a['progress']->score);
-                break;
-            default:
-                usort($rows, fn ($a, $b) => $b['progress']->progress <=> $a['progress']->progress);
-        }
-
-        if ($request->input('export') === 'csv') {
-            return $this->exportCsv($rows, $filter);
-        }
-
-        $page = max(1, (int) $request->input('page', 1));
-        $paginator = new LengthAwarePaginator(
-            array_slice($rows, ($page - 1) * $perPage, $perPage),
-            count($rows),
-            $perPage,
-            $page,
-            ['path' => $request->url(), 'query' => $request->query()]
-        );
-
-        return view('dashbord.bonus.index', [
-            'paginator' => $paginator,
-            'summary'   => $summary,
-            'search'    => $search,
-            'filter'    => $filter,
-            'sort'      => $sort,
-            'settings'  => BonusSettings::all(),
-            'enabled'   => BonusSettings::enabled(),
-        ]);
-    }
-
-    /**
-     * Download the filtered list as a CSV that opens in Excel with Arabic text intact.
-     */
-    protected function exportCsv(array $rows, string $filter)
-    {
-        $labels = [
-            'excellent'  => 'ممتاز',
-            'compliant'  => 'منتظم',
-            'recovering' => 'عائد للانتظام',
-            'late'       => 'متأخر',
-            'spiral'     => 'دوامة',
-            'hard_reset' => 'متعثر',
-            'excluded'   => 'غير مشمول',
-        ];
-
-        $patterns = [
-            'precise'    => 'دقيق',
-            'week'       => 'خلال أسبوع',
-            'late_habit' => 'متأخر عادةً',
-            'slow'       => 'مماطل',
-            'very_slow'  => 'مماطل جداً',
-        ];
-
-        $fileName = 'bonus-' . ($filter !== '' ? $filter : 'all') . '-' . now()->format('Ymd-His') . '.csv';
-
-        return response()->streamDownload(function () use ($rows, $labels) {
-            $out = fopen('php://output', 'w');
-            fwrite($out, "\xEF\xBB\xBF");   // BOM so Excel reads UTF-8
-            fputcsv($out, ['الاسم', 'الهاتف', 'الحالة', 'نمط الدفع', 'درجة الالتزام', 'التأخير المعتاد (يوم)', 'النقاط', 'أشهر نظيفة', 'آخر شهر محتسب', 'استدراك مستخدم في', 'عليه ديون']);
-
-            foreach ($rows as $row) {
-                /** @var BonusProgress $p */
-                $p = $row['progress'];
-                fputcsv($out, [
-                    $row['client']->name,
-                    $row['client']->phone,
-                    $labels[$p->status] ?? $p->status,
-                    $patterns[$p->pattern] ?? '-',
-                    $p->score,
-                    $p->medianLag ?? '-',
-                    $p->progress . '/' . $p->required,
-                    $p->cleanMonths,
-                    $p->lastCreditedMonth ?? '-',
-                    $p->lastCatchupMonth ?? '-',
-                    in_array($p->status, ['compliant', 'excellent'], true) ? 'لا' : 'نعم',
-                ]);
-            }
-
-            fclose($out);
-        }, $fileName, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     public function show(int $clientId)
@@ -293,7 +34,7 @@ class BonusController extends Controller
             abort(404);
         }
 
-        $progress = $this->progress->forClient($clientId);
+        $progress = $this->progress->forClient($clientId, true);
 
         $bonuses = DB::table('tbl_client_bonuses as b')
             ->leftJoin('admins as a', 'a.id', '=', 'b.approved_by')
@@ -323,28 +64,10 @@ class BonusController extends Controller
             'adjustments' => $adjustments,
             'balance'     => $balance,
             'openBonus'   => $openBonus,
-            'eligible'    => $progress->progress >= $progress->required && ! $progress->hasOpenBonus,
-            'remainingToEarn' => max(0, $progress->required - $progress->progress),
+            'eligible'    => $progress->credits >= $progress->required && ! $progress->hasOpenBonus,
+            'remainingToEarn' => max(0, $progress->required - $progress->credits),
         ]);
     }
-
-    public function spiral(Request $request)
-    {
-        $rows = $this->progress->spiralClients(200);
-
-        return view('dashbord.bonus.spiral', [
-            'rows' => $rows,
-        ]);
-    }
-
-    public function settings()
-    {
-        return view('dashbord.bonus.settings', [
-            'settings' => BonusSettings::all(),
-        ]);
-    }
-
-    // ------------------------------------------------------------ actions
 
     public function grant(Request $request, int $clientId)
     {
@@ -429,31 +152,6 @@ class BonusController extends Controller
         }, $this->clientOfBonus($bonusId));
     }
 
-    public function points(Request $request, int $clientId)
-    {
-        $data = $request->validate([
-            'points' => 'required|integer|between:-24,24|not_in:0',
-            'reason' => 'nullable|string|max:255',
-        ]);
-
-        return $this->run(function () use ($clientId, $data) {
-            app(BonusLedger::class)->addPoints($clientId, (int) $data['points'], auth('admin')->id(), $data['reason'] ?? null);
-
-            return 'تم تعديل نقاط البونص';
-        }, $clientId);
-    }
-
-    public function reset(Request $request, int $clientId)
-    {
-        $reason = $request->input('reason');
-
-        return $this->run(function () use ($clientId, $reason) {
-            app(BonusLedger::class)->resetCycle($clientId, auth('admin')->id(), $reason);
-
-            return 'تم إعادة تعيين الدورة';
-        }, $clientId);
-    }
-
     public function log()
     {
         $bonuses = DB::table('tbl_client_bonuses as b')
@@ -501,39 +199,5 @@ class BonusController extends Controller
         $clientId = DB::table('tbl_client_bonuses')->where('id', $bonusId)->value('client_id');
 
         return $clientId ? (int) $clientId : null;
-    }
-
-    public function saveSettings(Request $request)
-    {
-        $validated = $request->validate([
-            'bonus_enabled'                 => 'nullable|in:0,1',
-            'bonus_months_required'         => 'required|integer|min:1|max:120',
-            'bonus_grace_days'              => 'required|integer|min:0|max:31',
-            'bonus_catchup_per_cycle'       => 'required|integer|min:0|max:12',
-            'bonus_recovery_months'         => 'required|integer|min:1|max:12',
-            'bonus_hard_reset_after_months' => 'required|integer|min:0|max:12',
-            'bonus_spiral_after_months'     => 'required|integer|min:1|max:12',
-            'bonus_count_start_date'        => 'required|date',
-            'bonus_require_zero_balance'    => 'nullable|in:0,1',
-            'bonus_invoice_notes'           => 'nullable|string|max:255',
-            'bonus_client_types'            => 'required|in:internet,both',
-        ]);
-
-        // The form offers "internet only" (default) or "internet + satellite".
-        $validated['bonus_client_types'] = $validated['bonus_client_types'] === 'both'
-            ? 'internet,satellite'
-            : 'internet';
-
-        $validated['bonus_enabled']               = $request->input('bonus_enabled', '0');
-        $validated['bonus_require_zero_balance']  = $request->input('bonus_require_zero_balance', '0');
-
-        foreach ($validated as $key => $value) {
-            BonusSettings::set($key, $value);
-        }
-
-
-        return redirect()
-            ->route('admin.bonus.settings')
-            ->with('success', 'تم حفظ إعدادات البونص');
     }
 }

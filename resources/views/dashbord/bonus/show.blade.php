@@ -40,8 +40,8 @@
                         <span class="text-muted" style="font-size:13px">{{ $client->phone }}</span>
                     </div>
                     <div class="text-end">
-                        <div style="font-size:26px;font-weight:700" dir="ltr">{{ $progress->progress }} / {{ $progress->required }}</div>
-                        <div class="text-muted" style="font-size:12px">تقدّم الدورة</div>
+                        <div style="font-size:26px;font-weight:700" dir="ltr">{{ $progress->credits }} / {{ $progress->required }}</div>
+                        <div class="text-muted" style="font-size:12px">الأشهر المحتسبة</div>
                     </div>
                 </div>
 
@@ -50,158 +50,52 @@
                         <div class="col-6 col-md-3">
                             <div class="border rounded p-2 p-md-3 h-100">
                                 <div class="text-muted" style="font-size:12px">الحالة</div>
-                                <div class="fw-bold" style="font-size:13px">
-                                    @switch($progress->status)
-                                        @case('compliant') 🟢 منتظم @break
-                                        @case('recovering') 🟡 عائد للانتظام @break
-                                        @case('excellent') 💎 ممتاز في الدفع @break
-                                        @case('late') 🟠 متأخر @break
-                                        @case('spiral') 🔴 دوامة @break
-                                        @case('hard_reset') ⚫ متعثر (العداد صفر) @break
-                                        @case('excluded') ⛔ غير مشمول بالبرنامج @break
-                                        @case('inactive') ⛔ غير نشط — خارج البرنامج @break
-                                        @default {{ $progress->status }}
-                                    @endswitch
-                                </div>
+                                <div class="fw-bold" style="font-size:15px">{{ $progress->statusLabel() }}</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="border rounded p-2 p-md-3 h-100">
+                                <div class="text-muted" style="font-size:12px">الرصيد الحالي</div>
+                                <div class="fw-bold" style="font-size:15px" dir="ltr">{{ number_format($progress->balance, 2) }}$</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="border rounded p-2 p-md-3 h-100">
+                                <div class="text-muted" style="font-size:12px">باقي للاستحقاق</div>
+                                <div class="fw-bold" style="font-size:15px" dir="ltr">{{ $progress->remainingToEarn() }} شهر</div>
                             </div>
                         </div>
                         <div class="col-6 col-md-3">
                             <div class="border rounded p-2 p-md-3 h-100">
                                 <div class="text-muted" style="font-size:12px">الشهر المتوقع</div>
-                                <div class="fw-bold" style="font-size:13px">{{ $progress->nextEligibleMonth ?? '—' }}</div>
-                            </div>
-                        </div>
-                        <div class="col-6 col-md-3">
-                            <div class="border rounded p-2 p-md-3 h-100">
-                                <div class="text-muted" style="font-size:12px">استدراكات مستخدمة</div>
-                                <div class="fw-bold" style="font-size:13px">{{ $progress->catchupsUsed }}</div>
-                            </div>
-                        </div>
-                        <div class="col-6 col-md-3">
-                            <div class="border rounded p-2 p-md-3 h-100">
-                                <div class="text-muted" style="font-size:12px">أشهر متأخرة (مستحقة)</div>
-                                <div class="fw-bold" style="font-size:13px">{{ $progress->carriedArrears }}</div>
+                                <div class="fw-bold" style="font-size:13px" dir="ltr">{{ $progress->nextEligibleMonth ?? '—' }}</div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="alert alert-warning mb-4" style="font-size:13px">
-                        <div class="fw-bold mb-2">⏳ ما تبقّى قبل تغيّر التصنيف</div>
-                        @if($progress->catchupsUsed > 0)
-                            <div class="mb-2">
-                                🟡 <strong>الاستدراك</strong>:
-                                @if($progress->lastCatchupMonth)
-                                    استُخدم في <strong dir="ltr">{{ $progress->lastCatchupMonth }}</strong>
-                                @else
-                                    استُخدم
-                                @endif
-                                — لا يوجد رصيد استدراك متبقٍ في هذه الدورة
-                                <span class="text-muted">(أشهر نظيفة متتالية: {{ $progress->cleanMonths }} من {{ \App\Services\Bonus\BonusSettings::recoveryMonths() }})</span>
-                            </div>
+                    <div class="mb-3" style="font-size:13px">
+                        <span class="text-muted">حالة البونص:</span>
+                        @if($openBonus)
+                            @switch($openBonus->status)
+                                @case('pending') <b>بانتظار القرار</b> @break
+                                @case('approved') <b>معتمد (لم يُصدر)</b> @break
+                                @case('postponed') <b class="text-warning">⏸ مؤجّل</b> @break
+                                @default <b>{{ $openBonus->status }}</b>
+                            @endswitch
+                        @else
+                            <b>لا يوجد بونص مفتوح</b>
                         @endif
-                        <div class="d-flex flex-wrap gap-3">
-                            <div>
-                                🔴 ليصبح <strong>دوامة</strong>:
-                                @if($progress->monthsToSpiral > 0)
-                                    <strong>{{ $progress->monthsToSpiral }}</strong> شهر متأخر إضافي
-                                @else
-                                    <strong>هو الآن في حالة دوامة</strong>
-                                @endif
-                            </div>
-                            <div>
-                                ⚫ ليصبح <strong>متعثر</strong> (العدّاد صفر):
-                                @if($progress->monthsToHardReset > 0)
-                                    <strong>{{ $progress->monthsToHardReset }}</strong> شهر متأخر إضافي
-                                @else
-                                    <strong>هو الآن متعثر</strong>
-                                @endif
-                            </div>
-                            @if($progress->nextBoundaryDate)
-                                <div>
-                                    📅 التاريخ الحاسم:
-                                    <strong dir="ltr">{{ $progress->nextBoundaryDate }}</strong>
-                                    @if($progress->daysToNextBoundary !== null)
-                                        (بعد <strong>{{ $progress->daysToNextBoundary }}</strong> يوم)
-                                    @endif
-                                </div>
-                            @endif
-                        </div>
                     </div>
 
-                    {{-- ===== نمط الدفع ودرجة الالتزام ===== --}}
-                    @php
-                        $patMap = [
-                            'precise'    => ['⚡ دقيق', 'يدفع قبل أو في تاريخ الاستحقاق', '#0c6a4a', '#d8f5ea'],
-                            'week'       => ['✅ خلال أسبوع', 'يدفع خلال الأيام السبعة الأولى', '#1c6b33', '#dff3e3'],
-                            'late_habit' => ['🕐 متأخر عادةً', 'يدفع عادةً بعد 8–15 يوماً', '#8a6200', '#fff2d1'],
-                            'slow'       => ['🐢 مماطل', 'يدفع عادةً بعد 16–30 يوماً', '#8a4b00', '#ffe6cc'],
-                            'very_slow'  => ['⏳ مماطل جداً', 'يدفع عادةً بعد أكثر من 30 يوماً', '#a31919', '#fde0e0'],
-                        ];
-                        $pat = $patMap[$progress->pattern] ?? ['— لا سجل كافٍ', 'لا توجد دفعات كافية بعد', '#7a838c', '#eef0f2'];
-                        $scoreColor = $progress->score >= 85 ? '#1c6b33' : ($progress->score >= 60 ? '#8a6200' : '#a31919');
-                    @endphp
-                    <div class="row g-2 mb-3">
-                        <div class="col-12 col-md-6">
-                            <div style="border:1px solid #e9ecef;border-radius:12px;padding:12px">
-                                <div class="text-muted mb-1" style="font-size:12px">نمط الدفع (كيف يدفع عادةً)</div>
-                                <div class="d-flex align-items-center gap-2 flex-wrap">
-                                    <span class="pat-badge" style="background:{{ $pat[3] }};color:{{ $pat[2] }};font-size:13px;padding:4px 10px">{{ $pat[0] }}</span>
-                                    <span class="fw-bold">{{ $progress->lagLabel() }}</span>
-                                </div>
-                                <div class="text-muted mt-1" style="font-size:12px">{{ $pat[1] }}</div>
-                            </div>
+                    @if($progress->balance > 0.009)
+                        <div class="alert alert-warning py-2 mb-3" style="font-size:12px">
+                            الرصيد غير صفري: يجب تصفيته قبل إصدار الفاتورة.
                         </div>
-                        <div class="col-12 col-md-6">
-                            <div style="border:1px solid #e9ecef;border-radius:12px;padding:12px">
-                                <div class="text-muted mb-1" style="font-size:12px">درجة الالتزام (0–100)</div>
-                                <div class="d-flex align-items-center gap-2">
-                                    <span class="fw-bold" style="font-size:26px;color:{{ $scoreColor }}" dir="ltr">{{ $progress->score }}</span>
-                                    <div class="flex-grow-1">
-                                        <div class="progress" style="height:10px">
-                                            <div class="progress-bar" style="width:{{ $progress->score }}%;background:{{ $scoreColor }}"></div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="text-muted mt-1" style="font-size:11.5px">
-                                    45% الموقف المالي · 35% الأشهر المحتسبة · 20% الانتظام
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    @endif
 
-                    <h4 class="mb-2" style="font-size:15px">سجل الأشهر</h4>
-                    <div class="row g-2 mb-3">
-                        @foreach($progress->months as $m)
-                            @php
-                                $isCatchup = ($m['state'] ?? '') === 'catchup';
-                                $cls = $isCatchup
-                                    ? 'month-catchup'
-                                    : (($m['state'] ?? '') === 'on_time' ? 'month-on_time' : (($m['state'] ?? '') === 'late' ? 'month-late' : 'month-unpaid'));
-                            @endphp
-                            <div class="col-6 col-md-3">
-                                <div class="month-box {{ $cls }}">
-                                    <span class="m">{{ $m['month'] }}</span>
-                                    <span class="s">
-                                        @if($isCatchup && $m['credited']) ✓ استدراك
-                                        @elseif($m['credited']) ✓ محتسب
-                                        @elseif(($m['state'] ?? '') === 'duplicate') ✗ شهر مكرر
-                                        @elseif(($m['state'] ?? '') === 'unpaid') — غير مدفوع
-                                        @else ✗ غير محتسب
-                                        @endif
-                                    </span>
-                                    <span class="d">
-                                        @if(!empty($m['paid_at']))
-                                            دُفع: {{ \Illuminate\Support\Carbon::parse($m['paid_at'])->format('Y-m-d H:i') }}
-                                        @else
-                                            استحقاق: {{ $m['due'] }}
-                                        @endif
-                                    </span>
-                                </div>
-                            </div>
-                        @endforeach
-                        @if(empty($progress->months))
-                            <div class="col-12 text-muted">لا توجد فواتير اشتراك بعد تاريخ بدء الاحتساب.</div>
-                        @endif
+                    <div class="alert alert-light border py-2 mb-3" style="font-size:12px">
+                        <b>القاعدة:</b> الشهر يُحتسب إذا كان رصيد الزبون صفراً عند استحقاق الفاتورة التالية
+                        + أيام السماح. العدّ تراكمي — الشهر غير المسدَّد لا يُحتسب فقط، ولا يُصفَّر شيء.
                     </div>
 
                     <div class="table-responsive">
@@ -211,7 +105,8 @@
                                     <th>الشهر</th>
                                     <th>الاستحقاق</th>
                                     <th>الحالة</th>
-                                    <th>تاريخ ووقت الدفع</th>
+                                    <th>الرصيد عند الحدّ</th>
+                                    <th>تاريخ الدفع</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -220,78 +115,25 @@
                                     <td class="fw-bold">{{ $m['month'] }}</td>
                                     <td>{{ $m['due'] }}</td>
                                     <td>
-                                        @if(($m['state'] ?? '') === 'catchup') <span class="badge st-catchup">🟡 استدراك</span>
-                                        @elseif($m['credited']) <span class="badge st-ok">✓ محتسب</span>
-                                        @elseif(($m['state'] ?? '') === 'duplicate') <span class="badge st-bad">شهر مكرر</span>
-                                        @elseif(($m['state'] ?? '') === 'unpaid') <span class="badge st-bad">غير مدفوع</span>
-                                        @else <span class="badge st-bad">غير محتسب</span>
+                                        @if($m['credited'])
+                                            <span class="badge st-ok">✓ محتسب</span>
+                                        @else
+                                            <span class="badge st-bad">غير محتسب</span>
                                         @endif
                                     </td>
+                                    <td dir="ltr" class="text-end">{{ number_format($m['balance'], 2) }}$</td>
                                     <td dir="ltr" class="text-end">
                                         {{ !empty($m['paid_at']) ? \Illuminate\Support\Carbon::parse($m['paid_at'])->format('Y-m-d H:i') : '—' }}
                                     </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="4" class="text-center text-muted">لا توجد أشهر</td></tr>
+                                <tr><td colspan="5" class="text-center text-muted py-3">لا توجد أشهر محسوبة بعد</td></tr>
                             @endforelse
                             </tbody>
                         </table>
                     </div>
 
-                    <hr class="my-4">
-
-                    <h4 class="mb-3" style="font-size:15px">إجراءات الإدارة</h4>
-
-                    @php
-                        $statusLabels = ['pending' => 'بانتظار القرار', 'approved' => 'معتمد (لم يُصدر)', 'postponed' => 'مؤجّل', 'redeemed' => 'مُصدر', 'cancelled' => 'ملغى'];
-                        $sourceLabels = ['auto' => 'تلقائي (24 شهر)', 'manual' => 'يدوي'];
-                        $canApply = $openBonus && $openBonus->status === 'approved' && $balance <= 0;
-                    @endphp
-
-                    {{-- ========== صندوق الحالة ========== --}}
-                    <div class="border rounded p-3 mb-3" style="background:#fbfcfd">
-                        <div class="fw-bold mb-2" style="font-size:13.5px">حالة البونص الآن</div>
-                        <div class="row g-2" style="font-size:12.5px">
-                            <div class="col-12 col-md-6">
-                                @if($progress->progress >= $progress->required)
-                                    <div class="text-success">✔ بلغ شرط الأشهر ({{ $progress->progress }}/{{ $progress->required }})</div>
-                                @else
-                                    <div class="text-muted">⏳ التقدّم {{ $progress->progress }}/{{ $progress->required }} — يتبقّى <strong>{{ $remainingToEarn }}</strong> شهراً</div>
-                                @endif
-                                @if($progress->hasOpenBonus)
-                                    <div class="text-warning">
-                                        🎁 يوجد بونص مفتوح — لا يمكن منح آخر قبل إغلاقه
-                                        @if($openBonus && $openBonus->status === 'pending')
-                                            (يمكن حذفه إن كان بالخطأ)
-                                        @endif
-                                    </div>
-                                @else
-                                    <div class="text-muted">🎁 لا يوجد بونص مفتوح</div>
-                                @endif
-                            </div>
-                            <div class="col-12 col-md-6">
-                                @if($balance > 0)
-                                    <div class="text-danger">💵 رصيد الزبون {{ number_format($balance, 2) }}$ — يجب تصفيته قبل إصدار الفاتورة</div>
-                                @else
-                                    <div class="text-success">💵 لا رصيد عليه — جاهز للإصدار</div>
-                                @endif
-                                @if($openBonus)
-                                    <div class="text-muted">
-                                        📄 بونص #{{ $openBonus->id }} — {{ $statusLabels[$openBonus->status] ?? $openBonus->status }}
-                                    </div>
-                                    @if($openBonus->status === 'postponed')
-                                        <div class="text-warning">
-                                            ⏸ مؤجّل: {{ $openBonus->postpone_reason }}
-                                            @if($openBonus->postpone_target_month)
-                                                — الشهر المستهدف
-                                                <span style="white-space:nowrap">{{ \Carbon\Carbon::createFromFormat('Y-m', $openBonus->postpone_target_month)->translatedFormat('F Y') }}</span>
-                                            @endif
-                                        </div>
-                                    @endif
-                                @endif
-                            </div>
-                        </div>
-                    </div>
+                    <h6 class="mt-4 mb-2 fw-bold">إجراءات الإدارة</h6>
 
                     {{-- ========== الإجراءات الأساسية ========== --}}
                     <div class="row g-2 mb-3">
@@ -303,7 +145,7 @@
                                         @if($eligible)
                                             الزبون مستحق — المنح يُنشئ التزاماً مفتوحاً يحتاج اعتماداً.
                                         @else
-                                            غير مستحق بعد ({{ $progress->progress }}/{{ $progress->required }}).
+                                            غير مستحق بعد ({{ $progress->credits }}/{{ $progress->required }}).
                                         @endif
                                     </div>
                                     <form method="POST" action="{{ route('admin.bonus.grant', $client->id) }}" class="mt-auto js-confirm"
@@ -419,74 +261,6 @@
                             </div>
                         @endif
                     </div>
-
-                    {{-- ========== تعديل النقاط + الإعادة ========== --}}
-                    <div class="row g-2">
-                        <div class="col-12 col-md-6">
-                            <div class="border rounded p-3 h-100">
-                                <div class="fw-bold mb-1" style="font-size:13.5px">✎ تعديل النقاط يدوياً</div>
-                                <div class="text-muted mb-2" style="font-size:11.5px">رقم موجب يضيف، سالب يخصم (من −24 إلى 24).</div>
-                                <form method="POST" action="{{ route('admin.bonus.points', $client->id) }}" class="row g-2 js-confirm"
-                                      data-title="تعديل النقاط؟"
-                                      data-text="سيُضاف التعديل إلى السجل باسمك."
-                                      data-confirm="نعم، طبّق">
-                                    @csrf
-                                    <div class="col-4">
-                                        <label class="form-label mb-1" style="font-size:11px">النقاط</label>
-                                        <input type="number" name="points" class="form-control form-control-sm" value="1" min="-24" max="24" step="1" required>
-                                    </div>
-                                    <div class="col-8">
-                                        <label class="form-label mb-1" style="font-size:11px">السبب</label>
-                                        <input type="text" name="reason" class="form-control form-control-sm" placeholder="مثال: تعويض عن انقطاع" maxlength="255">
-                                    </div>
-                                    <div class="col-12">
-                                        <button class="btn btn-primary w-100 btn-sm">تطبيق التعديل</button>
-                                    </div>
-                                </form>
-
-                                @if($adjustments->isNotEmpty())
-                                    <div class="mt-2 pt-2" style="border-top:1px solid #eee;color:#4d5863">
-                                        <div class="text-muted mb-1" style="font-size:11px">آخر التعديلات</div>
-                                        @foreach($adjustments as $adj)
-                                            <div class="d-flex justify-content-between" style="font-size:11.5px">
-                                                <span>
-                                                    @if($adj->type === 'reset')
-                                                        <span class="text-danger">تصفير</span>
-                                                    @else
-                                                        <span class="{{ $adj->points > 0 ? 'text-success' : 'text-danger' }}">{{ $adj->points > 0 ? '+' : '' }}{{ $adj->points }}</span>
-                                                    @endif
-                                                    {{ $adj->reason ? '— '.$adj->reason : '' }}
-                                                </span>
-                                                <span class="text-muted">{{ substr((string) $adj->created_at, 0, 10) }}</span>
-                                            </div>
-                                        @endforeach
-                                    </div>
-                                @endif
-                            </div>
-                        </div>
-
-                        <div class="col-12 col-md-6">
-                            <div class="border rounded p-3 h-100">
-                                <div class="fw-bold mb-1" style="font-size:13.5px">⟲ إعادة تعيين الدورة</div>
-                                <div class="text-muted mb-2" style="font-size:11.5px">
-                                    يُصفّر العدّاد إلى صفر ويُسجّل التعديلات اليدوية ويلغي أي بونص مفتوح. لا يمسّ الفواتير.
-                                </div>
-                                <form method="POST" action="{{ route('admin.bonus.reset', $client->id) }}" class="js-confirm"
-                                      data-title="إعادة تعيين الدورة؟"
-                                      data-text="هذا الإجراء لا يمكن التراجع عنه."
-                                      data-confirm="نعم، صفّر"
-                                      data-danger="1">
-                                    @csrf
-                                    <input type="text" name="reason" class="form-control form-control-sm mb-2" placeholder="سبب الإعادة" maxlength="255">
-                                    <button class="btn btn-danger w-100 btn-sm">تصفير الدورة</button>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-
-                    <hr class="my-4">
-
-                    <h4 class="mb-3" style="font-size:15px">سجل البونص</h4>
 
                     {{-- هاتف: بطاقات --}}
                     <div class="d-md-none">

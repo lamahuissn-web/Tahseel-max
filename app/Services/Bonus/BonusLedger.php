@@ -21,10 +21,6 @@ use RuntimeException;
  */
 class BonusLedger
 {
-    public function __construct(protected BonusProgressService $progress)
-    {
-    }
-
     // ------------------------------------------------------------- grant
 
     public function grant(int $clientId, ?int $adminId, ?string $notes = null, bool $approveNow = false): ClientBonus

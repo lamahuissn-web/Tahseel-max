@@ -88,11 +88,12 @@ class BonusApiTest extends TestCase
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.required', 24);
 
-        $this->assertArrayHasKey('compliant', $response->json('data'));
-        $this->assertArrayHasKey('postponed', $response->json('data'));
+        $this->assertArrayHasKey('clean', $response->json('data'));
+        $this->assertArrayHasKey('late', $response->json('data'));
+        $this->assertArrayHasKey('eligible', $response->json('data'));
     }
 
-    public function test_the_list_returns_progress_status_and_habit(): void
+    public function test_the_list_returns_the_progress_and_the_two_states(): void
     {
         $client = $this->clientWithMonths(24);
         $admin  = $this->adminWithRole('Super-Admin');
@@ -108,10 +109,12 @@ class BonusApiTest extends TestCase
         $this->assertSame(24, $row['progress']);
         $this->assertSame(24, $row['required']);
         $this->assertArrayHasKey('statusLabel', $row);
-        $this->assertArrayHasKey('habitLabel', $row);
-        $this->assertArrayHasKey('score', $row);
         $this->assertArrayHasKey('nextEligibleMonth', $row);
         $this->assertNull($row['openBonus']);
+        // the removed metrics must not creep back into the contract
+        $this->assertArrayNotHasKey('habitLabel', $row);
+        $this->assertArrayNotHasKey('score', $row);
+        $this->assertArrayNotHasKey('pattern', $row);
     }
 
     public function test_the_list_shows_an_open_postponed_bonus(): void
@@ -131,10 +134,12 @@ class BonusApiTest extends TestCase
             ->assertJsonPath('data.rows.0.openBonusLabel', 'مؤجّل');
     }
 
-    public function test_the_postponed_and_eligible_filters_are_honest(): void
+    public function test_the_eligible_and_clean_filters_are_honest(): void
     {
         $a = $this->clientWithMonths(24);
         $admin = $this->adminWithRole('Super-Admin');
+
+        // an open bonus (even a postponed one) means "already has one" — never eligible
         ClientBonus::create([
             'client_id' => $a, 'earned_at' => now()->toDateString(),
             'status' => ClientBonus::STATUS_POSTPONED, 'source' => 'auto',
@@ -143,20 +148,20 @@ class BonusApiTest extends TestCase
         Cache::flush();
 
         $this->withToken($this->tokenFor($admin))
-            ->getJson('/api/v1/bonus/clients?filter=postponed')
-            ->assertOk()
-            ->assertJsonPath('data.meta.total', 1)
-            ->assertJsonPath('data.rows.0.id', $a);
-
-        $this->withToken($this->tokenFor($admin))
             ->getJson('/api/v1/bonus/clients?filter=eligible')
             ->assertOk()
             ->assertJsonPath('data.meta.total', 0);
 
         $this->withToken($this->tokenFor($admin))
-            ->getJson('/api/v1/bonus/clients?filter=excellent')
+            ->getJson('/api/v1/bonus/clients?filter=clean')
             ->assertOk()
-            ->assertJsonPath('data.meta.total', 1);
+            ->assertJsonPath('data.meta.total', 1)
+            ->assertJsonPath('data.rows.0.openBonus', 'postponed');
+
+        // the retired filters are refused instead of silently returning everything
+        $this->withToken($this->tokenFor($admin))
+            ->getJson('/api/v1/bonus/clients?filter=postponed')
+            ->assertStatus(422);
     }
 
     public function test_the_client_details_expose_the_months_grid_read_only(): void
@@ -172,8 +177,9 @@ class BonusApiTest extends TestCase
             ->json('data');
 
         $this->assertNotEmpty($data['months']);
-        $this->assertArrayHasKey('state', $data['months'][0]);
-        $this->assertArrayHasKey('habitSentence', $data);
+        $this->assertArrayHasKey('credited', $data['months'][0]);
+        $this->assertArrayHasKey('balance', $data['months'][0]);
+        $this->assertArrayNotHasKey('habitSentence', $data);
         $this->assertSame(0, $data['balance']);
     }
 

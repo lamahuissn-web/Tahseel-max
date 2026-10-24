@@ -6,7 +6,6 @@ use App\Models\Admin;
 use App\Models\AppConfig;
 use App\Models\ClientBonus;
 use App\Services\Bonus\BonusLedger;
-use App\Services\Bonus\BonusProgressService;
 use App\Services\Bonus\BonusSettings;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -176,58 +175,6 @@ class BonusActionsTest extends TestCase
         $this->ledger()->applyNow($bonus->id, 1);
     }
 
-    // ---------------------------------------------------- points and resets
-
-    public function test_manual_points_raise_the_progress(): void
-    {
-        $client = $this->client();
-        $inv = $this->invoice($client, '2026-01-16');
-        $this->pay($inv, $client, '2026-01-16');
-
-        $this->assertSame(1, $this->progress()->forClient($client)->progress);
-
-        $this->ledger()->addPoints($client, 3, 1, 'ظرف خاص');
-        BonusSettings::flush();
-
-        $this->assertSame(4, $this->progress()->forClient($client)->progress);
-    }
-
-    public function test_reset_also_wipes_points_granted_before_it(): void
-    {
-        $client = $this->client();
-        $this->ledger()->addPoints($client, 5, 1, 'قبل التصفير');
-        $this->assertSame(5, $this->progress()->forClient($client)->progress);
-
-        $this->ledger()->resetCycle($client, 1, 'تصفير');
-
-        $this->assertSame(0, $this->progress()->forClient($client)->progress);
-    }
-
-    public function test_points_still_count_when_the_cycle_has_no_invoices_yet(): void
-    {
-        $client = $this->client();
-        $this->ledger()->addPoints($client, 2, 1, 'بعد الاستبدال');
-
-        $this->assertSame(2, $this->progress()->forClient($client)->progress);
-    }
-
-    public function test_reset_moves_the_cycle_origin_to_zero(): void
-    {
-        $client = $this->client();
-        foreach (['2026-01-16', '2026-02-16', '2026-03-16'] as $due) {
-            $inv = $this->invoice($client, $due);
-            $this->pay($inv, $client, $due);
-        }
-
-        $this->assertSame(3, $this->progress()->forClient($client)->progress);
-
-        $this->ledger()->resetCycle($client, 1, 'قرار إداري');
-
-        $fresh = $this->progress()->forClient($client);
-        $this->assertSame(0, $fresh->progress, 'Everything earned before the reset is dropped.');
-    }
-
-    // ------------------------------------------------------------ interface
 
     public function test_collector_cannot_fire_bonus_actions(): void
     {
@@ -287,11 +234,13 @@ class BonusActionsTest extends TestCase
         $this->actingAs($admin->fresh(), 'admin')
             ->get(route('admin.bonus.show', $client))
             ->assertOk()
-            ->assertSee('استدراك')
             ->assertSee('2026-09-20 10:00')
-            ->assertSee('تاريخ ووقت الدفع')
-            ->assertSee('ما تبقّى قبل تغيّر التصنيف')
-            ->assertSee('التاريخ الحاسم');
+            ->assertSee('تاريخ الدفع')
+            ->assertSee('الأشهر المحتسبة')
+            // the 021 machinery must not leave a trace on the panel
+            ->assertDontSee('استدراك')
+            ->assertDontSee('ما تبقّى قبل تغيّر التصنيف')
+            ->assertDontSee('التاريخ الحاسم');
     }
 
     // ------------------------------------------- notification / value floor
@@ -306,7 +255,7 @@ class BonusActionsTest extends TestCase
 
         $bonus = $this->ledger()->grant($client, 1, null, true);
 
-        $this->app->bind(BonusLedger::class, fn ($app) => new class($app->make(BonusProgressService::class)) extends BonusLedger {
+        $this->app->bind(BonusLedger::class, fn ($app) => new class extends BonusLedger {
             protected function notifyIssued(int $clientId, int $invoiceId, string $dueDate): void
             {
                 throw new RuntimeException('telegram is down');
@@ -361,13 +310,6 @@ class BonusActionsTest extends TestCase
         return app(BonusLedger::class);
     }
 
-    private function progress(): BonusProgressService
-    {
-        return app(BonusProgressService::class);
-    }
-
-    // ------------------------------------------------------------ admin panel UX
-
     public function test_the_panel_states_the_bonus_position_in_arabic(): void
     {
         $admin  = $this->bonusAdmin();
@@ -378,11 +320,11 @@ class BonusActionsTest extends TestCase
             ->get(route('admin.bonus.show', $client))
             ->assertOk();
 
-        $response->assertSee('حالة البونص الآن', false);
-        $response->assertSee('التقدّم', false);
+        $response->assertSee('الحالة', false);
+        $response->assertSee('الرصيد الحالي', false);
+        $response->assertSee('باقي للاستحقاق', false);
         $response->assertSee('لا يوجد بونص مفتوح', false);
         $response->assertSee('إجراءات الإدارة', false);
-        $response->assertSee('تعديل النقاط يدوياً', false);
         // the old stale sentence must never come back
         $response->assertDontSee('سيُضاف في المرحلة القادمة', false);
     }

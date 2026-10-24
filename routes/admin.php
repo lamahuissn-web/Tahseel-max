@@ -319,8 +319,6 @@ Route::group(
 
                 // writes
                 Route::post('/client/{clientId}/grant', [\App\Http\Controllers\Admin\BonusController::class, 'grant'])->name('grant');
-                Route::post('/client/{clientId}/points', [\App\Http\Controllers\Admin\BonusController::class, 'points'])->name('points');
-                Route::post('/client/{clientId}/reset', [\App\Http\Controllers\Admin\BonusController::class, 'reset'])->name('reset');
                 Route::post('/entry/{bonusId}/approve', [\App\Http\Controllers\Admin\BonusController::class, 'approve'])->name('approve');
                 Route::post('/entry/{bonusId}/cancel', [\App\Http\Controllers\Admin\BonusController::class, 'cancel'])->name('cancel');
                 Route::post('/entry/{bonusId}/delete', [\App\Http\Controllers\Admin\BonusController::class, 'destroy'])->name('delete');
