@@ -173,7 +173,7 @@ class BonusLedger
      */
     public function applyNow(int $bonusId, ?int $adminId): array
     {
-        return DB::transaction(function () use ($bonusId, $adminId) {
+        $result = DB::transaction(function () use ($bonusId, $adminId) {
             $bonus = ClientBonus::query()->lockForUpdate()->findOrFail($bonusId);
 
             if ($bonus->status === ClientBonus::STATUS_REDEEMED) {
@@ -185,6 +185,14 @@ class BonusLedger
             }
 
             $this->assertInProgram((int) $bonus->client_id);
+
+            // A free month is a 0.00 invoice. If the configured value ever drifts this
+            // would create a PAID invoice with no revenue row — understated cash and a
+            // month that is not free. Refuse instead of trusting the setting.
+            $invoiceValue = BonusSettings::invoiceValue();
+            if (abs($invoiceValue) > 0.0001) {
+                throw new RuntimeException('قيمة فاتورة الشهر المجاني يجب أن تكون صفراً.');
+            }
 
             if (BonusSettings::requireZeroBalance() && $this->outstanding((int) $bonus->client_id) > 0) {
                 throw new RuntimeException('لا يمكن إصدار الشهر المجاني والزبون عليه رصيد غير مدفوع.');
@@ -208,8 +216,8 @@ class BonusLedger
                 'invoice_number'   => $this->nextInvoiceNumber(),
                 'client_id'        => $bonus->client_id,
                 'subscription_id'  => DB::table('tbl_clients')->where('id', $bonus->client_id)->value('subscription_id'),
-                'amount'           => BonusSettings::invoiceValue(),
-                'paid_amount'      => BonusSettings::invoiceValue(),
+                'amount'           => $invoiceValue,
+                'paid_amount'      => $invoiceValue,
                 'remaining_amount' => 0,
                 'enshaa_date'      => now()->toDateString(),
                 'due_date'         => $dueDate,
@@ -238,22 +246,40 @@ class BonusLedger
                 $dueDate
             ), $bonus);
 
-            sendTelegramNotification(
-                sprintf(
-                    '🎉 إصدار شهر مجاني - الزبون #%d | الفاتورة #%d | استحقاق %s بمبلغ 0$',
-                    $bonus->client_id,
-                    $invoiceId,
-                    $dueDate
-                ),
-                'bonus_redeemed'
-            );
-
             return [
-                'bonus'     => $bonus->fresh(),
+                'client_id'  => (int) $bonus->client_id,
+                'bonus'      => $bonus->fresh(),
                 'invoice_id' => $invoiceId,
-                'due_date'  => $dueDate,
+                'due_date'   => $dueDate,
             ];
         });
+
+        // Deliberately OUTSIDE the transaction: sending Telegram inside it held the
+        // invoice locks for the whole HTTP timeout and a failure rolled the issued
+        // free month back. The invoice is committed; the notification is best effort.
+        $this->notifyIssued((int) $result['client_id'], (int) $result['invoice_id'], (string) $result['due_date']);
+
+        return [
+            'bonus'      => $result['bonus'],
+            'invoice_id' => $result['invoice_id'],
+            'due_date'   => $result['due_date'],
+        ];
+    }
+
+    /**
+     * Best-effort admin notification. Never part of the issuance transaction.
+     */
+    protected function notifyIssued(int $clientId, int $invoiceId, string $dueDate): void
+    {
+        sendTelegramNotification(
+            sprintf(
+                '🎉 إصدار شهر مجاني - الزبون #%d | الفاتورة #%d | استحقاق %s بمبلغ 0$',
+                $clientId,
+                $invoiceId,
+                $dueDate
+            ),
+            'bonus_redeemed'
+        );
     }
 
     // ------------------------------------------------------ manual points

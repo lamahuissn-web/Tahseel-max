@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\AppConfig;
+use App\Models\ClientBonus;
 use App\Services\Bonus\BonusProgressService;
 use App\Services\Bonus\BonusSettings;
 use Illuminate\Support\Facades\Artisan;
@@ -762,9 +763,88 @@ class BonusProgressTest extends TestCase
         $this->assertSame(1, $progress->progress, 'The admin can opt satellite back in from settings.');
     }
 
+    // -------------------------------------------- cycle origin / zero bills
+
+    public function test_a_later_cancelled_bonus_must_not_rewind_the_cycle_origin(): void
+    {
+        $client = $this->client();
+
+        // Two months that a redeemed free month already consumed.
+        foreach (['2026-02-05', '2026-03-05'] as $due) {
+            $inv = $this->invoice($client, $due);
+            $this->pay($inv, $client, $due);
+        }
+
+        // The free month was issued on 2026-04-01: everything before it is spent.
+        DB::table('tbl_client_bonuses')->insert([
+            'client_id'    => $client,
+            'status'       => ClientBonus::STATUS_REDEEMED,
+            'source'       => 'manual',
+            'earned_at'    => '2026-04-01 09:00:00',
+            'redeemed_at'  => '2026-04-01 09:00:00',
+            'cycle_months' => 24,
+            'cycle_start'  => '2026-01-01',
+            'created_at'   => '2026-04-01 09:00:00',
+            'updated_at'   => '2026-04-01 09:00:00',
+        ]);
+
+        $before = $this->service()->forClient($client);
+        $this->assertSame(0, $before->progress, 'A redeemed free month restarts the count.');
+
+        // A routine admin cancel writes a second row with no redemption date.
+        DB::table('tbl_client_bonuses')->insert([
+            'client_id'    => $client,
+            'status'       => ClientBonus::STATUS_CANCELLED,
+            'source'       => 'manual',
+            'earned_at'    => '2026-05-01 09:00:00',
+            'cycle_months' => 24,
+            'cycle_start'  => '2026-01-01',
+            'created_at'   => '2026-05-01 09:00:00',
+            'updated_at'   => '2026-05-01 09:00:00',
+        ]);
+
+        $after = $this->service()->forClient($client);
+
+        $this->assertSame(
+            $before->cycleStart,
+            $after->cycleStart,
+            'A bonus row without redeemed_at must never move the cycle origin backwards.'
+        );
+        $this->assertSame(
+            $before->progress,
+            $after->progress,
+            'Months already consumed by a free month must not be counted again.'
+        );
+    }
+
+    public function test_a_zero_amount_bill_neither_credits_nor_breaks_the_run(): void
+    {
+        $client = $this->client();
+
+        $jan = $this->invoice($client, '2026-01-05');
+        $this->pay($jan, $client, '2026-01-05');
+
+        // February is a 0.00 bill: nothing to pay, no revenue row, still 'unpaid'.
+        $this->invoice($client, '2026-02-05', [
+            'amount'           => '0.00',
+            'paid_amount'      => '0.00',
+            'remaining_amount' => '0.00',
+            'status'           => 'unpaid',
+            'paid_date'        => null,
+        ]);
+
+        $mar = $this->invoice($client, '2026-03-05');
+        $this->pay($mar, $client, '2026-03-05');
+
+        $p = $this->service()->forClient($client);
+
+        $this->assertSame(2, $p->progress, 'A 0.00 month is outside the program: it cannot block the months after it.');
+        $this->assertSame(2, $p->cleanMonths);
+        $this->assertFalse($p->hadBreak, 'A 0.00 month is not a break in the run.');
+    }
+
     // ---------------------------------------------------------------- helpers
 
-    /** @return array<int,string> n monthly due dates ending last month */
     /**
      * @return array{0:string,1:string,2:string} the 5th of two months ago, last month, this month
      */
@@ -779,6 +859,7 @@ class BonusProgressTest extends TestCase
         ];
     }
 
+    /** @return array<int,string> n monthly due dates ending last month */
     private function pastDueDates(int $n): array
     {
         $dates = [];

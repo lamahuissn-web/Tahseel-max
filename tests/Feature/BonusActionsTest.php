@@ -301,6 +301,66 @@ class BonusActionsTest extends TestCase
             ->assertSee('التاريخ الحاسم');
     }
 
+    // ------------------------------------------- notification / value floor
+
+    public function test_a_failed_notification_never_rolls_back_the_issued_month(): void
+    {
+        $client = $this->client();
+        foreach (['2026-08-16', '2026-09-16'] as $due) {
+            $inv = $this->invoice($client, $due);
+            $this->pay($inv, $client, $due);
+        }
+
+        $bonus = $this->ledger()->grant($client, 1, null, true);
+
+        $this->app->bind(BonusLedger::class, fn ($app) => new class($app->make(BonusProgressService::class)) extends BonusLedger {
+            protected function notifyIssued(int $clientId, int $invoiceId, string $dueDate): void
+            {
+                throw new RuntimeException('telegram is down');
+            }
+        });
+
+        try {
+            $this->ledger()->applyNow($bonus->id, 1);
+            $this->fail('A failing notification must surface to the caller.');
+        } catch (RuntimeException $e) {
+            $this->assertSame('telegram is down', $e->getMessage());
+        }
+
+        $this->assertSame(
+            1,
+            DB::table('tbl_invoices')->where('client_id', $client)->where('amount', 0)->count(),
+            'The issued invoice is committed before the notification: a dead Telegram must never undo a free month.'
+        );
+        $this->assertSame(ClientBonus::STATUS_REDEEMED, $bonus->fresh()->status);
+    }
+
+    public function test_issuance_is_refused_when_the_configured_invoice_value_is_not_zero(): void
+    {
+        $client = $this->client();
+        $inv = $this->invoice($client, '2026-09-16');
+        $this->pay($inv, $client, '2026-09-16');
+
+        $bonus = $this->ledger()->grant($client, 1, null, true);
+
+        AppConfig::query()->updateOrCreate(['key' => 'bonus_invoice_value'], ['value' => '20']);
+        BonusSettings::flush();
+
+        try {
+            $this->ledger()->applyNow($bonus->id, 1);
+            $this->fail('A non-zero configured value must refuse issuance.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('صفر', $e->getMessage());
+        }
+
+        $this->assertSame(
+            0,
+            DB::table('tbl_invoices')->where('client_id', $client)->where('amount', 0)->count(),
+            'No invoice may be created when the configured value is not zero.'
+        );
+        $this->assertNotSame(ClientBonus::STATUS_REDEEMED, $bonus->fresh()->status);
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private function ledger(): BonusLedger

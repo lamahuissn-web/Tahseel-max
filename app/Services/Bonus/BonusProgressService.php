@@ -127,6 +127,10 @@ class BonusProgressService
                 $bonusInvoiceIds[] = (int) $b->redeemed_invoice_id;
             }
 
+            // The cycle origin only ever moves FORWARD. A later row that carries no
+            // redeemed_at (a cancel, a re-grant, a postpone) must never pull it back:
+            // months already consumed by an issued free month would be counted twice
+            // and the customer would earn a second free month far too early.
             $since = $globalStart;
             if ($b->redeemed_at) {
                 $redeemedDate = Carbon::parse($b->redeemed_at)->toDateString();
@@ -134,7 +138,10 @@ class BonusProgressService
                     $since = $redeemedDate;
                 }
             }
-            $sinceByClient[(int) $b->client_id] = $since;
+            $sinceClientId = (int) $b->client_id;
+            if ($since > ($sinceByClient[$sinceClientId] ?? $globalStart)) {
+                $sinceByClient[$sinceClientId] = $since;
+            }
 
             if (in_array($b->status, [ClientBonus::STATUS_PENDING, ClientBonus::STATUS_APPROVED, ClientBonus::STATUS_POSTPONED], true)) {
                 $openBonus[(int) $b->client_id] = true;
@@ -166,6 +173,9 @@ class BonusProgressService
             ->whereNull('deleted_at')
             ->where('invoice_type', 'subscription')
             ->whereNotNull('due_date')
+            // A 0.00 bill has nothing to pay: it can neither earn a credit nor break
+            // the run. Counting it made free/trial accounts look permanently late.
+            ->where('amount', '>', 0)
             ->where('due_date', '>=', $globalStart)
             ->when($bonusInvoiceIds !== [], fn ($q) => $q->whereNotIn('id', $bonusInvoiceIds))
             ->orderBy('due_date')
