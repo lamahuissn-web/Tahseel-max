@@ -843,6 +843,83 @@ class BonusProgressTest extends TestCase
         $this->assertFalse($p->hadBreak, 'A 0.00 month is not a break in the run.');
     }
 
+    // ------------------------------------------- months vs rows / per cycle
+
+    public function test_unpaid_twins_of_one_month_count_as_one_open_month(): void
+    {
+        $client = $this->client();
+        $dates  = $this->pastDueDates(5);
+
+        foreach ([0, 1, 2, 4] as $i) {
+            $this->pay($this->invoice($client, $dates[$i]), $client, $dates[$i]);
+        }
+
+        // ONE month (two months ago) billed three times and left unpaid: one obligation,
+        // three rows. Its window has closed, so it is the only open month.
+        $this->invoice($client, $dates[3]);
+        $this->invoice($client, \Carbon\Carbon::parse($dates[3])->addDays(9)->toDateString());
+        $this->invoice($client, \Carbon\Carbon::parse($dates[3])->addDays(19)->toDateString());
+
+        $p = $this->service()->forClient($client);
+
+        $this->assertSame('late', $p->status, 'One unpaid month is «متأخر» — being billed 3 times does not make it «دوامة»/«متعثر».');
+    }
+
+    public function test_the_catch_up_allowance_belongs_to_the_cycle_not_the_customer(): void
+    {
+        $client = $this->client();
+
+        $this->invoice($client, '2026-01-16');                 // open → the break
+        $feb = $this->invoice($client, '2026-02-16');
+        $this->pay($feb, $client, '2026-03-20');               // catch-up #1 of cycle 1
+        $this->invoice($client, '2026-03-16');
+        $this->invoice($client, '2026-04-16');
+        $this->invoice($client, '2026-05-16');                 // 3 open → hard reset
+
+        $p = $this->service()->forClient($client);
+
+        $this->assertSame(0, $p->catchupsUsed, 'A new cycle starts with a full allowance, not the old one spent.');
+    }
+
+    public function test_the_habit_is_measured_only_on_months_that_earned_a_credit(): void
+    {
+        $client = $this->client();
+        $dates  = $this->pastDueDates(4);
+
+        $this->invoice($client, $dates[0]);
+        $this->invoice($client, $dates[1]);
+
+        // The customer pays ONLY the newest bill, three days early, while older months stay open.
+        $newest = $this->invoice($client, $dates[3]);
+        $this->pay($newest, $client, \Carbon\Carbon::parse($dates[3])->subDays(3)->toDateString());
+
+        $p = $this->service()->forClient($client);
+
+        $this->assertSame(0, $p->progress);
+        $this->assertNull($p->medianLag, 'A customer who never earned a month has no payment habit to describe.');
+        $this->assertNull($p->pattern, 'No credited month means no habit badge at all.');
+    }
+
+    public function test_a_rebilled_month_already_credited_is_not_a_break(): void
+    {
+        $client = $this->client();
+        $dates  = $this->pastDueDates(5);
+
+        foreach ($dates as $d) {
+            $this->pay($this->invoice($client, $d), $client, $d);
+        }
+
+        // The newest month is billed a second time (the billing day moved) and paid.
+        $newest = \Carbon\Carbon::parse($dates[4]);
+        $twin   = $this->invoice($client, $newest->copy()->addDays(9)->toDateString());
+        $this->pay($twin, $client, $newest->copy()->addDays(10)->toDateString());
+
+        $p = $this->service()->forClient($client);
+
+        $this->assertFalse($p->hadBreak, 'A month billed twice is not a missed month.');
+        $this->assertGreaterThanOrEqual(5, $p->cleanMonths);
+    }
+
     // ---------------------------------------------------------------- helpers
 
     /**

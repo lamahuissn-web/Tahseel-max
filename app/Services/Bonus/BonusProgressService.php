@@ -382,6 +382,10 @@ class BonusProgressService
 
             if ($hardReset > 0 && $break > $hardReset) {
                 $hardResetAt = $i;
+                // «استدراك» is once PER CYCLE: the run starts over here, so the
+                // allowance does too. Carrying it over punished the next cycle.
+                $catchupsUsed = 0;
+                $lastCatchupMonth = null;
             }
 
             $isCredited = false;
@@ -421,9 +425,16 @@ class BonusProgressService
             $credited[$i] = $isCredited;
             $states[$i] = $state;
 
-            if ($payTime !== null) {
+            // Only months that actually earned a credit describe a paying habit.
+            // Counting every settled bill let a customer who ignores the oldest months
+            // and pays only the newest read as «يدفع في يوم الاستحقاق».
+            if ($isCredited && $payTime !== null) {
+                // Calendar days in UTC: the local-midnight subtraction loses a day
+                // across a DST switch (Egypt late-Apr / late-Oct), which silently
+                // moved a customer between habit bands.
                 $lags[] = (int) floor(
-                    ($payTime->copy()->startOfDay()->timestamp - $due->copy()->startOfDay()->timestamp) / 86400
+                    (Carbon::parse($payTime->toDateString(), 'UTC')->timestamp
+                        - Carbon::parse($due->toDateString(), 'UTC')->timestamp) / 86400
                 );
             }
 
@@ -496,12 +507,17 @@ class BonusProgressService
         //   3+ open months -> متعثر  (broke more than two months)
         // A month is only "overdue" once its window has closed: being unpaid in the
         // current month is normal, not a violation.
-        $openCount = 0;
+        // Months, not invoice rows: a month billed twice (the billing day moved) is
+        // ONE obligation. Counting rows turned a single unpaid month into «دوامة»
+        // and, at three rows, into «متعثر» — the exact twin-bill class the credit
+        // guards already handle everywhere else.
+        $openMonths = [];
         for ($i = 0; $i < $count; $i++) {
             if ($settledAt[$i] === null && $windowEnds[$i]->lt(now())) {
-                $openCount++;
+                $openMonths[$dues[$i]->format('Y-m')] = true;
             }
         }
+        $openCount = count($openMonths);
 
         // Clean months: how many months, counting backwards from the newest, were paid
         // inside their own month. A month that is not due yet neither helps nor hurts.
@@ -510,6 +526,11 @@ class BonusProgressService
         for ($i = $count - 1; $i >= 0; $i--) {
             $state = $states[$i] ?? self::STATE_UNPAID;
 
+            if ($state === 'duplicate') {
+                // Same month billed twice: its sibling row owns the credit, so this row
+                // neither adds a clean month nor breaks the run.
+                continue;
+            }
             if ($state === self::STATE_ON_TIME) {
                 $cleanMonths++;
                 continue;
