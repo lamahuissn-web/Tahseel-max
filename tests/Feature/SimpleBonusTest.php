@@ -381,4 +381,50 @@ class SimpleBonusTest extends TestCase
             'updated_at'       => $at.' 10:00:00',
         ]);
     }
+
+    public function test_the_next_eligible_month_counts_the_open_boundaries_as_winnable(): void
+    {
+        // Ten monthly invoices. The last one is unpaid and falls due in three days, so the
+        // boundaries of the last TWO months are still in the future — both are still winnable.
+        $lastDue = Carbon::today()->addDays(3);
+        $dues = [];
+        for ($i = 9; $i >= 0; $i--) {
+            $dues[] = $lastDue->copy()->subMonthsNoOverflow($i)->toDateString();
+        }
+
+        foreach ([
+            'bonus_enabled'          => '1',
+            'bonus_months_required'  => '10',
+            'bonus_grace_days'       => '0',
+            'bonus_count_start_date' => $dues[0],
+        ] as $key => $value) {
+            BonusSettings::set($key, $value);
+        }
+        BonusSettings::flush();
+
+        $clientId = $this->client();
+        foreach ($dues as $i => $due) {
+            $invoiceId = $this->invoice($clientId, $due);
+            if ($i === count($dues) - 1) {
+                continue;   // the last invoice stays unpaid
+            }
+            $this->pay($invoiceId, $clientId, Carbon::parse($due)->subDays(5)->toDateString());
+        }
+
+        $progress = $this->service()->forClient($clientId, true);
+        $this->assertSame(8, $progress->credits);
+        $this->assertSame(10, $progress->required);
+        $this->assertSame(2, $progress->remainingToEarn());
+
+        // honoring both open months finishes the requirement in the LAST invoice's month —
+        // "current month + months left" would have said two months later than the truth
+        $this->assertSame(
+            Carbon::parse($dues[9])->format('Y-m'),
+            $progress->nextEligibleMonth,
+        );
+        $this->assertNotSame(
+            Carbon::now()->startOfMonth()->addMonthsNoOverflow(2)->format('Y-m'),
+            $progress->nextEligibleMonth,
+        );
+    }
 }

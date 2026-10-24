@@ -299,7 +299,7 @@ class SimpleBonusProgressService
         $progress->hasOpenBonus = $hasOpenBonus;
 
         if ($invoices === []) {
-            $progress->nextEligibleMonth = $this->nextMonthFor($progress->credits);
+            $progress->nextEligibleMonth = $this->nextMonthFor($progress->credits, $firstOpenMonth ?? null);
 
             return $progress;
         }
@@ -312,6 +312,7 @@ class SimpleBonusProgressService
         }
 
         // Boundaries come from subscription months only, one per month.
+        $firstOpenMonth = null;
         $months = [];
         foreach ($invoices as $invoice) {
             if ($invoice->invoice_type !== 'subscription') {
@@ -345,7 +346,10 @@ class SimpleBonusProgressService
                 ->endOfDay();
 
             if ($boundary->gt($today)) {
-                continue;   // the month is not over yet — never credited early
+                // the month is not over yet — never credited early, but it is still winnable
+                $firstOpenMonth ??= $key;
+
+                continue;
             }
 
             if ($redeemedAt !== null && $boundary->lte($redeemedAt)) {
@@ -375,7 +379,7 @@ class SimpleBonusProgressService
         $progress->eligible = $progress->credits >= $this->required
             && $progress->balance <= self::EPSILON
             && ! $progress->hasOpenBonus;
-        $progress->nextEligibleMonth = $this->nextMonthFor($progress->credits);
+        $progress->nextEligibleMonth = $this->nextMonthFor($progress->credits, $firstOpenMonth);
 
         return $progress;
     }
@@ -422,11 +426,26 @@ class SimpleBonusProgressService
         return $total;
     }
 
-    private function nextMonthFor(int $credits): string
+    /**
+     * The earliest month the customer can still reach the threshold in.
+     *
+     * A month whose boundary has not passed is still winnable, so the answer must start
+     * there — "current month + months left" told a customer with an open boundary he had
+     * to wait until the month after it, which is a month later than the truth.
+     */
+    private function nextMonthFor(int $credits, ?string $firstOpenMonth = null): string
     {
+        $needed = max(0, $this->required - $credits);
+
+        if ($firstOpenMonth !== null) {
+            $base = Carbon::createFromFormat('Y-m-d', $firstOpenMonth.'-01')->startOfMonth();
+
+            return $base->addMonthsNoOverflow(max(0, $needed - 1))->format('Y-m');
+        }
+
         return Carbon::now()
             ->startOfMonth()
-            ->addMonthsNoOverflow(max(0, $this->required - $credits))
+            ->addMonthsNoOverflow($needed)
             ->format('Y-m');
     }
 
