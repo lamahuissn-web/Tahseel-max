@@ -24,21 +24,73 @@ class SimpleBonusController extends Controller
     {
     }
 
-    public function index()
+    /**
+     * The follow-up screen: EVERY customer, not only the ones who already earned a month.
+     * The owner asked for a page he can work from daily — so it carries the state, the
+     * progress, the habit and the numbers, with tabs, a search box and paging.
+     */
+    public function index(Request $request)
     {
-        $lists = $this->progress->lists();
+        $dataset = $this->progress->followUp();
 
-        return view('dashbord.bonus.eligible', [
-            'eligible'      => $this->withClientNames($lists['eligible']),
-            'verge'         => $this->withClientNames($lists['verge']),
-            'eligibleCost'  => $lists['eligibleCost'],
-            'vergeCost'     => $lists['vergeCost'],
-            'clean'         => $lists['clean'],
-            'late'          => $lists['late'],
-            'required'      => BonusSettings::monthsRequired(),
-            'graceDays'     => BonusSettings::graceDays(),
-            'enabled'       => BonusSettings::enabled(),
-            'startDate'     => BonusSettings::countStartDate(),
+        $tabs = [
+            'all'      => 'الكل',
+            'eligible' => 'مستحق',
+            'verge'    => 'على وشك',
+            'clean'    => 'منتظم',
+            'late'     => 'متأخر',
+        ];
+
+        $tab = (string) $request->query('tab', 'all');
+        if (! array_key_exists($tab, $tabs)) {
+            $tab = 'all';
+        }
+
+        $search = trim((string) $request->query('q', ''));
+
+        $rows = array_values(array_filter($dataset['rows'], function (array $row) use ($tab, $search): bool {
+            $matchesTab = match ($tab) {
+                'eligible' => $row['eligible'],
+                'verge'    => $row['verge'],
+                'clean'    => $row['status'] === 'clean',
+                'late'     => $row['status'] === 'late',
+                default    => true,
+            };
+
+            if (! $matchesTab) {
+                return false;
+            }
+
+            if ($search === '') {
+                return true;
+            }
+
+            $needle = mb_strtolower($search);
+
+            return str_contains(mb_strtolower((string) $row['name']), $needle)
+                || str_contains((string) $row['phone'], $needle);
+        }));
+
+        $perPage = 50;
+        $total   = count($rows);
+        $lastPage = max(1, (int) ceil($total / $perPage));
+        $page    = min(max(1, (int) $request->query('page', 1)), $lastPage);
+
+        return view('dashbord.bonus.followup', [
+            'rows'         => array_slice($rows, ($page - 1) * $perPage, $perPage),
+            'counts'       => $dataset['counts'],
+            'eligibleCost' => $dataset['eligibleCost'],
+            'vergeCost'    => $dataset['vergeCost'],
+            'tabs'         => $tabs,
+            'tab'          => $tab,
+            'search'       => $search,
+            'page'         => $page,
+            'lastPage'     => $lastPage,
+            'total'        => $total,
+            'required'     => BonusSettings::monthsRequired(),
+            'graceDays'    => BonusSettings::graceDays(),
+            'enabled'      => BonusSettings::enabled(),
+            'startDate'    => BonusSettings::countStartDate(),
         ]);
     }
 

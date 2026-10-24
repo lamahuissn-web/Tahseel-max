@@ -41,7 +41,7 @@ class SimpleBonusScreensTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_the_list_shows_the_eligible_customer_and_hides_the_indebted_one(): void
+    public function test_the_followup_page_lists_every_customer_not_only_the_eligible_ones(): void
     {
         $this->setRequired(3);
 
@@ -55,16 +55,116 @@ class SimpleBonusScreensTest extends TestCase
             $this->pay($this->invoice($id, $dates[2]), $id, $this->settleDate($dates[2]));
         }
 
-        // the debt sits on a SERVICE invoice: it must still disqualify
+        // the debt sits on a SERVICE invoice: it still disqualifies from earning
         $this->invoice($dirty, $dates[0], ['invoice_type' => 'service', 'amount' => '40.00']);
 
         $response = $this->actingAs($this->adminWithRole('Super-Admin'), 'admin')
             ->get(route('admin.bonus.index'))
             ->assertOk();
 
+        // the promise of this screen: the owner can follow EVERY customer
+        $response->assertSee('متابعة الزبائن', false);
         $response->assertSee('زبون منتظم', false);
-        $response->assertSee('مستحق الآن', false);
-        $response->assertDontSee('زبون عليه دين', false);
+        $response->assertSee('زبون عليه دين', false);
+        $response->assertSee('إجمالي الزبائن', false);
+    }
+
+    public function test_the_eligible_tab_keeps_only_the_customer_who_earned_the_month(): void
+    {
+        $this->setRequired(3);
+
+        $dates = $this->monthlyDues(4);
+        $clean = $this->client('زبون منتظم');
+        $dirty = $this->client('زبون عليه دين');
+
+        foreach ([$clean, $dirty] as $id) {
+            foreach ([$dates[0], $dates[1], $dates[2]] as $d) {
+                $this->pay($this->invoice($id, $d), $id, $this->settleDate($d));
+            }
+        }
+
+        $this->invoice($dirty, $dates[0], ['invoice_type' => 'service', 'amount' => '40.00']);
+
+        $this->actingAs($this->adminWithRole('Super-Admin'), 'admin')
+            ->get(route('admin.bonus.index', ['tab' => 'eligible']))
+            ->assertOk()
+            ->assertSee('زبون منتظم', false)
+            ->assertDontSee('زبون عليه دين', false);
+    }
+
+    public function test_the_search_filters_by_name_and_by_phone(): void
+    {
+        $this->setRequired(3);
+        $dates = $this->monthlyDues(4);
+
+        $a = $this->client('سامر الخطيب');
+        $b = $this->client('نبيل حداد');
+        foreach ([$a, $b] as $id) {
+            $this->pay($this->invoice($id, $dates[0]), $id, $this->settleDate($dates[0]));
+        }
+
+        $admin = $this->adminWithRole('Super-Admin');
+
+        $this->actingAs($admin, 'admin')
+            ->get(route('admin.bonus.index', ['q' => 'سامر']))
+            ->assertOk()
+            ->assertSee('سامر الخطيب', false)
+            ->assertDontSee('نبيل حداد', false);
+
+        $phone = (string) DB::table('tbl_clients')->where('id', $b)->value('phone');
+
+        $this->actingAs($admin, 'admin')
+            ->get(route('admin.bonus.index', ['q' => $phone]))
+            ->assertOk()
+            ->assertSee('نبيل حداد', false)
+            ->assertDontSee('سامر الخطيب', false);
+    }
+
+    public function test_the_list_is_paged_fifty_at_a_time(): void
+    {
+        $this->setRequired(3);
+        $admin = $this->adminWithRole('Super-Admin');
+
+        for ($i = 1; $i <= 51; $i++) {
+            $this->client('زبون رقم '.$i);
+        }
+
+        $first = $this->actingAs($admin, 'admin')->get(route('admin.bonus.index'))->assertOk();
+        $this->assertSame(50, substr_count($first->getContent(), '>تفاصيل</a>'));
+        $first->assertSee('صفحة 1 من 2', false);
+
+        $second = $this->actingAs($admin, 'admin')->get(route('admin.bonus.index', ['page' => 2]))->assertOk();
+        $this->assertSame(1, substr_count($second->getContent(), '>تفاصيل</a>'));
+        $second->assertSee('صفحة 2 من 2', false);
+    }
+
+    public function test_the_payment_habit_is_described_from_real_payment_dates(): void
+    {
+        $this->setRequired(3);
+        $dates = $this->monthlyDues(4);
+
+        $early = $this->client('زبون مبكر');
+        $late  = $this->client('زبون متأخر');
+        $never = $this->client('زبون بلا دفع');
+
+        foreach ([$dates[0], $dates[1], $dates[2]] as $d) {
+            $this->pay($this->invoice($early, $d), $early, Carbon::parse($d)->subDays(5)->toDateString());
+            $this->pay($this->invoice($late, $d), $late, Carbon::parse($d)->addDays(4)->toDateString());
+        }
+        $this->invoice($never, $dates[0]);
+
+        $response = $this->actingAs($this->adminWithRole('Super-Admin'), 'admin')
+            ->get(route('admin.bonus.index'))
+            ->assertOk();
+
+        $response->assertSee('يدفع قبل الاستحقاق بـ 5', false);
+        $response->assertSee('يتأخر عادةً 4', false);
+        $response->assertSee('لا سجل دفع بعد', false);
+
+        // a habit is a sentence, never a score or a band
+        $response->assertDontSee('الدرجة', false);
+        $response->assertDontSee('دوامة', false);
+        $response->assertDontSee('متعثر', false);
     }
 
     public function test_the_list_states_the_cost_of_issuing_to_everyone(): void

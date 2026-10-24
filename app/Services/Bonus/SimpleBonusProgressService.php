@@ -152,6 +152,194 @@ class SimpleBonusProgressService
         });
     }
 
+    /**
+     * The follow-up dataset: EVERY customer in scope, with his progress, his state
+     * and how he actually pays. This is what the owner reads every day — the eligible
+     * list alone cannot answer "how is this customer doing?".
+     *
+     * Read-only. The money path (issuance) never touches this.
+     *
+     * @return array{rows:array<int,array<string,mixed>>,counts:array<string,int>,eligibleCost:float,vergeCost:float}
+     */
+    public function followUp(int $vergeWithin = 2): array
+    {
+        $fingerprint = md5(implode('|', [
+            (string) DB::table('tbl_invoices')->max('updated_at'),
+            (string) DB::table('tbl_invoices')->count(),
+            (string) DB::table('tbl_revenues')->count(),
+            (string) DB::table('tbl_client_bonuses')->max('updated_at'),
+            $this->required,
+            $this->graceDays,
+            $this->startDate->toDateString(),
+            'habit',
+        ]));
+
+        return Cache::remember('bonus.followup.'.$fingerprint, now()->addMinutes(5), function () use ($vergeWithin) {
+            $ids = $this->inScopeClientIds();
+
+            $clients = DB::table('tbl_clients')
+                ->whereIn('id', $ids)
+                ->get(['id', 'name', 'phone', 'price', 'client_type'])
+                ->keyBy('id');
+
+            $rows = [];
+            $counts = ['all' => 0, 'eligible' => 0, 'verge' => 0, 'clean' => 0, 'late' => 0];
+            $eligibleCost = $vergeCost = 0.0;
+
+            foreach ($this->forClients($ids, true) as $progress) {
+                $client = $clients[$progress->clientId] ?? null;
+                if ($client === null) {
+                    continue;
+                }
+
+                $price = (float) ($client->price ?? 0);
+                $habit = $this->paymentHabit($progress);
+                $gap   = $progress->required - $progress->credits;
+                $verge = ! $progress->eligible
+                    && $gap >= 1
+                    && $gap <= $vergeWithin
+                    && $progress->balance <= self::EPSILON;
+
+                $rows[] = [
+                    'clientId'          => $progress->clientId,
+                    'name'              => $client->name,
+                    'phone'             => (string) ($client->phone ?? ''),
+                    'type'              => $client->client_type === 'internet' ? 'إنترنت' : 'ستلايت',
+                    'price'             => $price,
+                    'credits'           => $progress->credits,
+                    'required'          => $progress->required,
+                    'remaining'         => $progress->remainingToEarn(),
+                    'balance'           => round($progress->balance, 2),
+                    'status'            => $progress->status,
+                    'statusLabel'       => $progress->statusLabel(),
+                    'eligible'          => $progress->eligible,
+                    'verge'             => $verge,
+                    'hasOpenBonus'      => $progress->hasOpenBonus,
+                    'lastCreditedMonth' => $progress->lastCreditedMonth,
+                    'nextEligibleMonth' => $progress->nextEligibleMonth,
+                    'streak'            => $habit['streak'],
+                    'missed'            => $habit['missed'],
+                    'daysLate'          => $habit['medianDays'],
+                    'habitLabel'        => $habit['label'],
+                    'months'            => array_slice($progress->months, -6),
+                ];
+
+                $counts['all']++;
+                $progress->status === 'clean' ? $counts['clean']++ : $counts['late']++;
+
+                if ($progress->eligible) {
+                    $counts['eligible']++;
+                    $eligibleCost += $price;
+                } elseif ($verge) {
+                    $counts['verge']++;
+                    $vergeCost += $price;
+                }
+            }
+
+            // who gets the free month first, then the closest to it
+            usort($rows, function (array $a, array $b): int {
+                $byEligible = (int) $b['eligible'] <=> (int) $a['eligible'];
+                if ($byEligible !== 0) {
+                    return $byEligible;
+                }
+
+                $byCredits = $b['credits'] <=> $a['credits'];
+                if ($byCredits !== 0) {
+                    return $byCredits;
+                }
+
+                $byMonth = (string) ($a['lastCreditedMonth'] ?? '~') <=> (string) ($b['lastCreditedMonth'] ?? '~');
+
+                return $byMonth !== 0 ? $byMonth : strcmp((string) $a['name'], (string) $b['name']);
+            });
+
+            return [
+                'rows'         => $rows,
+                'counts'       => $counts,
+                'eligibleCost' => round($eligibleCost, 2),
+                'vergeCost'    => round($vergeCost, 2),
+            ];
+        });
+    }
+
+    /**
+     * How this customer actually pays, described — never scored or banded.
+     *
+     * medianDays: positive = usually late by N days, negative = usually early.
+     *
+     * @return array{medianDays:?int,label:string,streak:int,missed:int}
+     */
+    private function paymentHabit(SimpleBonusProgress $progress): array
+    {
+        $deltas = [];
+        $credited = [];
+        $missed = 0;
+
+        foreach ($progress->months as $month) {
+            $credited[] = $month['credited'];
+
+            if (! $month['credited']) {
+                $missed++;
+            }
+
+            if ($month['paid_at'] === null) {
+                continue;
+            }
+
+            $daysLate = Carbon::parse($month['due'])
+                ->startOfDay()
+                ->diffInDays(Carbon::parse($month['paid_at'])->startOfDay(), false);
+
+            $deltas[] = (int) $daysLate;
+        }
+
+        $streak = 0;
+        foreach (array_reverse($credited) as $ok) {
+            if (! $ok) {
+                break;
+            }
+            $streak++;
+        }
+
+        if ($deltas === []) {
+            return [
+                'medianDays' => null,
+                'label'      => 'لا سجل دفع بعد',
+                'streak'     => $streak,
+                'missed'     => $missed,
+            ];
+        }
+
+        sort($deltas);
+        $count = count($deltas);
+        $median = $count % 2 === 1
+            ? $deltas[intdiv($count, 2)]
+            : (int) round(($deltas[$count / 2 - 1] + $deltas[$count / 2]) / 2);
+
+        $label = match (true) {
+            $median <= -1 => 'يدفع قبل الاستحقاق بـ '.abs($median).' '.($this->daysWord(abs($median))),
+            $median >= 1  => 'يتأخر عادةً '.$median.' '.$this->daysWord($median),
+            default       => 'يدفع في يوم الاستحقاق تقريباً',
+        };
+
+        return [
+            'medianDays' => $median,
+            'label'      => $label,
+            'streak'     => $streak,
+            'missed'     => $missed,
+        ];
+    }
+
+    private function daysWord(int $days): string
+    {
+        return match (true) {
+            $days === 1  => 'يوم',
+            $days === 2  => 'يومين',
+            $days <= 10  => 'أيام',
+            default      => 'يوماً',
+        };
+    }
+
     /** @return array<string,mixed> */
     private function listRow(SimpleBonusProgress $p, float $price): array
     {

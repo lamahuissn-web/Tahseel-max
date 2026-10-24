@@ -49,7 +49,7 @@ class BonusAccessTest extends TestCase
         $this->actingAs($admin, 'admin')
             ->get(route('admin.bonus.index'))
             ->assertOk()
-            ->assertSee('قائمة المستحقين', false)
+            ->assertSee('متابعة الزبائن', false)
             ->assertSee('مستحق الآن', false);
     }
 
@@ -60,7 +60,7 @@ class BonusAccessTest extends TestCase
         $this->actingAs($admin, 'admin')
             ->get(route('admin.bonus.index'))
             ->assertOk()
-            ->assertSee('قائمة المستحقين', false);
+            ->assertSee('متابعة الزبائن', false);
     }
 
     public function test_accounting_can_open_the_section(): void
