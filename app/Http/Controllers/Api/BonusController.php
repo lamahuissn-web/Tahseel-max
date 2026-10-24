@@ -206,6 +206,7 @@ class BonusController extends Controller
             'required'           => $p->required,
             'remaining'          => $p->remainingToEarn(),
             'balance'            => round($p->balance, 2),
+            'overdue'            => round($p->overdue, 2),
             'eligible'           => $p->eligible,
             'status'             => $p->status,
             'statusLabel'        => self::STATUS_LABELS[$p->status] ?? $p->status,

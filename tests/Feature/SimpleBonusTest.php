@@ -427,4 +427,77 @@ class SimpleBonusTest extends TestCase
             $progress->nextEligibleMonth,
         );
     }
+
+    public function test_an_invoice_issued_in_advance_is_not_delinquency(): void
+    {
+        foreach ([
+            'bonus_enabled'          => '1',
+            'bonus_months_required'  => '3',
+            'bonus_grace_days'       => '5',
+            'bonus_count_start_date' => Carbon::now()->startOfMonth()->subMonthsNoOverflow(6)->toDateString(),
+        ] as $key => $value) {
+            BonusSettings::set($key, $value);
+        }
+        BonusSettings::flush();
+
+        // paid up to the current month, and next month's invoice is already issued
+        $paid    = $this->client('زبون دفع مقدماً');
+        $overdue = $this->client('زبون متأخر فعلاً');
+
+        foreach ([$paid, $overdue] as $id) {
+            for ($i = 4; $i >= 1; $i--) {
+                $due = Carbon::now()->startOfMonth()->subMonthsNoOverflow($i)->day(10)->toDateString();
+                $this->pay($this->invoice($id, $due), $id, Carbon::parse($due)->subDays(2)->toDateString());
+            }
+        }
+
+        // the prepaying customer still has next month's invoice open (due in the future)
+        $nextDue = Carbon::now()->startOfMonth()->addMonthNoOverflow()->day(10)->toDateString();
+        $this->invoice($paid, $nextDue);
+
+        // the other one has a month whose due date already passed
+        $pastDue = Carbon::now()->startOfMonth()->subDays(3)->toDateString();
+        $this->invoice($overdue, $pastDue);
+
+        $service = $this->service();
+
+        $clean = $service->forClient($paid, true);
+        $this->assertGreaterThan(0, $clean->balance, 'the total balance still shows what he owes');
+        $this->assertSame(0.0, round($clean->overdue, 2), 'but none of it is overdue');
+        $this->assertSame('clean', $clean->status);
+        $this->assertSame('منتظم', $clean->statusLabel());
+
+        $late = $service->forClient($overdue, true);
+        $this->assertGreaterThan(0, $late->overdue);
+        $this->assertSame('late', $late->status);
+        $this->assertSame('متأخر', $late->statusLabel());
+    }
+
+    public function test_a_customer_who_owes_money_is_never_eligible_even_if_it_is_not_due_yet(): void
+    {
+        foreach ([
+            'bonus_enabled'          => '1',
+            'bonus_months_required'  => '3',
+            'bonus_grace_days'       => '0',
+            'bonus_count_start_date' => Carbon::now()->startOfMonth()->subMonthsNoOverflow(6)->toDateString(),
+        ] as $key => $value) {
+            BonusSettings::set($key, $value);
+        }
+        BonusSettings::flush();
+
+        $id = $this->client('زبون استحق لكن عليه فاتورة قادمة');
+        for ($i = 5; $i >= 1; $i--) {
+            $due = Carbon::now()->startOfMonth()->subMonthsNoOverflow($i)->day(10)->toDateString();
+            $this->pay($this->invoice($id, $due), $id, Carbon::parse($due)->subDays(2)->toDateString());
+        }
+        // an open invoice for a month that has not arrived yet
+        $this->invoice($id, Carbon::now()->startOfMonth()->addMonthNoOverflow()->day(10)->toDateString());
+
+        $progress = $this->service()->forClient($id, true);
+
+        $this->assertGreaterThanOrEqual(3, $progress->credits);
+        $this->assertSame('clean', $progress->status);
+        // earning months is not the same as being handed a free month while money is owed
+        $this->assertFalse($progress->eligible);
+    }
 }

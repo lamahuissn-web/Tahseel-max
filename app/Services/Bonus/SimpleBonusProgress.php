@@ -18,8 +18,11 @@ class SimpleBonusProgress
     /** The owner-configured threshold at the moment of reading. */
     public int $required = 12;
 
-    /** Total outstanding balance today (every invoice, services included). */
+    /** Total outstanding balance (every open invoice, services included — due or not). */
     public float $balance = 0.0;
+
+    /** The part of the balance whose due date has already passed — this is what "متأخر" means. */
+    public float $overdue = 0.0;
 
     public bool $eligible = false;
 
@@ -31,7 +34,10 @@ class SimpleBonusProgress
     /** `Y-m` the customer is expected to reach the threshold. */
     public ?string $nextEligibleMonth = null;
 
-    /** منتظم | متأخر — describes TODAY, not history. */
+    /**
+     * منتظم | متأخر — describes TODAY, not history, and only debt whose due date
+     * has passed counts: an invoice issued in advance is not delinquency.
+     */
     public string $status = 'late';
 
     /** @var array<int,array{month:string,due:string,credited:bool,balance:float,paid_at:?string}> */
@@ -56,6 +62,7 @@ class SimpleBonusProgress
             'required'          => $this->required,
             'remaining'         => $this->remainingToEarn(),
             'balance'           => round($this->balance, 2),
+            'overdue'           => round($this->overdue, 2),
             'eligible'          => $this->eligible,
             'hasOpenBonus'      => $this->hasOpenBonus,
             'lastCreditedMonth' => $this->lastCreditedMonth,

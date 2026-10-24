@@ -43,8 +43,12 @@
                 </div>
             </div>
             <p class="text-muted small mb-3">
-                شهر يُحتسب إذا كان رصيد الزبون صفراً عند استحقاق الفاتورة التالية (مع {{ $graceDays }} أيام سماح).
+                <b>كل فاتورة تُدفع قبل استحقاقها + {{ $graceDays }} أيام = شهر محسوب.</b>
+                الشهر لا يُمنح مقدماً — يُفتح عندما يمرّ موعده، والعدّ تراكمي بلا تصفير.
                 العتبة الحالية: <b>{{ $required }}</b> شهراً · بداية العدّ: <b>{{ $startDate }}</b>.
+                <span class="d-block mt-1">
+                    «متأخر» تعني ديناً <b>تجاوز موعده</b> فقط — فاتورة الشهر القادم الصادرة مسبقاً لا تُحسب تأخيراً.
+                </span>
             </p>
 
             <div class="row g-2 mb-3">
@@ -151,8 +155,13 @@
                                             <td class="text-center d-none d-md-table-cell bn-mono">
                                                 {{ $row['nextEligibleMonth'] ?? '—' }}
                                             </td>
-                                            <td class="text-center bn-mono {{ $row['balance'] > 0 ? 'text-danger fw-bold' : 'text-success' }}">
+                                            <td class="text-center bn-mono {{ $row['overdue'] > 0 ? 'text-danger fw-bold' : ($row['balance'] > 0 ? 'text-warning' : 'text-success') }}">
                                                 {{ number_format($row['balance'], 2) }}$
+                                                @if($row['overdue'] > 0)
+                                                    <div class="small text-danger">مستحق {{ number_format($row['overdue'], 2) }}$</div>
+                                                @elseif($row['balance'] > 0)
+                                                    <div class="small text-muted">غير مستحق بعد</div>
+                                                @endif
                                             </td>
                                             <td class="text-center">
                                                 <div class="bn-habit">{{ $row['habitLabel'] }}</div>

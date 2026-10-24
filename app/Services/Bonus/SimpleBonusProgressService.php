@@ -210,6 +210,7 @@ class SimpleBonusProgressService
                     'required'          => $progress->required,
                     'remaining'         => $progress->remainingToEarn(),
                     'balance'           => round($progress->balance, 2),
+                    'overdue'           => round($progress->overdue, 2),
                     'status'            => $progress->status,
                     'statusLabel'       => $progress->statusLabel(),
                     'eligible'          => $progress->eligible,
@@ -494,9 +495,21 @@ class SimpleBonusProgressService
 
         $today = Carbon::now();
 
-        // Every non-deleted invoice counts for the balance.
+        // Every non-deleted invoice counts for the balance; only what is already due
+        // counts as overdue. An invoice issued for next month is not delinquency.
+        $todayDate = $today->toDateString();
         foreach ($invoices as $invoice) {
-            $progress->balance += (float) $invoice->remaining_amount;
+            $remaining = (float) $invoice->remaining_amount;
+            if ($remaining <= 0.0) {
+                continue;
+            }
+
+            $progress->balance += $remaining;
+
+            $due = $this->dateOf($invoice);
+            if ($due !== null && $due->toDateString() <= $todayDate) {
+                $progress->overdue += $remaining;
+            }
         }
 
         // Boundaries come from subscription months only, one per month.
@@ -563,7 +576,8 @@ class SimpleBonusProgressService
             }
         }
 
-        $progress->status = $progress->balance <= self::EPSILON ? 'clean' : 'late';
+        // "متأخر" means he owes something that was due — not that a future invoice exists.
+        $progress->status = $progress->overdue <= self::EPSILON ? 'clean' : 'late';
         $progress->eligible = $progress->credits >= $this->required
             && $progress->balance <= self::EPSILON
             && ! $progress->hasOpenBonus;
