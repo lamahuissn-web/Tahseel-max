@@ -132,8 +132,22 @@ class BonusController extends Controller
             $rows[] = $row;
         }
 
-        usort($rows, fn ($a, $b) => [$b['credits'], $a['last_credited_month'] ?? '']
-            <=> [$a['credits'], $b['last_credited_month'] ?? '']);
+        // the row contract calls it "progress"; the old engine's "credits" key is gone
+        $descending = $request->input('sort', 'progress_desc') !== 'progress_asc';
+        usort($rows, function (array $a, array $b) use ($descending): int {
+            $byProgress = $descending
+                ? $b['progress'] <=> $a['progress']
+                : $a['progress'] <=> $b['progress'];
+
+            if ($byProgress !== 0) {
+                return $byProgress;
+            }
+
+            // oldest credited month first, then a stable id tiebreaker so paging never shuffles
+            $byMonth = (string) ($a['lastCreditedMonth'] ?? '') <=> (string) ($b['lastCreditedMonth'] ?? '');
+
+            return $byMonth !== 0 ? $byMonth : ($a['id'] <=> $b['id']);
+        });
 
         $total  = count($rows);
         $offset = ($page - 1) * $perPage;

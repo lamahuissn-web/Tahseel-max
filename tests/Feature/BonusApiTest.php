@@ -285,6 +285,72 @@ class BonusApiTest extends TestCase
         BonusSettings::flush();
     }
 
+    public function test_the_list_sorts_many_rows_and_honours_the_sort_param(): void
+    {
+        // one row never exercises the comparator — this is how the "credits" crash shipped
+        AppConfig::query()->updateOrCreate(
+            ['key' => 'bonus_count_start_date'],
+            ['value' => \Carbon\Carbon::today()->startOfMonth()->subMonthsNoOverflow(6)->toDateString()],
+        );
+        AppConfig::query()->updateOrCreate(['key' => 'bonus_enabled'], ['value' => '1']);
+        AppConfig::query()->updateOrCreate(['key' => 'bonus_months_required'], ['value' => '3']);
+        BonusSettings::flush();
+
+        $tag  = 'SORTTAG'.random_int(1000, 9999);
+        $two  = $this->settledMonths($tag, 2);
+        $six  = $this->settledMonths($tag, 6);
+        $four = $this->settledMonths($tag, 4);
+
+        $admin = $this->adminWithRole('Super-Admin');
+
+        $desc = $this->withToken($this->tokenFor($admin))
+            ->getJson('/api/v1/bonus/clients?search='.$tag.'&sort=progress_desc&per_page=50')
+            ->assertOk()
+            ->json('data.rows');
+        $this->assertCount(3, $desc);
+        $this->assertSame([$six, $four, $two], array_column($desc, 'id'));
+        $this->assertSame([6, 4, 2], array_column($desc, 'progress'));
+
+        $asc = $this->withToken($this->tokenFor($admin))
+            ->getJson('/api/v1/bonus/clients?search='.$tag.'&sort=progress_asc&per_page=50')
+            ->assertOk()
+            ->json('data.rows');
+        $this->assertSame([$two, $four, $six], array_column($asc, 'id'));
+
+        // an unknown sort value must fall back to the default, never blow up
+        $this->withToken($this->tokenFor($admin))
+            ->getJson('/api/v1/bonus/clients?search='.$tag.'&sort=nonsense')
+            ->assertOk();
+    }
+
+    /** creates a client with $months fully settled months, tagged for isolation */
+    private function settledMonths(string $tag, int $months): int
+    {
+        $clientId = DB::table('tbl_clients')->insertGetId([
+            'name' => $tag.' زبون', 'phone' => '0556'.random_int(100000, 999999), 'address1' => 'x',
+            'client_type' => 'internet', 'subscription_id' => 1, 'price' => 15,
+            'subscription_date' => '2026-01-01', 'start_date' => '2026-01-01',
+            'is_active' => '1', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        for ($i = $months; $i >= 1; $i--) {
+            $due = \Carbon\Carbon::today()->startOfMonth()->subMonthsNoOverflow($i)->day(5)->toDateString();
+            $invoiceId = DB::table('tbl_invoices')->insertGetId([
+                'invoice_number' => 'SRT-'.strtoupper(uniqid()), 'client_id' => $clientId,
+                'subscription_id' => 1, 'amount' => '15.00', 'paid_amount' => '15.00',
+                'remaining_amount' => 0, 'enshaa_date' => $due, 'due_date' => $due,
+                'status' => 'paid', 'invoice_type' => 'subscription', 'paid_date' => $due.' 10:00:00',
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+            DB::table('tbl_revenues')->insert([
+                'client_id' => $clientId, 'invoice_id' => $invoiceId, 'amount' => '15.00',
+                'collected_by' => 1, 'created_at' => $due.' 10:00:00', 'updated_at' => now(),
+            ]);
+        }
+
+        return $clientId;
+    }
+
     private function clientWithMonths(int $months, string $type = 'internet'): int
     {
         $clientId = DB::table('tbl_clients')->insertGetId([
