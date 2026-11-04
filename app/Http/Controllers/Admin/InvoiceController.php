@@ -24,6 +24,7 @@ use DataTables;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
+use App\Services\Telegram\TelegramMessage;
 
 class InvoiceController extends Controller
 {
@@ -568,7 +569,15 @@ class InvoiceController extends Controller
                 );
             }
 
-            sendTelegramNotification($notificationMessage, 'invoice_deleted');
+sendTelegramNotification(
+                TelegramMessage::make('invoice_deleted')
+                    ->field('الفاتورة', '#'.$invoiceData['invoice_number'])
+                    ->field('العميل', $invoiceData['client_name'])
+                    ->amount(number_format((float) $invoiceData['amount'], 2), get_app_config_data('currency'))
+                    ->actor(auth()->user()->name)
+                    ->link(TelegramMessage::recordLink('admin.clients.show', $invoiceData['client_id'])),
+                'invoice_deleted'
+            );
 
             log_helper(
                 'invoice_deleted',
@@ -698,7 +707,16 @@ class InvoiceController extends Controller
             DB::commit();
             // Telegram + WhatsApp "payment" alerts — only on actual payment, not balance/price edit
             if ($request->paid_amount) {
-                sendTelegramNotification($notificationMessage, 'invoice_paid');
+sendTelegramNotification(
+                    TelegramMessage::make('invoice_paid')
+                        ->field('العميل', $invoice->client->name ?? 'غير محدد')
+                        ->field('الفاتورة', '#'.$invoice->invoice_number)
+                        ->due($invoice->due_date, $invoice->paid_date ? \Carbon\Carbon::parse($invoice->paid_date) : null)
+                        ->amount(number_format((float) $request->paid_amount, 2), get_app_config_data('currency'))
+                        ->actor(auth()->user()->name)
+                        ->link(TelegramMessage::recordLink('admin.invoice_details', $invoice->id)),
+                    'invoice_paid'
+                );
                 app(PaymentReceiptNotifier::class)->notify($invoice);
             } elseif ($invoice->remaining_amount != ($oldInvoiceData['remaining_amount'] ?? null)) {
                 // Balance/price edited (no money moved) → separate "balance edited" alert
@@ -714,7 +732,16 @@ class InvoiceController extends Controller
                     get_app_config_data('currency'),
                     auth()->user()->name
                 );
-                sendTelegramNotification($balanceMessage, 'invoice_balance_edited');
+sendTelegramNotification(
+                    TelegramMessage::make('invoice_balance_edited')
+                        ->field('الفاتورة', '#'.$invoice->invoice_number)
+                        ->field('العميل', $invoice->client->name ?? 'غير محدد')
+                        ->field('الرصيد قبل', $oldRemaining.' '.get_app_config_data('currency'))
+                        ->amount(number_format((float) $invoice->remaining_amount, 2), get_app_config_data('currency'))
+                        ->actor(auth()->user()->name)
+                        ->link(TelegramMessage::recordLink('admin.invoice_details', $invoice->id)),
+                    'invoice_balance_edited'
+                );
             }
 
             log_helper(
@@ -802,7 +829,16 @@ class InvoiceController extends Controller
             DB::commit();
             // Telegram + WhatsApp "payment" alerts — only on actual payment, not balance/price edit
             if ($request->paid_amount) {
-                sendTelegramNotification($notificationMessage, 'invoice_paid');
+sendTelegramNotification(
+                    TelegramMessage::make('invoice_paid')
+                        ->field('العميل', $invoice->client->name ?? 'غير محدد')
+                        ->field('الفاتورة', '#'.$invoice->invoice_number)
+                        ->due($invoice->due_date, $invoice->paid_date ? \Carbon\Carbon::parse($invoice->paid_date) : null)
+                        ->amount(number_format((float) $request->paid_amount, 2), get_app_config_data('currency'))
+                        ->actor(auth()->user()->name)
+                        ->link(TelegramMessage::recordLink('admin.invoice_details', $invoice->id)),
+                    'invoice_paid'
+                );
                 app(PaymentReceiptNotifier::class)->notify($invoice);
             } elseif ($invoice->remaining_amount != ($oldInvoiceData['remaining_amount'] ?? null)) {
                 // Balance/price edited (no money moved) → separate "balance edited" alert
@@ -818,7 +854,16 @@ class InvoiceController extends Controller
                     get_app_config_data('currency'),
                     auth()->user()->name
                 );
-                sendTelegramNotification($balanceMessage, 'invoice_balance_edited');
+sendTelegramNotification(
+                    TelegramMessage::make('invoice_balance_edited')
+                        ->field('الفاتورة', '#'.$invoice->invoice_number)
+                        ->field('العميل', $invoice->client->name ?? 'غير محدد')
+                        ->field('الرصيد قبل', $oldRemaining.' '.get_app_config_data('currency'))
+                        ->amount(number_format((float) $invoice->remaining_amount, 2), get_app_config_data('currency'))
+                        ->actor(auth()->user()->name)
+                        ->link(TelegramMessage::recordLink('admin.invoice_details', $invoice->id)),
+                    'invoice_balance_edited'
+                );
             }
 
             log_helper(
@@ -1037,7 +1082,15 @@ class InvoiceController extends Controller
                 );
             }
 
-            sendTelegramNotification($notificationMessage, 'invoice_redone');
+sendTelegramNotification(
+                TelegramMessage::make('invoice_redone')
+                    ->field('الفاتورة', '#'.$invoice->invoice_number)
+                    ->field('العميل', $client->name ?? 'غير معروف')
+                    ->amount(number_format((float) $lastPayment->amount, 2), get_app_config_data('currency') ?? 'جنيه')
+                    ->actor(auth()->user()->name)
+                    ->link(TelegramMessage::recordLink('admin.invoice_details', $invoice->id)),
+                'invoice_redone'
+            );
 
             DB::commit();
 

@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
+use App\Services\Telegram\TelegramMessage;
 
 class SecureMobilePaymentService
 {
@@ -196,7 +197,13 @@ class SecureMobilePaymentService
                 ]);
 
                 sendTelegramNotification(
-                    "💰 دفع عبر التطبيق - {$clientName} | الفاتورة #{$invoice->invoice_number} | {$periodLabel} | مبلغ \${$paidLabel} | المحصل: {$collectorName}",
+                    TelegramMessage::make('mobile_invoice_paid')
+                        ->field('العميل', $clientName)
+                        ->field('الفاتورة', '#'.$invoice->invoice_number)
+                        ->field('الفترة', $periodLabel)
+                        ->amount($paidLabel, '$')
+                        ->actor($collectorName)
+                        ->link(TelegramMessage::recordLink('admin.invoice_details', $invoice->id)),
                     'mobile_invoice_paid'
                 );
 

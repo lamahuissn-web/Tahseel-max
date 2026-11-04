@@ -9,6 +9,7 @@ use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use App\Services\Telegram\TelegramMessage;
 
 class SendOverdueReminders extends Command
 {
@@ -72,7 +73,15 @@ class SendOverdueReminders extends Command
                     );
                 }
 
-                sendTelegramNotification($notificationMessage, 'overdue_reminder');
+sendTelegramNotification(
+                    TelegramMessage::make('overdue_reminder')
+                        ->field('الفاتورة', '#'.$invoice->invoice_number)
+                        ->field('العميل', $invoice->client->name ?? 'غير معروف')
+                        ->due($invoice->due_date)
+                        ->amount(number_format((float) $invoice->amount, 2), $currency)
+                        ->link(TelegramMessage::recordLink('admin.invoice_details', $invoice->id)),
+                    'overdue_reminder'
+                );
 
                 $invoice->updateQuietly(['last_notified_at' => $today]);
                 $sentCount++;

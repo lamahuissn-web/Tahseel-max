@@ -18,6 +18,7 @@ use Illuminate\Http\Request;
 use Spatie\Permission\Models\Permission;
 use App\Models\Role;
 use Yajra\DataTables\Facades\DataTables;
+use App\Services\Telegram\TelegramMessage;
 
 class UsersController extends Controller
 {
@@ -185,7 +186,15 @@ class UsersController extends Controller
                 auth()->user()->name
             );
 
-            sendTelegramNotification($message, 'admin_added');
+sendTelegramNotification(
+                TelegramMessage::make('admin_added')
+                    ->field('المشرف', $admin->name)
+                    ->field('الصلاحية', $admin->roles->first()?->getTranslation('title', app()->getLocale()) ?? 'بدون صلاحية')
+                    ->field('البريد', $admin->email)
+                    ->actor(auth()->user()->name)
+                    ->link(TelegramMessage::recordLink('admin.users.index')),
+                'admin_added'
+            );
 
             toastr()->addSuccess(trans('forms.success'));
             return redirect()->route('admin.users.index');

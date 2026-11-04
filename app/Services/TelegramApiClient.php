@@ -32,13 +32,20 @@ class TelegramApiClient
     }
 
     /** Send a text message. Returns decoded response array or false. */
-    public function sendMessage(string $chatId, string $text, string $parseMode = 'HTML'): array|false
+    public function sendMessage(string $chatId, string $text, string $parseMode = 'HTML', ?array $replyMarkup = null): array|false
     {
-        return $this->post('sendMessage', [
+        $payload = [
             'chat_id' => $chatId,
             'text' => $text,
             'parse_mode' => $parseMode,
-        ]);
+        ];
+
+        // Spec 023: inline button ("فتح السجل") travels with the message.
+        if ($replyMarkup !== null && $replyMarkup !== []) {
+            $payload['reply_markup'] = json_encode($replyMarkup, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+
+        return $this->post('sendMessage', $payload);
     }
 
     /** Send a file (multipart). Returns decoded response array or false. */

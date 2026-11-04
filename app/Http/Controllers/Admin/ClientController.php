@@ -27,6 +27,7 @@ use DataTables;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Facades\Excel;
+use App\Services\Telegram\TelegramMessage;
 
 class ClientController extends Controller
 {
@@ -395,7 +396,13 @@ class ClientController extends Controller
                 ]
             );
 
-            sendTelegramNotification($notificationMessage, 'client_updated');
+sendTelegramNotification(
+                TelegramMessage::make('client_updated')
+                    ->field('العميل', $client->name)
+                    ->actor(auth()->user()->name)
+                    ->link(TelegramMessage::recordLink('admin.clients.show', $client->id)),
+                'client_updated'
+            );
 
             toastr()->addSuccess(trans('forms.success'));
             return redirect()->route('admin.clients.index');
@@ -423,7 +430,12 @@ class ClientController extends Controller
                     'model' => $client
                 ]
             );
-            sendTelegramNotification($notificationMessage, 'client_deleted');
+sendTelegramNotification(
+                TelegramMessage::make('client_deleted')
+                    ->field('العميل', $client->name)
+                    ->actor(auth()->user()->name),
+                'client_deleted'
+            );
             toastr()->addSuccess(trans('forms.success'));
             return redirect()->route('admin.clients.index');
         } catch (\Exception $e) {
@@ -597,7 +609,15 @@ class ClientController extends Controller
                 );
             }
 
-            sendTelegramNotification($creationMessage, 'invoice_created');
+sendTelegramNotification(
+                TelegramMessage::make('invoice_created')
+                    ->field('الفاتورة', '#'.$invoice->invoice_number)
+                    ->field('العميل', $invoice->client->name ?? 'غير محدد')
+                    ->amount(number_format((float) $invoice->amount, 2), get_app_config_data('currency'))
+                    ->actor(auth()->user()->name)
+                    ->link(TelegramMessage::recordLink('admin.invoice_details', $invoice->id)),
+                'invoice_created'
+            );
 
             log_helper(
                 'invoice_created',
@@ -687,7 +707,19 @@ class ClientController extends Controller
                     );
                 }
 
-                sendTelegramNotification($notificationMessage, 'invoice_paid');
+sendTelegramNotification(
+                    TelegramMessage::make('invoice_paid')
+                        ->field('العميل', $invoice->client->name ?? 'غير محدد')
+                        ->field('الفاتورة', '#'.$invoice->invoice_number)
+                        ->field('البند', $request->invoice_type === 'subscription'
+                            ? 'اشتراك '.($invoice->subscription->name ?? '')
+                            : 'خدمة '.($invoice->notes ?? ''))
+                        ->amount(number_format((float) $request->amount, 2), get_app_config_data('currency'))
+                        ->field('ملاحظة', trim($paymentType))
+                        ->actor(auth()->user()->name)
+                        ->link(TelegramMessage::recordLink('admin.invoice_details', $invoice->id)),
+                    'invoice_paid'
+                );
 
                 log_helper(
                     'invoice_paid',
@@ -719,7 +751,14 @@ class ClientController extends Controller
 
                 $statusText = $newStatus == '1' ? 'مفعل' : 'موقوف';
                 $statusMessage = "تم تغيير حالة العميل: {$client->name} إلى {$statusText} - بواسطة " . auth()->user()->name;
-                sendTelegramNotification($statusMessage, 'client_status_changed');
+sendTelegramNotification(
+                    TelegramMessage::make('client_status_changed')
+                        ->field('العميل', $client->name)
+                        ->field('الحالة', $statusText)
+                        ->actor(auth()->user()->name)
+                        ->link(TelegramMessage::recordLink('admin.clients.show', $client->id)),
+                    'client_status_changed'
+                );
                 
                 // إذا كان الطلب AJAX، أعد JSON response
                 if (request()->ajax() || request()->wantsJson()) {

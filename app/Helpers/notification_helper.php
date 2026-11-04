@@ -376,6 +376,17 @@ if (!function_exists('sendOneSignalNotification1')) {
 // SendOverdueReminders, TelegramBackupCommand) keep working unchanged.
 
 if (!function_exists('sendTelegramNotification')) {
+    /**
+     * Spec 023 — the single send boundary.
+     *
+     * Accepts a TelegramMessage (preferred: escaped, formatted, with an inline
+     * button) or a raw string (legacy callers: escaped here so an `&` in a name
+     * can never produce Telegram's "can't parse entities" 400).
+     *
+     * A non-2xx answer is retried once, logged as a warning, and reported as
+     * `false`. It never throws into the caller: the financial write stays
+     * committed and the HTTP response unchanged.
+     */
     function sendTelegramNotification($message, $eventType = null)
     {
         try {
@@ -385,8 +396,37 @@ if (!function_exists('sendTelegramNotification')) {
             $chatId = \App\Services\TelegramConfig::chatId();
             if (!$chatId) return false;
 
+            $markup = null;
+
+            if ($message instanceof \App\Services\Telegram\TelegramMessage) {
+                $payload = $message->toPayload();
+                $text = $payload['text'];
+                $markup = $payload['reply_markup'] ?? null;
+            } else {
+                $text = htmlspecialchars((string) $message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            }
+
             $client = app(\App\Services\TelegramApiClient::class);
-            return $client->sendMessage($chatId, (string) $message);
+
+            $attempts = 0;
+            while ($attempts < 2) {
+                $attempts++;
+
+                if ($client->sendMessage($chatId, $text, 'HTML', $markup) !== false) {
+                    return true;
+                }
+
+                if ($attempts === 1) {
+                    usleep(300000); // one short retry, then give up loudly
+                }
+            }
+
+            \Log::warning('Telegram notification failed after retry', [
+                'event' => $eventType,
+                'chat_id' => $chatId,
+            ]);
+
+            return false;
         } catch (\Exception $e) {
             \Log::error('Telegram notification exception: ' . $e->getMessage());
             return false;

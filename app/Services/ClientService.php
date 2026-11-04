@@ -14,6 +14,7 @@ use App\Notifications\NewClientAddedNotification;
 use App\Traits\ImageProcessing;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use App\Services\Telegram\TelegramMessage;
 
 class ClientService
 {
@@ -95,7 +96,15 @@ class ClientService
             );
         }
 
-        sendTelegramNotification($notificationMessage, 'client_added');
+sendTelegramNotification(
+            TelegramMessage::make('client_added')
+                ->field('العميل', $client->name)
+                ->field('نوع الاشتراك', $client->subscription->name ?? 'غير محدد')
+                ->amount(number_format((float) $validated_data['price'], 2), get_app_config_data('currency') ?? 'جنيه')
+                ->actor(optional(auth()->user())->name)
+                ->link(TelegramMessage::recordLink('admin.clients.show', $client->id)),
+            'client_added'
+        );
 
         return $client;
     }

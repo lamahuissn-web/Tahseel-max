@@ -18,6 +18,7 @@ use Illuminate\Http\Request;
 use Yajra\DataTables\Facades\DataTables;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use App\Services\Telegram\TelegramMessage;
 
 class AccountTransferController extends Controller
 {
@@ -331,7 +332,15 @@ class AccountTransferController extends Controller
 
                 }
 
-            sendTelegramNotification($notificationMessage, 'transfer_created');
+sendTelegramNotification(
+                TelegramMessage::make('transfer_created')
+                    ->field('من حساب', $fromAccountName)
+                    ->field('إلى حساب', $toAccountName)
+                    ->amount(number_format((float) $validated_data['amount'], 2), get_app_config_data('currency') ?? 'جنيه')
+                    ->actor(auth()->user()->name)
+                    ->link(TelegramMessage::recordLink('admin.account_transfers')),
+                'transfer_created'
+            );
 
             DB::commit();
 
@@ -488,7 +497,15 @@ class AccountTransferController extends Controller
                 );
             }
 
-            sendTelegramNotification($notificationMessage, 'transfer_redone');
+sendTelegramNotification(
+                TelegramMessage::make('transfer_redone')
+                    ->field('من حساب', $fromAccountName)
+                    ->field('إلى حساب', $toAccountName)
+                    ->amount(number_format((float) $accountTransfer->amount, 2), get_app_config_data('currency') ?? 'جنيه')
+                    ->actor(auth()->user()->name)
+                    ->link(TelegramMessage::recordLink('admin.account_transfers')),
+                'transfer_redone'
+            );
 
             DB::commit();
             toastr()->addSuccess(trans('account_transfers.transfer_redone_successfully'));

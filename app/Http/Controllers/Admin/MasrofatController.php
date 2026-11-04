@@ -13,6 +13,7 @@ use App\Traits\ImageProcessing;
 use App\Traits\ValidationMessage;
 use Illuminate\Http\Request;
 use Yajra\DataTables\Facades\DataTables;
+use App\Services\Telegram\TelegramMessage;
 
 class MasrofatController extends Controller
 {
@@ -146,7 +147,14 @@ class MasrofatController extends Controller
                 ]
             );
 
-            sendTelegramNotification($message, 'expense_added');
+sendTelegramNotification(
+                TelegramMessage::make('expense_added')
+                    ->field('البيان', $masrofat->description)
+                    ->amount(number_format((float) $masrofat->amount, 2), get_app_config_data('currency'))
+                    ->actor(auth()->user()->name)
+                    ->link(TelegramMessage::recordLink('admin.masrofat.index')),
+                'expense_added'
+            );
 
             toastr()->addSuccess(trans('forms.success'));
             return redirect()->route('admin.masrofat.index');
