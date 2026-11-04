@@ -337,8 +337,7 @@ sendTelegramNotification(
                     ->field('من حساب', $fromAccountName)
                     ->field('إلى حساب', $toAccountName)
                     ->amount(number_format((float) $validated_data['amount'], 2), get_app_config_data('currency') ?? 'جنيه')
-                    ->actor(auth()->user()->name)
-                    ->link(TelegramMessage::recordLink('admin.account_transfers')),
+                    ->actor(auth()->user()->name),
                 'transfer_created'
             );
 
@@ -502,8 +501,7 @@ sendTelegramNotification(
                     ->field('من حساب', $fromAccountName)
                     ->field('إلى حساب', $toAccountName)
                     ->amount(number_format((float) $accountTransfer->amount, 2), get_app_config_data('currency') ?? 'جنيه')
-                    ->actor(auth()->user()->name)
-                    ->link(TelegramMessage::recordLink('admin.account_transfers')),
+                    ->actor(auth()->user()->name),
                 'transfer_redone'
             );
 

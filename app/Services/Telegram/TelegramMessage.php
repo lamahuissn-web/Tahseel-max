@@ -16,7 +16,6 @@ use LogicException;
  *     <label>: <value>[ · <extra>]
  *     <b><amount> <currency></b>
  *     <H:i> · <d/m/Y>[ · <actor>]
- *     [ inline button: open the record ]
  *
  * Every dynamic value is escaped here, once, so no call site can produce a
  * message Telegram refuses to parse. Markup the builder adds itself (`<b>`) is
@@ -58,10 +57,6 @@ class TelegramMessage
     private ?string $actor = null;
 
     private ?Carbon $at = null;
-
-    private ?string $linkUrl = null;
-
-    private string $linkLabel = 'فتح السجل';
 
     private function __construct(string $event)
     {
@@ -138,15 +133,6 @@ class TelegramMessage
         return $this;
     }
 
-    public function link(?string $url, string $label = 'فتح السجل'): self
-    {
-        $url = $url === null ? '' : trim($url);
-        $this->linkUrl = $url === '' ? null : $url;
-        $this->linkLabel = $label;
-
-        return $this;
-    }
-
     /**
      * Renders the due-date field with the real distance to the payment:
      * «الاستحقاق: 20/10 · +15 يوم».
@@ -184,25 +170,7 @@ class TelegramMessage
     }
 
     /**
-     * Absolute admin URL for a record, or null when the route/params are not
-     * resolvable in this context (e.g. a console command without localization
-     * set) — the message still goes out, only without the button.
-     */
-    public static function recordLink(string $routeName, mixed $params = []): ?string
-    {
-        try {
-            if (! \Illuminate\Support\Facades\Route::has($routeName)) {
-                return null;
-            }
-
-            return route($routeName, $params);
-        } catch (\Throwable $e) {
-            return null;
-        }
-    }
-
-    /**
-     * @return array{text: string, reply_markup?: array}
+     * @return array{text: string}
      *
      * @throws LogicException when the event is unknown — a typo must fail in CI,
      *                        never produce a silent message or a silent no-send.
@@ -229,17 +197,7 @@ class TelegramMessage
 
         $lines[] = $this->footer();
 
-        $payload = ['text' => implode("\n", $lines)];
-
-        if ($this->linkUrl !== null) {
-            $payload['reply_markup'] = [
-                'inline_keyboard' => [[
-                    ['text' => $this->linkLabel, 'url' => $this->linkUrl],
-                ]],
-            ];
-        }
-
-        return $payload;
+        return ['text' => implode("\n", $lines)];
     }
 
     /**

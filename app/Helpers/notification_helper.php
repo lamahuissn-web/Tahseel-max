@@ -379,9 +379,9 @@ if (!function_exists('sendTelegramNotification')) {
     /**
      * Spec 023 — the single send boundary.
      *
-     * Accepts a TelegramMessage (preferred: escaped, formatted, with an inline
-     * button) or a raw string (legacy callers: escaped here so an `&` in a name
-     * can never produce Telegram's "can't parse entities" 400).
+     * Accepts a TelegramMessage (preferred: escaped and formatted) or a raw
+     * string (legacy callers: escaped here so an `&` in a name can never
+     * produce Telegram's "can't parse entities" 400).
      *
      * A non-2xx answer is retried once, logged as a warning, and reported as
      * `false`. It never throws into the caller: the financial write stays
@@ -396,12 +396,8 @@ if (!function_exists('sendTelegramNotification')) {
             $chatId = \App\Services\TelegramConfig::chatId();
             if (!$chatId) return false;
 
-            $markup = null;
-
             if ($message instanceof \App\Services\Telegram\TelegramMessage) {
-                $payload = $message->toPayload();
-                $text = $payload['text'];
-                $markup = $payload['reply_markup'] ?? null;
+                $text = $message->toPayload()['text'];
             } else {
                 $text = htmlspecialchars((string) $message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
             }
@@ -412,7 +408,7 @@ if (!function_exists('sendTelegramNotification')) {
             while ($attempts < 2) {
                 $attempts++;
 
-                if ($client->sendMessage($chatId, $text, 'HTML', $markup) !== false) {
+                if ($client->sendMessage($chatId, $text, 'HTML') !== false) {
                     return true;
                 }
 

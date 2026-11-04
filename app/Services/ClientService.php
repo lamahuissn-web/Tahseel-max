@@ -101,8 +101,7 @@ sendTelegramNotification(
                 ->field('العميل', $client->name)
                 ->field('نوع الاشتراك', $client->subscription->name ?? 'غير محدد')
                 ->amount(number_format((float) $validated_data['price'], 2), get_app_config_data('currency') ?? 'جنيه')
-                ->actor(optional(auth()->user())->name)
-                ->link(TelegramMessage::recordLink('admin.clients.show', $client->id)),
+                ->actor(optional(auth()->user())->name),
             'client_added'
         );
 

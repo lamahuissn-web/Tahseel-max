@@ -84,18 +84,10 @@ class TelegramMessageTest extends TestCase
         $this->assertLessThanOrEqual(48, mb_strlen($fieldLine), 'a field line must stay readable on a phone');
     }
 
-    public function test_link_renders_as_an_inline_button(): void
+    public function test_no_message_carries_an_inline_button(): void
     {
-        $payload = $this->paid()->link('https://bills.ispnet.online/ar/admin/invoice_details/19000')->toPayload();
-
-        $this->assertSame(
-            [[['text' => 'فتح السجل', 'url' => 'https://bills.ispnet.online/ar/admin/invoice_details/19000']]],
-            $payload['reply_markup']['inline_keyboard']
-        );
-    }
-
-    public function test_no_link_means_no_keyboard(): void
-    {
+        // owner decision 2026-11-04: clean formatting only, no links to tap
+        $this->assertSame(['text'], array_keys($this->paid()->toPayload()));
         $this->assertArrayNotHasKey('reply_markup', $this->paid()->toPayload());
     }
 

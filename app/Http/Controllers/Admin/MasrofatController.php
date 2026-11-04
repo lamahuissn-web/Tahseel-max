@@ -151,8 +151,7 @@ sendTelegramNotification(
                 TelegramMessage::make('expense_added')
                     ->field('البيان', $masrofat->description)
                     ->amount(number_format((float) $masrofat->amount, 2), get_app_config_data('currency'))
-                    ->actor(auth()->user()->name)
-                    ->link(TelegramMessage::recordLink('admin.masrofat.index')),
+                    ->actor(auth()->user()->name),
                 'expense_added'
             );
 

@@ -574,8 +574,7 @@ sendTelegramNotification(
                     ->field('الفاتورة', '#'.$invoiceData['invoice_number'])
                     ->field('العميل', $invoiceData['client_name'])
                     ->amount(number_format((float) $invoiceData['amount'], 2), get_app_config_data('currency'))
-                    ->actor(auth()->user()->name)
-                    ->link(TelegramMessage::recordLink('admin.clients.show', $invoiceData['client_id'])),
+                    ->actor(auth()->user()->name),
                 'invoice_deleted'
             );
 
@@ -713,8 +712,7 @@ sendTelegramNotification(
                         ->field('الفاتورة', '#'.$invoice->invoice_number)
                         ->due($invoice->due_date, $invoice->paid_date ? \Carbon\Carbon::parse($invoice->paid_date) : null)
                         ->amount(number_format((float) $request->paid_amount, 2), get_app_config_data('currency'))
-                        ->actor(auth()->user()->name)
-                        ->link(TelegramMessage::recordLink('admin.invoice_details', $invoice->id)),
+                        ->actor(auth()->user()->name),
                     'invoice_paid'
                 );
                 app(PaymentReceiptNotifier::class)->notify($invoice);
@@ -738,8 +736,7 @@ sendTelegramNotification(
                         ->field('العميل', $invoice->client->name ?? 'غير محدد')
                         ->field('الرصيد قبل', $oldRemaining.' '.get_app_config_data('currency'))
                         ->amount(number_format((float) $invoice->remaining_amount, 2), get_app_config_data('currency'))
-                        ->actor(auth()->user()->name)
-                        ->link(TelegramMessage::recordLink('admin.invoice_details', $invoice->id)),
+                        ->actor(auth()->user()->name),
                     'invoice_balance_edited'
                 );
             }
@@ -835,8 +832,7 @@ sendTelegramNotification(
                         ->field('الفاتورة', '#'.$invoice->invoice_number)
                         ->due($invoice->due_date, $invoice->paid_date ? \Carbon\Carbon::parse($invoice->paid_date) : null)
                         ->amount(number_format((float) $request->paid_amount, 2), get_app_config_data('currency'))
-                        ->actor(auth()->user()->name)
-                        ->link(TelegramMessage::recordLink('admin.invoice_details', $invoice->id)),
+                        ->actor(auth()->user()->name),
                     'invoice_paid'
                 );
                 app(PaymentReceiptNotifier::class)->notify($invoice);
@@ -860,8 +856,7 @@ sendTelegramNotification(
                         ->field('العميل', $invoice->client->name ?? 'غير محدد')
                         ->field('الرصيد قبل', $oldRemaining.' '.get_app_config_data('currency'))
                         ->amount(number_format((float) $invoice->remaining_amount, 2), get_app_config_data('currency'))
-                        ->actor(auth()->user()->name)
-                        ->link(TelegramMessage::recordLink('admin.invoice_details', $invoice->id)),
+                        ->actor(auth()->user()->name),
                     'invoice_balance_edited'
                 );
             }
@@ -1087,8 +1082,7 @@ sendTelegramNotification(
                     ->field('الفاتورة', '#'.$invoice->invoice_number)
                     ->field('العميل', $client->name ?? 'غير معروف')
                     ->amount(number_format((float) $lastPayment->amount, 2), get_app_config_data('currency') ?? 'جنيه')
-                    ->actor(auth()->user()->name)
-                    ->link(TelegramMessage::recordLink('admin.invoice_details', $invoice->id)),
+                    ->actor(auth()->user()->name),
                 'invoice_redone'
             );
 

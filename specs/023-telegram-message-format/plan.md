@@ -15,8 +15,7 @@ TelegramMessage::make('invoice_paid')      // sets emoji + title from the map
     ->amount($paid, $currency)             // renders "<b>25.00 $</b>"
     ->actor($admin->name)
     ->at(now())
-    ->link(route('admin.invoice_details', $invoice->id))
-    ->toPayload();                         // ['text' => ..., 'reply_markup' => ...]
+        ->toPayload();                         // ['text' => ..., 'reply_markup' => ...]
 ```
 
 - `EVENT_META` constant: `event key => ['emoji' => '💵', 'title' => 'دفعة مستلمة']`
@@ -25,8 +24,6 @@ TelegramMessage::make('invoice_paid')      // sets emoji + title from the map
   applied to **every** dynamic value; builder markup is added after escaping.
 - Empty/null fields are dropped, never rendered as `null` or `-`.
 - `at()` defaults to `now()` in `APP_TIMEZONE`; footer renders `H:i · d/m/Y`.
-- `link()` stores an absolute URL; renders as an inline keyboard
-  `[['text' => 'فتح السجل', 'url' => $url]]`.
 - `toPayload()` throws a `LogicException` if the title or the text exceeds the
   line budget — a malformed message fails in tests, not in silence on the phone.
 - `send()`: resolves `TelegramConfig` (master + event gate), calls the API client,
@@ -55,13 +52,13 @@ positioned exactly where the current call sits (verified to be after
 decimals and the currency from `get_app_config_data('currency')`; wording of the
 facts is preserved, layout is not.
 
-### 5. Deep links
+### 5. No links (owner decision, 2026-11-04)
 
-`admin.invoice_details` for invoice events, `admin.clients.show` for client
-events, accounts page for transfers, `admin.masrofat.index` for expenses,
-`admin.users.index` for the admin event. Route names are resolved through
-`route()` with the active locale; a route that does not exist must fail the test,
-not the production send.
+The first implementation shipped an inline «فتح السجل» button built from
+`route()`. The owner rejected it («بدون أن أذهب إلى أي link»), so the button,
+`TelegramMessage::link()`, `recordLink()` and the `reply_markup` parameter on
+`TelegramApiClient::sendMessage()` were all removed in the same branch. The
+message must stay self-explanatory: ids, names, amounts and dates only.
 
 ## Phases
 

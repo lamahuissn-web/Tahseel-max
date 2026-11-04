@@ -40,7 +40,6 @@ A single class produces every message. Fixed anatomy, top to bottom:
 <field>: <value>          ← zero or more, in the order the call site declares
 <amount line>             ← bold, only for money events
 <date/time> · <actor>
-[ inline button: open the record ]
 ```
 
 Hard limits: title line ≤ 32 chars, one field per line, no line longer than 40
@@ -84,12 +83,14 @@ All interpolated values pass through `htmlspecialchars(..., ENT_QUOTES |
 ENT_SUBSTITUTE, 'UTF-8')`. `parse_mode` stays `HTML`. Markup the builder itself
 adds (`<b>`) is never escaped.
 
-### R4 — Deep link per event
+### R4 — No links, no buttons (owner decision, 2026-11-04)
 
-Where the catalogue names a link target, the message carries an inline keyboard
-button «فتح السجل» pointing at the admin URL of that record (absolute URL built
-from `url()`/`route()`, with the locale prefix). Events with no surviving record
-(`client_deleted`) carry no button.
+The message must be readable on its own. No inline keyboard, no URL inside the
+text, nothing to tap: the owner rejected the «فتح السجل» button after seeing it
+on the channel («لم يعجبني فكرة زر فتح السجل … بدون أن أذهب إلى أي link»). The
+record ids, client name, amount and dates already printed are the record
+reference. The «Link target» column of the catalogue above is therefore
+historical and must not be implemented.
 
 ### R5 — Failures are visible
 
@@ -121,6 +122,7 @@ change.
   WhatsApp path.
 - No schema change, no new table, no migration.
 - No change to the Telegram backup command or its `sendDocument` path.
+- No deep links, no inline keyboards, no reply_markup anywhere.
 
 ## Evidence
 

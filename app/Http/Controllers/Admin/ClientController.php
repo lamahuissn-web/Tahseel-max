@@ -399,8 +399,7 @@ class ClientController extends Controller
 sendTelegramNotification(
                 TelegramMessage::make('client_updated')
                     ->field('العميل', $client->name)
-                    ->actor(auth()->user()->name)
-                    ->link(TelegramMessage::recordLink('admin.clients.show', $client->id)),
+                    ->actor(auth()->user()->name),
                 'client_updated'
             );
 
@@ -614,8 +613,7 @@ sendTelegramNotification(
                     ->field('الفاتورة', '#'.$invoice->invoice_number)
                     ->field('العميل', $invoice->client->name ?? 'غير محدد')
                     ->amount(number_format((float) $invoice->amount, 2), get_app_config_data('currency'))
-                    ->actor(auth()->user()->name)
-                    ->link(TelegramMessage::recordLink('admin.invoice_details', $invoice->id)),
+                    ->actor(auth()->user()->name),
                 'invoice_created'
             );
 
@@ -716,8 +714,7 @@ sendTelegramNotification(
                             : 'خدمة '.($invoice->notes ?? ''))
                         ->amount(number_format((float) $request->amount, 2), get_app_config_data('currency'))
                         ->field('ملاحظة', trim($paymentType))
-                        ->actor(auth()->user()->name)
-                        ->link(TelegramMessage::recordLink('admin.invoice_details', $invoice->id)),
+                        ->actor(auth()->user()->name),
                     'invoice_paid'
                 );
 
@@ -755,8 +752,7 @@ sendTelegramNotification(
                     TelegramMessage::make('client_status_changed')
                         ->field('العميل', $client->name)
                         ->field('الحالة', $statusText)
-                        ->actor(auth()->user()->name)
-                        ->link(TelegramMessage::recordLink('admin.clients.show', $client->id)),
+                        ->actor(auth()->user()->name),
                     'client_status_changed'
                 );
                 

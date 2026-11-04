@@ -202,8 +202,7 @@ class SecureMobilePaymentService
                         ->field('الفاتورة', '#'.$invoice->invoice_number)
                         ->field('الفترة', $periodLabel)
                         ->amount($paidLabel, '$')
-                        ->actor($collectorName)
-                        ->link(TelegramMessage::recordLink('admin.invoice_details', $invoice->id)),
+                        ->actor($collectorName),
                     'mobile_invoice_paid'
                 );
 

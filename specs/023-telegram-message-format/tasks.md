@@ -11,7 +11,7 @@ Nothing is committed to `main`; work stays on `feature/023-telegram-message-form
   - `test_null_and_empty_fields_are_dropped`
   - `test_amount_line_is_bold_and_keeps_two_decimals`
   - `test_long_values_are_trimmed_to_the_line_budget`
-  - `test_link_renders_as_an_inline_button`
+  - `test_no_message_carries_an_inline_button` (owner rejected the button)
   - `test_missing_title_throws_instead_of_sending`
 - [ ] T0.2 Write `tests/Feature/TelegramNotificationFormatTest.php` skeleton:
   fake the API client in the container, capture payloads, one test per event key.
@@ -40,8 +40,8 @@ Nothing is committed to `main`; work stays on `feature/023-telegram-message-form
       `invoice_deleted` (571), `invoice_redone` (1040).
 - [ ] T2.2 Migrate `client_added` (ClientService:98), `client_updated` (398),
       `client_deleted` (426, no button), `client_status_changed` (722).
-- [ ] T2.3 Each event test asserts: title, the facts the old text carried, the
-      link target, and that no `null`/`-` leaks into the text.
+- [ ] T2.3 Each event test asserts: title, the facts the old text carried, that no
+      `null`/`-` leaks into the text, and that no `reply_markup` is produced.
 - [ ] T2.4 Green: full `TelegramNotificationFormat` suite.
 
 ## Phase 3 — money + system

@@ -86,7 +86,7 @@ class TelegramNotificationFormatTest extends TestCase
         $client->shouldReceive('sendMessage')
             ->once()
             ->with('-1004377540472', Mockery::on(fn ($text) => str_contains($text, 'دفعة مستلمة')
-                && str_contains($text, '<b>25.00 $</b>')), 'HTML', Mockery::any())
+                && str_contains($text, '<b>25.00 $</b>')), 'HTML')
             ->andReturn(['ok' => true, 'result' => ['message_id' => 1]]);
         $this->app->instance(TelegramApiClient::class, $client);
 
@@ -131,7 +131,7 @@ class TelegramNotificationFormatTest extends TestCase
         $client = Mockery::mock(TelegramApiClient::class);
         $client->shouldReceive('sendMessage')
             ->once()
-            ->with('-1004377540472', Mockery::on(fn ($text) => str_contains($text, '&amp;') && ! str_contains($text, 'A & B')), 'HTML', Mockery::any())
+            ->with('-1004377540472', Mockery::on(fn ($text) => str_contains($text, '&amp;') && ! str_contains($text, 'A & B')), 'HTML')
             ->andReturn(['ok' => true, 'result' => ['message_id' => 2]]);
         $this->app->instance(TelegramApiClient::class, $client);
 

@@ -191,8 +191,7 @@ sendTelegramNotification(
                     ->field('المشرف', $admin->name)
                     ->field('الصلاحية', $admin->roles->first()?->getTranslation('title', app()->getLocale()) ?? 'بدون صلاحية')
                     ->field('البريد', $admin->email)
-                    ->actor(auth()->user()->name)
-                    ->link(TelegramMessage::recordLink('admin.users.index')),
+                    ->actor(auth()->user()->name),
                 'admin_added'
             );
 
