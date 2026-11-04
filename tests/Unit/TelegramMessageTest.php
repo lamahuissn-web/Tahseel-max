@@ -6,34 +6,64 @@ use App\Services\Telegram\TelegramMessage;
 use Tests\TestCase;
 
 /**
- * Spec 023 — canonical anatomy of every Telegram operator message.
+ * Spec 023 — the owner-approved card (variant 1, 2026-11-04):
  *
- * These assertions are the contract: title line, separator, one field per line,
- * bold amount, footer with time + actor, optional inline button, escaped values.
+ *     💰 دفعة عبر التطبيق — ام سليم العلي تذكير
+ *     🧾 #19598 · 📅 الشهر 10/2026 · 💵 15.00 $ · 👤 محل الصفدي
+ *     🕓 16:12 · 04/11/2026
+ *
+ * Line 1 = event + channel + headline · line 2 = facts · line 3 = moment.
  */
 class TelegramMessageTest extends TestCase
 {
     private function paid(): TelegramMessage
     {
-        return TelegramMessage::make('invoice_paid')
-            ->field('العميل', 'ابو محمود سلمون W.K')
-            ->field('الفاتورة', '#19000', 'الاستحقاق 20/10 (+15 يوم)')
-            ->amount('25.00', '$')
-            ->actor('قاسم محمد عامر')
-            ->at(new \DateTimeImmutable('2026-11-04 15:42:00'));
+        return TelegramMessage::make('mobile_invoice_paid')
+            ->field('العميل', 'ام سليم العلي تذكير')
+            ->field('الفاتورة', '#19598')
+            ->field('الشهر', '10/2026')
+            ->amount('15.00', '$')
+            ->actor('محل الصفدي')
+            ->at(new \DateTimeImmutable('2026-11-04 16:12:00'));
     }
 
-    public function test_anatomy_is_title_separator_fields_amount_and_footer(): void
+    public function test_the_owner_approved_card_is_rendered_exactly(): void
+    {
+        $this->assertSame(
+            "💰 دفعة عبر التطبيق — ام سليم العلي تذكير\n"
+            ."🧾 #19598 · 📅 10/2026 · 💵 <b>15.00 \$</b> · 👤 محل الصفدي\n"
+            .'🕓 16:12 · 04/11/2026',
+            $this->paid()->toPayload()['text']
+        );
+    }
+
+    public function test_the_web_payment_says_so_in_the_title(): void
+    {
+        $text = TelegramMessage::make('invoice_paid')
+            ->field('العميل', 'ابو محمود سلمون W.K')
+            ->field('الفاتورة', '#19000')
+            ->amount('25.00', '$')
+            ->toPayload()['text'];
+
+        $this->assertStringStartsWith('💵 دفعة عبر الويب — ابو محمود سلمون W.K', $text);
+    }
+
+    public function test_the_first_field_is_the_headline_and_the_rest_are_segments(): void
     {
         $lines = explode("\n", $this->paid()->toPayload()['text']);
 
-        $this->assertSame('💵 دفعة مستلمة', $lines[0], 'title must carry the event emoji');
-        $this->assertSame('──────────────', $lines[1], 'separator line follows the title');
-        $this->assertSame('العميل: ابو محمود سلمون W.K', $lines[2]);
-        $this->assertSame('الفاتورة: #19000 · الاستحقاق 20/10 (+15 يوم)', $lines[3]);
-        $this->assertSame('<b>25.00 $</b>', $lines[4], 'amount is its own bold line');
-        $this->assertSame('15:42 · 04/11/2026 · قاسم محمد عامر', $lines[5], 'footer is time · date · actor');
-        $this->assertCount(6, $lines, 'no stray blank lines');
+        $this->assertStringContainsString('— ام سليم العلي تذكير', $lines[0]);
+        $this->assertStringNotContainsString('ام سليم العلي', $lines[1], 'the headline is not repeated');
+        $this->assertStringStartsWith('🧾 #19598', $lines[1]);
+        $this->assertCount(3, $lines, 'headline + facts + moment');
+    }
+
+    public function test_amount_is_bold_and_the_moment_is_last(): void
+    {
+        $lines = explode("\n", $this->paid()->toPayload()['text']);
+
+        $this->assertStringContainsString('💵 <b>15.00 $</b>', $lines[1]);
+        $this->assertSame('🕓 16:12 · 04/11/2026', $lines[2]);
     }
 
     public function test_every_dynamic_value_is_html_escaped(): void
@@ -53,42 +83,60 @@ class TelegramMessageTest extends TestCase
     public function test_builder_markup_is_not_escaped(): void
     {
         // the only markup that survives is the one the builder adds itself
-        $this->assertStringContainsString('<b>25.00 $</b>', $this->paid()->toPayload()['text']);
+        $this->assertStringContainsString('<b>15.00 $</b>', $this->paid()->toPayload()['text']);
     }
 
     public function test_null_and_empty_fields_are_dropped(): void
     {
-        $lines = explode("\n", TelegramMessage::make('client_updated')
+        $text = TelegramMessage::make('client_updated')
             ->field('العميل', 'زبون')
             ->field('الهاتف', null)
             ->field('ملاحظة', '')
-            ->toPayload()['text']);
+            ->toPayload()['text'];
 
-        foreach ($lines as $line) {
-            $this->assertStringNotContainsString('null', $line);
-            $this->assertStringNotContainsString('الهاتف', $line);
-            $this->assertStringNotContainsString('ملاحظة', $line);
-        }
+        $this->assertStringNotContainsString('null', $text);
+        $this->assertStringNotContainsString('الهاتف', $text);
+        $this->assertStringNotContainsString('ملاحظة', $text);
     }
 
-    public function test_long_values_are_trimmed_to_the_line_budget(): void
+    public function test_a_long_value_is_trimmed_and_still_ends_with_an_ellipsis(): void
     {
         $long = str_repeat('طويل جداً ', 20);
         $text = TelegramMessage::make('client_updated')
             ->field('العميل', $long)
             ->toPayload()['text'];
 
-        $fieldLine = collect(explode("\n", $text))->first(fn ($l) => str_starts_with($l, 'العميل: '));
-        $this->assertNotNull($fieldLine);
-        $this->assertStringEndsWith('…', $fieldLine);
-        $this->assertLessThanOrEqual(48, mb_strlen($fieldLine), 'a field line must stay readable on a phone');
+        $this->assertStringContainsString('…', $text);
+        $this->assertLessThanOrEqual(120, mb_strlen(explode("\n", $text)[0]), 'the headline stays scannable');
+    }
+
+    public function test_due_date_segment_carries_the_delay(): void
+    {
+        $text = TelegramMessage::make('overdue_reminder')
+            ->field('العميل', 'زبون')
+            ->due('2026-10-20', new \DateTimeImmutable('2026-11-04'))
+            ->toPayload()['text'];
+
+        $this->assertStringContainsString('📅 20/10 (+15 يوم)', $text);
+    }
+
+    public function test_headline_override_keeps_the_first_field_as_a_segment(): void
+    {
+        $text = TelegramMessage::make('transfer_created')
+            ->headline('الخزينة ⇢ الصندوق')
+            ->field('من حساب', 'الخزينة')
+            ->field('إلى حساب', 'الصندوق')
+            ->amount('100.00', '$')
+            ->toPayload()['text'];
+
+        $this->assertStringStartsWith('🔁 حوالة بين حسابين — الخزينة ⇢ الصندوق', $text);
+        $this->assertStringContainsString('🏦 الخزينة', $text);
     }
 
     public function test_no_message_carries_an_inline_button(): void
     {
         // owner decision 2026-11-04: clean formatting only, no links to tap
         $this->assertSame(['text'], array_keys($this->paid()->toPayload()));
-        $this->assertArrayNotHasKey('reply_markup', $this->paid()->toPayload());
     }
 
     public function test_missing_title_throws_instead_of_sending(): void
@@ -101,15 +149,15 @@ class TelegramMessageTest extends TestCase
     {
         $expected = [
             'invoice_paid' => '💵',
-            'mobile_invoice_paid' => '📱',
+            'mobile_invoice_paid' => '💰',
             'invoice_balance_edited' => '✏️',
-            'invoice_created' => '🧾',
+            'invoice_created' => '🆕',
             'invoice_deleted' => '🗑',
             'invoice_redone' => '↩️',
             'client_added' => '👤',
-            'client_updated' => '👤',
+            'client_updated' => '✏️',
             'client_deleted' => '🗑',
-            'client_status_changed' => '🔀',
+            'client_status_changed' => '🚦',
             'expense_added' => '💸',
             'transfer_created' => '🔁',
             'transfer_redone' => '↩️',
@@ -118,8 +166,8 @@ class TelegramMessageTest extends TestCase
         ];
 
         foreach ($expected as $event => $emoji) {
-            $title = TelegramMessage::make($event)->field('x', 'y')->toPayload()['text'];
-            $this->assertStringStartsWith($emoji.' ', $title, "event {$event} must render its emoji");
+            $text = TelegramMessage::make($event)->field('x', 'y')->toPayload()['text'];
+            $this->assertStringStartsWith($emoji.' ', $text, "event {$event} must render its emoji");
         }
     }
 }

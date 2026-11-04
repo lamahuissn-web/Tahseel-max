@@ -75,8 +75,8 @@ class SendOverdueReminders extends Command
 
 sendTelegramNotification(
                     TelegramMessage::make('overdue_reminder')
-                        ->field('الفاتورة', '#'.$invoice->invoice_number)
                         ->field('العميل', $invoice->client->name ?? 'غير معروف')
+                        ->field('الفاتورة', '#'.$invoice->invoice_number)
                         ->due($invoice->due_date)
                         ->amount(number_format((float) $invoice->amount, 2), $currency),
                     'overdue_reminder'

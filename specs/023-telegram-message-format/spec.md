@@ -35,16 +35,25 @@ Four concrete defects follow from that shape:
 A single class produces every message. Fixed anatomy, top to bottom:
 
 ```
-<emoji> <title>
-──────────────
-<field>: <value>          ← zero or more, in the order the call site declares
-<amount line>             ← bold, only for money events
-<date/time> · <actor>
+<emoji> <title — channel> — <headline>
+<emoji> <segment> · <emoji> <segment> · 💵 <b>amount</b> · 👤 <actor>
+🕓 <H:i> · <d/m/Y>
 ```
 
-Hard limits: title line ≤ 32 chars, one field per line, no line longer than 40
-chars of value text, maximum 8 lines of fields (Telegram truncates long cards and
-the owner reads on a phone).
+Approved by the owner on 2026-11-04 (variant 1 of four samples shown on the
+channel):
+
+```
+💰 دفعة عبر التطبيق — ام سليم العلي تذكير
+🧾 #19598 · 📅 10/2026 · 💵 15.00 $ · 👤 محل الصفدي
+🕓 16:12 · 04/11/2026
+```
+
+The channel lives in the title: `invoice_paid` → «دفعة عبر الويب»,
+`mobile_invoice_paid` → «دفعة عبر التطبيق».
+
+Hard limits: three lines, one segment per fact joined by ` · `, each value
+trimmed to 46 chars, the amount bold and always on the details line.
 
 ### R2 — All eighteen call sites migrated, same facts
 

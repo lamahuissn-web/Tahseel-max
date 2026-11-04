@@ -610,8 +610,8 @@ sendTelegramNotification(
 
 sendTelegramNotification(
                 TelegramMessage::make('invoice_created')
-                    ->field('الفاتورة', '#'.$invoice->invoice_number)
                     ->field('العميل', $invoice->client->name ?? 'غير محدد')
+                    ->field('الفاتورة', '#'.$invoice->invoice_number)
                     ->amount(number_format((float) $invoice->amount, 2), get_app_config_data('currency'))
                     ->actor(auth()->user()->name),
                 'invoice_created'

@@ -85,7 +85,7 @@ class TelegramNotificationFormatTest extends TestCase
         $client = Mockery::mock(TelegramApiClient::class);
         $client->shouldReceive('sendMessage')
             ->once()
-            ->with('-1004377540472', Mockery::on(fn ($text) => str_contains($text, 'دفعة مستلمة')
+            ->with('-1004377540472', Mockery::on(fn ($text) => str_contains($text, 'دفعة عبر الويب')
                 && str_contains($text, '<b>25.00 $</b>')), 'HTML')
             ->andReturn(['ok' => true, 'result' => ['message_id' => 1]]);
         $this->app->instance(TelegramApiClient::class, $client);

@@ -571,8 +571,8 @@ class InvoiceController extends Controller
 
 sendTelegramNotification(
                 TelegramMessage::make('invoice_deleted')
-                    ->field('الفاتورة', '#'.$invoiceData['invoice_number'])
                     ->field('العميل', $invoiceData['client_name'])
+                    ->field('الفاتورة', '#'.$invoiceData['invoice_number'])
                     ->amount(number_format((float) $invoiceData['amount'], 2), get_app_config_data('currency'))
                     ->actor(auth()->user()->name),
                 'invoice_deleted'
@@ -732,10 +732,9 @@ sendTelegramNotification(
                 );
 sendTelegramNotification(
                     TelegramMessage::make('invoice_balance_edited')
-                        ->field('الفاتورة', '#'.$invoice->invoice_number)
                         ->field('العميل', $invoice->client->name ?? 'غير محدد')
-                        ->field('الرصيد قبل', $oldRemaining.' '.get_app_config_data('currency'))
-                        ->amount(number_format((float) $invoice->remaining_amount, 2), get_app_config_data('currency'))
+                        ->field('الفاتورة', '#'.$invoice->invoice_number)
+                        ->amount($oldRemaining.' ← '.number_format((float) $invoice->remaining_amount, 2), get_app_config_data('currency'))
                         ->actor(auth()->user()->name),
                     'invoice_balance_edited'
                 );
@@ -852,10 +851,9 @@ sendTelegramNotification(
                 );
 sendTelegramNotification(
                     TelegramMessage::make('invoice_balance_edited')
-                        ->field('الفاتورة', '#'.$invoice->invoice_number)
                         ->field('العميل', $invoice->client->name ?? 'غير محدد')
-                        ->field('الرصيد قبل', $oldRemaining.' '.get_app_config_data('currency'))
-                        ->amount(number_format((float) $invoice->remaining_amount, 2), get_app_config_data('currency'))
+                        ->field('الفاتورة', '#'.$invoice->invoice_number)
+                        ->amount($oldRemaining.' ← '.number_format((float) $invoice->remaining_amount, 2), get_app_config_data('currency'))
                         ->actor(auth()->user()->name),
                     'invoice_balance_edited'
                 );

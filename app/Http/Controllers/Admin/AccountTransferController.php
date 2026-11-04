@@ -334,6 +334,7 @@ class AccountTransferController extends Controller
 
 sendTelegramNotification(
                 TelegramMessage::make('transfer_created')
+                    ->headline($fromAccountName.' ⇢ '.$toAccountName)
                     ->field('من حساب', $fromAccountName)
                     ->field('إلى حساب', $toAccountName)
                     ->amount(number_format((float) $validated_data['amount'], 2), get_app_config_data('currency') ?? 'جنيه')
@@ -498,6 +499,7 @@ sendTelegramNotification(
 
 sendTelegramNotification(
                 TelegramMessage::make('transfer_redone')
+                    ->headline($fromAccountName.' ⇢ '.$toAccountName)
                     ->field('من حساب', $fromAccountName)
                     ->field('إلى حساب', $toAccountName)
                     ->amount(number_format((float) $accountTransfer->amount, 2), get_app_config_data('currency') ?? 'جنيه')

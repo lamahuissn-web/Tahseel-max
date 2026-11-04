@@ -9,37 +9,40 @@ use LogicException;
 /**
  * Spec 023 — the single builder for every Telegram operator message.
  *
- * Anatomy (fixed, enforced by tests):
+ * Owner-approved layout (variant 1, 2026-11-04):
  *
- *     <emoji> <title>
- *     ──────────────
- *     <label>: <value>[ · <extra>]
- *     <b><amount> <currency></b>
- *     <H:i> · <d/m/Y>[ · <actor>]
+ *     💰 دفعة عبر التطبيق — ام سليم العلي تذكير
+ *     🧾 #19598 · 📅 الشهر 10/2026 · 💵 15.00 $ · 👤 محل الصفدي
+ *     🕓 16:12 · 04/11/2026
  *
- * Every dynamic value is escaped here, once, so no call site can produce a
- * message Telegram refuses to parse. Markup the builder adds itself (`<b>`) is
- * applied after escaping.
+ * Line 1 carries the event, the channel it came from (web / app / system) and
+ * the headline entity. Line 2 carries the facts as emoji-prefixed segments
+ * joined by `·`, the amount always bold. Line 3 is the moment.
+ *
+ * The first `field()` becomes the headline; later ones become segments, so a
+ * call site never has to know which fact is the headline. `headline()` overrides
+ * it when the first fact is not a name (transfers). Every dynamic value is
+ * escaped here, once.
  */
 class TelegramMessage
 {
-    public const SEPARATOR = '──────────────';
+    public const SEPARATOR = '·';
 
-    /** A single field line must stay readable on a phone. */
-    private const VALUE_MAX = 40;
+    /** A single segment must stay readable on a phone. */
+    private const VALUE_MAX = 46;
 
-    /** event key => [emoji, title] — the fifteen keys of the eighteen call sites. */
+    /** event key => [emoji, title]; a payment's title states its channel. */
     private const EVENTS = [
-        'invoice_paid' => ['💵', 'دفعة مستلمة'],
-        'mobile_invoice_paid' => ['📱', 'دفعة من التطبيق'],
+        'invoice_paid' => ['💵', 'دفعة عبر الويب'],
+        'mobile_invoice_paid' => ['💰', 'دفعة عبر التطبيق'],
         'invoice_balance_edited' => ['✏️', 'تعديل رصيد فاتورة'],
-        'invoice_created' => ['🧾', 'فاتورة جديدة'],
+        'invoice_created' => ['🆕', 'فاتورة جديدة'],
         'invoice_deleted' => ['🗑', 'حذف فاتورة'],
         'invoice_redone' => ['↩️', 'تراجع عن دفعة'],
         'client_added' => ['👤', 'عميل جديد'],
-        'client_updated' => ['👤', 'تعديل بيانات عميل'],
+        'client_updated' => ['✏️', 'تعديل بيانات عميل'],
         'client_deleted' => ['🗑', 'حذف عميل'],
-        'client_status_changed' => ['🔀', 'تغيّر حالة عميل'],
+        'client_status_changed' => ['🚦', 'تغيّر حالة عميل'],
         'expense_added' => ['💸', 'مصروف جديد'],
         'transfer_created' => ['🔁', 'حوالة بين حسابين'],
         'transfer_redone' => ['↩️', 'تراجع عن حوالة'],
@@ -47,10 +50,34 @@ class TelegramMessage
         'overdue_reminder' => ['⏰', 'فاتورة متأخرة'],
     ];
 
+    /** field label => segment emoji (the headline always uses the event emoji). */
+    private const FIELD_EMOJI = [
+        'العميل' => '👤',
+        'المحصّل' => '👤',
+        'الفاتورة' => '🧾',
+        'الاستحقاق' => '📅',
+        'الفترة' => '📅',
+        'الشهر' => '📅',
+        'البند' => '📦',
+        'نوع الاشتراك' => '📦',
+        'ملاحظة' => '📝',
+        'البيان' => '📝',
+        'الرصيد قبل' => '💰',
+        'الرصيد بعد' => '💰',
+        'من حساب' => '🏦',
+        'إلى حساب' => '🏦',
+        'الصلاحية' => '🎖',
+        'البريد' => '✉️',
+        'الحالة' => '🔀',
+        'المشرف' => '🛡',
+    ];
+
     private string $event;
 
-    /** @var array<int, string> */
-    private array $fields = [];
+    private ?string $headline = null;
+
+    /** @var array<int, array{emoji: string, text: string}> */
+    private array $segments = [];
 
     private ?string $amountLine = null;
 
@@ -78,22 +105,47 @@ class TelegramMessage
         return isset(self::EVENTS[$event]);
     }
 
+    /** Force the headline when the first fact is not the entity being reported. */
+    public function headline(mixed $value): self
+    {
+        $value = is_scalar($value) ? trim((string) $value) : '';
+
+        if ($value !== '') {
+            $this->headline = self::escape(self::trimValue($value));
+        }
+
+        return $this;
+    }
+
+    /**
+     * Register a fact: the first one becomes the headline, the rest become
+     * `emoji value` segments on the details line.
+     */
     public function field(string $label, mixed $value, ?string $extra = null): self
     {
         $value = is_scalar($value) ? trim((string) $value) : '';
 
         if ($value === '') {
-            return $this; // never render an empty or "null" row
+            return $this; // never render an empty or "null" segment
         }
 
-        $line = self::escape($label) . ': ' . self::escape(self::trimValue($value));
+        $text = self::trimValue($value);
 
         $extra = $extra === null ? '' : trim($extra);
         if ($extra !== '') {
-            $line .= ' · ' . self::escape(self::trimValue($extra));
+            $text .= ' ' . self::trimValue($extra);
         }
 
-        $this->fields[] = $line;
+        if ($this->headline === null) {
+            $this->headline = self::escape($text);
+
+            return $this;
+        }
+
+        $this->segments[] = [
+            'emoji' => self::FIELD_EMOJI[$label] ?? '•',
+            'text' => self::escape($text),
+        ];
 
         return $this;
     }
@@ -111,7 +163,7 @@ class TelegramMessage
             $line .= ' ' . self::escape($currency);
         }
 
-        $this->amountLine = '<b>' . $line . '</b>';
+        $this->amountLine = '💵 <b>' . $line . '</b>';
 
         return $this;
     }
@@ -119,7 +171,7 @@ class TelegramMessage
     public function actor(?string $actor): self
     {
         $actor = $actor === null ? '' : trim($actor);
-        $this->actor = $actor === '' ? null : $actor;
+        $this->actor = $actor === '' ? null : self::escape(self::trimValue($actor));
 
         return $this;
     }
@@ -133,10 +185,7 @@ class TelegramMessage
         return $this;
     }
 
-    /**
-     * Renders the due-date field with the real distance to the payment:
-     * «الاستحقاق: 20/10 · +15 يوم».
-     */
+    /** Adds the due date as a `📅 dd/mm (+N يوم)` segment. */
     public function due(mixed $dueDate, ?DateTimeInterface $paidAt = null, string $label = 'الاستحقاق'): self
     {
         if ($dueDate === null || $dueDate === '') {
@@ -148,8 +197,8 @@ class TelegramMessage
 
         $extra = match (true) {
             $late === null => null,
-            $late > 0 => '+' . $late . ' يوم',
-            $late === 0 => 'في الموعد',
+            $late > 0 => '(+' . $late . ' يوم)',
+            $late === 0 => '(في الموعد)',
             default => null,
         };
 
@@ -183,19 +232,34 @@ class TelegramMessage
 
         [$emoji, $title] = self::EVENTS[$this->event];
 
-        $lines = [];
-        $lines[] = $emoji . ' ' . $title;
-        $lines[] = self::SEPARATOR;
+        $headline = $emoji . ' ' . $title;
 
-        foreach ($this->fields as $field) {
-            $lines[] = $field;
+        if ($this->headline !== null && $this->headline !== '') {
+            $headline .= ' — ' . $this->headline;
+        }
+
+        $segments = [];
+
+        foreach ($this->segments as $segment) {
+            $segments[] = $segment['emoji'] . ' ' . $segment['text'];
         }
 
         if ($this->amountLine !== null) {
-            $lines[] = $this->amountLine;
+            $segments[] = $this->amountLine;
         }
 
-        $lines[] = $this->footer();
+        if ($this->actor !== null) {
+            $segments[] = '👤 ' . $this->actor;
+        }
+
+        $lines = [$headline];
+
+        if ($segments !== []) {
+            $lines[] = implode(' ' . self::SEPARATOR . ' ', $segments);
+        }
+
+        $moment = $this->at ?? Carbon::now();
+        $lines[] = '🕓 ' . $moment->format('H:i') . ' ' . self::SEPARATOR . ' ' . $moment->format('d/m/Y');
 
         return ['text' => implode("\n", $lines)];
     }
@@ -207,19 +271,6 @@ class TelegramMessage
     public function send(?string $eventType = null): bool
     {
         return sendTelegramNotification($this, $eventType ?? $this->event);
-    }
-
-    private function footer(): string
-    {
-        $moment = $this->at ?? Carbon::now();
-
-        $footer = $moment->format('H:i') . ' · ' . $moment->format('d/m/Y');
-
-        if ($this->actor !== null) {
-            $footer .= ' · ' . self::escape($this->actor);
-        }
-
-        return $footer;
     }
 
     private static function trimValue(string $value): string
