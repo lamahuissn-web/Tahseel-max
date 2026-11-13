@@ -11,6 +11,7 @@ use App\Models\Clients;
 use App\Traits\ResponseApi;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 class ClientsController extends Controller
@@ -178,6 +179,21 @@ class ClientsController extends Controller
             if (!$client) {
                 return $this->responseApiError('العميل غير موجود');
             }
+
+            // The customer screen header renders `client.subscriptionPrice`, which
+            // ClientResource fills from `invoices_sum_remaining_amount`. The list
+            // endpoint computes that sum with a grouped subquery; this detail
+            // endpoint never did, so the header always showed 0.00 for a customer
+            // who owed money while the list showed the real figure. Use the same
+            // definition as the list (every non-deleted invoice, all statuses) so
+            // both screens agree.
+            // Note: `next_due_date` is deliberately NOT filled here — the owner
+            // asked to leave the detail screen's due date exactly as it is.
+            $client->invoices_sum_remaining_amount = Invoice::query()
+                ->where('client_id', $client->id)
+                ->whereNull('deleted_at')
+                ->sum(DB::raw('COALESCE(remaining_amount, 0)'));
+
             $oneYearAgo = Carbon::now()->subYear();
 
             // Unpaid debt has no age limit: an invoice that stays open for more

@@ -87,6 +87,11 @@ class ClientInvoicesUnpaidWindowTest extends TestCase
         $this->assertContains($recent, $numbers);
         $this->assertSame(2, $data['unpaid_and_partial_invoices']['count']);
         $this->assertEquals(14.0, (float) $data['unpaid_and_partial_invoices']['total_unpaidAndPartial_amount']);
+
+        // The screen header shows `client.subscriptionPrice`. It used to come out
+        // as 0.00 because this endpoint never filled the remaining-balance sum
+        // (only the list endpoint did), so the header contradicted the invoice tab.
+        $this->assertSame('14.00', $data['client']['subscriptionPrice']);
     }
 
     public function test_paid_history_keeps_its_one_year_window(): void
