@@ -180,10 +180,13 @@ class ClientsController extends Controller
             }
             $oneYearAgo = Carbon::now()->subYear();
 
+            // Unpaid debt has no age limit: an invoice that stays open for more
+            // than a year must keep appearing (and keep counting in the total),
+            // otherwise old arrears silently disappear from the collector's
+            // screen. The paid-history window below is deliberately unchanged.
             $unpaidAndPartialInvoices = Invoice::with(['client', 'employee', 'subscription'])
                 ->where('client_id', $id)
                 ->whereIn('status', ['unpaid', 'partial'])
-                ->where('created_at', '>=', $oneYearAgo)
                 ->orderBy('created_at', 'asc')
                 ->get();
 
